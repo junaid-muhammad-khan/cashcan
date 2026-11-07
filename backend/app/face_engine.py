@@ -19,6 +19,7 @@ class FaceResult:
     box: tuple[int, int, int, int]  # x1, y1, x2, y2
     sharpness: float
     turn: float | None = None  # head-turn ratio, see liveness.turn_ratio; None if unavailable
+    yaw: float | None = None  # InsightFace head yaw in degrees (diagnostic only; not used for decisions)
 
 
 class FaceEngine(Protocol):
@@ -70,5 +71,7 @@ class InsightFaceEngine:
             sharp = float(cv2.Laplacian(gray, cv2.CV_64F).var())
             emb = np.asarray(f.normed_embedding, dtype=np.float32)
             turn = turn_ratio(np.asarray(f.kps)) if getattr(f, "kps", None) is not None else None
-            out.append(FaceResult(emb, float(f.det_score), (x1, y1, x2, y2), sharp, turn))
+            pose = getattr(f, "pose", None)
+            yaw = float(pose[1]) if pose is not None else None
+            out.append(FaceResult(emb, float(f.det_score), (x1, y1, x2, y2), sharp, turn, yaw))
         return out
