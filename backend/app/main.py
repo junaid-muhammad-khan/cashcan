@@ -1,5 +1,6 @@
 """CashCan face API.
 
+GET    /                  enrollment web page
 POST   /enroll            consent + 3-8 face frames + wallet -> stores embeddings only
 POST   /match             one frame from the bin camera -> user + session token
 GET    /session/{token}   which user a live session belongs to (used by the payout step)
@@ -9,7 +10,10 @@ from __future__ import annotations
 
 import re
 
+from pathlib import Path
+
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 
 from . import config
 from .face_engine import FaceEngine, InsightFaceEngine, QualityError, check_quality, decode_image, pick_face
@@ -18,6 +22,8 @@ from .sessions import SessionManager
 from .store import FaceStore
 
 USER_ID_RE = re.compile(r"^[A-Za-z0-9_.-]{1,64}$")
+SOLANA_ADDR_RE = re.compile(r"^[1-9A-HJ-NP-Za-km-z]{32,44}$")  # base58 public key
+STATIC = Path(__file__).parent / "static"
 
 
 def create_app(engine: FaceEngine | None = None, store: FaceStore | None = None,
@@ -31,6 +37,10 @@ def create_app(engine: FaceEngine | None = None, store: FaceStore | None = None,
             state["engine"] = InsightFaceEngine()
         return state["engine"]
 
+    @app.get("/", include_in_schema=False)
+    def index():
+        return FileResponse(STATIC / "index.html")
+
     @app.get("/health")
     def health():
         return {"ok": True}
@@ -42,8 +52,9 @@ def create_app(engine: FaceEngine | None = None, store: FaceStore | None = None,
             raise HTTPException(400, "Consent is required to store a face embedding.")
         if not USER_ID_RE.match(user_id):
             raise HTTPException(400, "user_id must be 1-64 letters, digits, '.', '_' or '-'.")
-        if not wallet.strip():
-            raise HTTPException(400, "A wallet address is required.")
+        wallet = wallet.strip()
+        if not SOLANA_ADDR_RE.match(wallet):
+            raise HTTPException(400, "That does not look like a Solana wallet address.")
         if state["store"].user_exists(user_id):
             raise HTTPException(409, "User already enrolled. Delete first to re-enroll.")
         if not config.MIN_ENROLL_FRAMES <= len(frames) <= config.MAX_ENROLL_FRAMES:
@@ -60,7 +71,7 @@ def create_app(engine: FaceEngine | None = None, store: FaceStore | None = None,
         if len(embeddings) < config.MIN_ENROLL_FRAMES:
             raise HTTPException(422, {"message": "Not enough usable frames.", "problems": problems})
 
-        state["store"].add_user(user_id, wallet.strip(), embeddings)
+        state["store"].add_user(user_id, wallet, embeddings)
         return {"enrolled": True, "user_id": user_id, "frames_used": len(embeddings), "problems": problems}
 
     @app.post("/match")

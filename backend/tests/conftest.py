@@ -9,6 +9,9 @@ from app.sessions import SessionManager
 from app.store import FaceStore
 
 
+WALLET = "9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin"
+
+
 def person_vec(pid: int) -> np.ndarray:
     v = np.random.default_rng(pid).normal(size=512).astype(np.float32)
     return v / np.linalg.norm(v)
@@ -48,5 +51,5 @@ def client(tmp_path, clock):
 
 def enroll(client, user, pid, n=3, consent=True, **kw):
     files = [("frames", (f"f{i}.png", png(pid, **kw), "image/png")) for i in range(n)]
-    return client.post("/enroll", data={"user_id": user, "wallet": f"wallet-{user}", "consent": str(consent).lower()},
+    return client.post("/enroll", data={"user_id": user, "wallet": WALLET, "consent": str(consent).lower()},
                        files=files)

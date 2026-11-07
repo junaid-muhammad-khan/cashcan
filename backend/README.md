@@ -9,10 +9,13 @@ uvicorn app.main:app_factory --factory --port 8000
 python -m pytest -q
 ```
 
+Open <http://localhost:8000> to enroll. The camera needs `localhost` or https (browsers block it on plain http over a LAN).
+
 First request downloads the InsightFace `buffalo_s` model (~125 MB) to `~/.insightface`.
 
 | Endpoint | Purpose |
 |---|---|
+| `GET /` | enrollment web page (consent, name + wallet, 5-frame webcam scan, delete) |
 | `POST /enroll` | form: `user_id`, `wallet`, `consent=true`, 3-8 `frames` images |
 | `POST /match` | form: one `frame` image -> `{matched, user_id, score, session_token, expires_in}` |
 | `GET /session/{token}` | user + wallet for a live session (payout step) |
@@ -21,6 +24,7 @@ First request downloads the InsightFace `buffalo_s` model (~125 MB) to `~/.insig
 Settings are in `app/config.py` (`MATCH_THRESHOLD` 0.45, `AMBIGUITY_MARGIN` 0.05, quality gates).
 
 ## Known limits
+- Anyone who knows a user name can delete that registration (no auth yet). Fine for a demo, fix before real use.
 - No liveness check yet: a photo or screen of an enrolled user can match.
 - Threshold is untuned on our team's faces. A smoke test on a stock photo gave <=0.19 between different people and 0.98 for the same face with a brightness change.
 - Sessions are in memory and lost on restart. The API has no auth, so run it on a trusted network only.

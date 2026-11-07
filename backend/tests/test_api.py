@@ -1,4 +1,4 @@
-from .conftest import enroll, png
+from .conftest import WALLET, enroll, png
 
 
 def match(client, pid, **kw):
@@ -11,7 +11,7 @@ def test_enroll_then_match_opens_session(client):
     r = match(client, 1)
     assert r["matched"] and r["user_id"] == "alice" and r["score"] > 0.9
     s = client.get(f"/session/{r['session_token']}").json()
-    assert s == {"user_id": "alice", "wallet": "wallet-alice"}
+    assert s == {"user_id": "alice", "wallet": WALLET}
 
 
 def test_unknown_face_rejected(client):
@@ -63,3 +63,14 @@ def test_delete_removes_face_and_sessions(client):
     assert client.delete("/users/alice").status_code == 404
     assert client.get(f"/session/{token}").status_code == 404
     assert match(client, 1)["reason"] == "no_enrolled_users"
+
+
+def test_wallet_validated_server_side(client):
+    files = [("frames", (f"f{i}.png", png(1), "image/png")) for i in range(3)]
+    r = client.post("/enroll", data={"user_id": "a", "wallet": "not-a-wallet", "consent": "true"}, files=files)
+    assert r.status_code == 400 and "wallet" in r.json()["detail"].lower()
+
+
+def test_enrollment_page_served(client):
+    r = client.get("/")
+    assert r.status_code == 200 and "text/html" in r.headers["content-type"] and "consent" in r.text.lower()
