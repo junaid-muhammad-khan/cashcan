@@ -39,6 +39,22 @@ session. The bin streams frames to `/liveness/{id}/frame`; only a pass returns t
   `LIVENESS_ID_THRESHOLD` and the pose thresholds are in `app/config.py`.
 - The camera image is assumed **not mirrored** ("left" = the user's own left). Mirrored cameras flip the direction.
 
+## Measured accuracy (LFW, 2026-11-07)
+Full tables in [`EVAL.md`](EVAL.md); regenerate with `python -m tools.eval_lfw --data <dir>` (see its docstring).
+Real pipeline, threshold 0.45, 150 enrolled people (3 photos each), 757 later photos of them, 831 photos of 600 strangers:
+
+| What | Result |
+|---|---|
+| Enrolled person recognised | **99.2%** (6 of 757 not recognised, all scored 0.24-0.44) |
+| Wrong person named | **0 of 757** |
+| Strangers accepted | 1 of 831 at 0.45; on inspection that photo shows an enrolled person (Jimmy Carter) next to the labelled one, so it is a labelling artefact, i.e. 0 real false accepts (95% upper bound still ~0.7%) |
+| Photos rejected by quality gates | ~3% (mostly face too small, then blur) |
+| 1:1 verification (2,057 pairs) | AUC 0.997, EER 0.88%, 99.56% accuracy at the best threshold; 95.3% at 0.45, because single-photo-vs-single-photo is stricter than matching against 3 enrolled photos |
+| Liveness turn measure vs InsightFace yaw (4,400 faces) | correlation 0.93; faces within 10 degrees of frontal pass "facing camera" 95-100% and "turned" 0%; faces 30+ degrees pass "turned" 98-100%, 20-30 degrees only 47% |
+
+This is celebrity press photos, a gallery of 150, and no spoof attempts. It says the model is sound, not that the bin
+will hit these numbers under venue lighting. Fairness across groups was not measured. Measure on the team with `tools.tune`.
+
 ## Known limits
 - Anyone who knows a user name can delete that registration (no auth yet). Fine for a demo, fix before real use.
 - Liveness stops a photo or a screen showing a still. It does **not** stop a video of the right person turning the
