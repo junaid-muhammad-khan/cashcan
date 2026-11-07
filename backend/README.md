@@ -24,3 +24,18 @@ Settings are in `app/config.py` (`MATCH_THRESHOLD` 0.45, `AMBIGUITY_MARGIN` 0.05
 - No liveness check yet: a photo or screen of an enrolled user can match.
 - Threshold is untuned on our team's faces. A smoke test on a stock photo gave <=0.19 between different people and 0.98 for the same face with a brightness change.
 - Sessions are in memory and lost on restart. The API has no auth, so run it on a trusted network only.
+
+## Tuning the threshold on real faces
+
+Run on a machine with a webcam, at least 3 people. Saves embeddings only (`tuning_data/`, git-ignored).
+
+```bash
+python -m tools.tune capture --person alice --tag enroll --count 5
+python -m tools.tune capture --person alice --tag dim --count 10
+python -m tools.tune capture --person alice --tag glasses --count 10
+python -m tools.tune report
+```
+
+Tag `enroll` is the gallery; every other tag is a probe condition (try dim, bright, angle, glasses, mask-down, a different day).
+`report` prints genuine vs impostor scores, a threshold sweep (FRR, wrong-user rate, open-set FAR) and a suggested
+`MATCH_THRESHOLD`. Set it with the env var, e.g. `MATCH_THRESHOLD=0.5 uvicorn ...`. No webcam? `tools.tune ingest --person X --tag T --dir photos/`.
