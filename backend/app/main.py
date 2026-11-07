@@ -1,0 +1,99 @@
+"""CashCan face API.
+
+POST   /enroll            consent + 3-8 face frames + wallet -> stores embeddings only
+POST   /match             one frame from the bin camera -> user + session token
+GET    /session/{token}   which user a live session belongs to (used by the payout step)
+DELETE /users/{user_id}   delete all biometric data for a user
+"""
+from __future__ import annotations
+
+import re
+
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+
+from . import config
+from .face_engine import FaceEngine, InsightFaceEngine, QualityError, check_quality, decode_image, pick_face
+from .matching import match
+from .sessions import SessionManager
+from .store import FaceStore
+
+USER_ID_RE = re.compile(r"^[A-Za-z0-9_.-]{1,64}$")
+
+
+def create_app(engine: FaceEngine | None = None, store: FaceStore | None = None,
+               sessions: SessionManager | None = None) -> FastAPI:
+    app = FastAPI(title="CashCan face API")
+    state = {"engine": engine, "store": store or FaceStore(config.DB_PATH),
+             "sessions": sessions or SessionManager()}
+
+    def get_engine() -> FaceEngine:
+        if state["engine"] is None:  # lazy: model load is slow
+            state["engine"] = InsightFaceEngine()
+        return state["engine"]
+
+    @app.get("/health")
+    def health():
+        return {"ok": True}
+
+    @app.post("/enroll")
+    async def enroll(user_id: str = Form(...), wallet: str = Form(...), consent: bool = Form(False),
+                     frames: list[UploadFile] = File(...)):
+        if not consent:
+            raise HTTPException(400, "Consent is required to store a face embedding.")
+        if not USER_ID_RE.match(user_id):
+            raise HTTPException(400, "user_id must be 1-64 letters, digits, '.', '_' or '-'.")
+        if not wallet.strip():
+            raise HTTPException(400, "A wallet address is required.")
+        if state["store"].user_exists(user_id):
+            raise HTTPException(409, "User already enrolled. Delete first to re-enroll.")
+        if not config.MIN_ENROLL_FRAMES <= len(frames) <= config.MAX_ENROLL_FRAMES:
+            raise HTTPException(400, f"Send {config.MIN_ENROLL_FRAMES}-{config.MAX_ENROLL_FRAMES} frames.")
+
+        embeddings, problems = [], []
+        for i, f in enumerate(frames):
+            try:
+                face = pick_face(get_engine().analyse(decode_image(await f.read())))
+                check_quality(face)
+                embeddings.append(face.embedding)
+            except QualityError as e:
+                problems.append(f"frame {i + 1}: {e}")
+        if len(embeddings) < config.MIN_ENROLL_FRAMES:
+            raise HTTPException(422, {"message": "Not enough usable frames.", "problems": problems})
+
+        state["store"].add_user(user_id, wallet.strip(), embeddings)
+        return {"enrolled": True, "user_id": user_id, "frames_used": len(embeddings), "problems": problems}
+
+    @app.post("/match")
+    async def match_face(frame: UploadFile = File(...)):
+        try:
+            face = pick_face(get_engine().analyse(decode_image(await frame.read())))
+            check_quality(face)
+        except QualityError as e:
+            return {"matched": False, "reason": "bad_frame", "message": str(e)}
+        owners, gallery = state["store"].all_embeddings()
+        res = match(face.embedding, owners, gallery)
+        if not res.matched:
+            return {"matched": False, "reason": res.reason, "score": round(res.score, 3)}
+        token, ttl = state["sessions"].open(res.user_id)
+        return {"matched": True, "user_id": res.user_id, "score": round(res.score, 3),
+                "session_token": token, "expires_in": ttl}
+
+    @app.get("/session/{token}")
+    def session(token: str):
+        user_id = state["sessions"].user_for(token)
+        if user_id is None:
+            raise HTTPException(404, "Session expired or unknown.")
+        return {"user_id": user_id, "wallet": state["store"].wallet(user_id)}
+
+    @app.delete("/users/{user_id}")
+    def delete_user(user_id: str):
+        if not state["store"].delete_user(user_id):
+            raise HTTPException(404, "No such user.")
+        state["sessions"].close_user(user_id)
+        return {"deleted": True}
+
+    return app
+
+
+def app_factory() -> FastAPI:
+    return create_app()
