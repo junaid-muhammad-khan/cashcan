@@ -20,7 +20,7 @@ JSON lines on **stdout**; human status on stderr.
 {"event": "session_started", "user_id": "alice", "wallet": "9xQe...", "token": "...", "expires_in": 60, "score": 0.98}
 {"event": "challenge_started", "user_id": "alice", "direction": "left"}
 {"event": "session_ended", "user_id": "alice", "why": "expired | different_person | unrecognised_face"}
-{"event": "denied", "reason": "below_threshold | ambiguous | no_enrolled_users", "score": 0.1}
+{"event": "denied", "reason": "below_threshold | ambiguous | no_enrolled_users | liveness_expired | liveness_different_person", "score": 0.1}
 {"event": "error", "message": "ConnectError: ..."}
 ```
 A payout is allowed only while a `session_started` has no matching `session_ended`. Confirm with
