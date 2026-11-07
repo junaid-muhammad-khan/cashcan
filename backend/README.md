@@ -39,6 +39,35 @@ session. The bin streams frames to `/liveness/{id}/frame`; only a pass returns t
   `LIVENESS_ID_THRESHOLD` and the pose thresholds are in `app/config.py`.
 - The camera image is assumed **not mirrored** ("left" = the user's own left). Mirrored cameras flip the direction.
 
+## Try it on your Mac (save your face, then test it)
+
+```bash
+git fetch origin && git checkout feature/mac-demo
+cd backend
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+pip uninstall -y opencv-python-headless && pip install opencv-python   # the windowed build, for the camera preview
+```
+If `pip install insightface` fails while building, run `xcode-select --install` and retry. The first run downloads the
+face model (~125 MB). When macOS asks, allow the camera for your terminal. If camera 0 is your phone, add `--camera 1`.
+
+```bash
+python -m tools.face_demo enroll --name junaid                      # follow the prompts, 5 frames
+python -m tools.face_demo identify --webcam                         # live: green box + name when it is you; q quits
+python -m tools.face_demo identify --image ~/pics/*.jpg --annotate out/   # who is in these pictures? (saves marked-up copies)
+python -m tools.face_demo evaluate --name junaid --mine ~/test/me --others ~/test/others
+python -m tools.face_demo list
+python -m tools.face_demo delete --name junaid
+```
+`evaluate` is the accuracy test: put photos of you in one folder (different light, angles, glasses, a different day)
+and photos of other people in another. It lists every photo as ok/ERR, your lowest score vs the others' highest, and
+whether a clean threshold exists. The more varied photos, the more it tells you.
+
+Your face is saved as 512 numbers (no photo) in `backend/cashcan_faces.db` (git-ignored), the same database the API and
+enrollment page use; `delete` removes it. This is local only for now. Databricks Vector Search is the next step once
+there is a workspace to point at. Not yet run on macOS itself (developed and tested on Linux, with video files
+standing in for a camera).
+
 ## Measured accuracy (LFW, 2026-11-07)
 Full tables in [`EVAL.md`](EVAL.md); regenerate with `python -m tools.eval_lfw --data <dir>` (see its docstring).
 Real pipeline, threshold 0.45, 150 enrolled people (3 photos each), 757 later photos of them, 831 photos of 600 strangers:
