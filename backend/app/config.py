@@ -20,3 +20,13 @@ MIN_SHARPNESS = 40.0  # variance of Laplacian on the face crop
 
 # Bin session: after one successful match, items in this window pay out to that user
 SESSION_TTL_SECONDS = int(os.environ.get("SESSION_TTL_SECONDS", "60"))
+
+# Liveness (random head-turn challenge, issued only after a face is recognised)
+REQUIRE_LIVENESS = os.environ.get("CASHCAN_LIVENESS", "on").lower() not in ("off", "0", "false")
+LIVENESS_TTL_SECONDS = float(os.environ.get("LIVENESS_TTL_SECONDS", "10"))  # time allowed to complete a challenge
+LIVENESS_CENTER_MAX = 0.12   # |turn ratio| at or below this counts as facing the camera
+LIVENESS_TURN_MIN = 0.25     # ratio needed in the asked direction (~30 degrees of head turn)
+LIVENESS_ID_THRESHOLD = float(os.environ.get("LIVENESS_ID_THRESHOLD", "0.35"))  # looser than MATCH_THRESHOLD: a turned head scores lower
+LIVENESS_MAX_STRIKES = 3     # frames that fail the identity check before the challenge fails
+LIVENESS_VALID_SECONDS = float(os.environ.get("LIVENESS_VALID_SECONDS", "120"))  # a live session may be refreshed by face re-check this long
+LIVENESS_MAX_OPEN = 200      # cap on simultaneously open challenges

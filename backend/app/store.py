@@ -49,6 +49,10 @@ class FaceStore:
         row = self._db.execute("SELECT wallet FROM users WHERE user_id=?", (user_id,)).fetchone()
         return row[0] if row else None
 
+    def embeddings_for(self, user_id: str) -> np.ndarray:
+        rows = self._db.execute("SELECT vec FROM embeddings WHERE user_id=?", (user_id,)).fetchall()
+        return np.stack([np.frombuffer(r[0], np.float32) for r in rows]) if rows else np.zeros((0, 512), np.float32)
+
     def all_embeddings(self) -> tuple[list[str], np.ndarray]:
         rows = self._db.execute("SELECT user_id, vec FROM embeddings").fetchall()
         if not rows:

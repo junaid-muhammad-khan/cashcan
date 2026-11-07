@@ -24,14 +24,20 @@ class FakeServer:
 
     def __init__(self):
         self.match_replies, self.calls, self.down = [], 0, False
+        self.live_replies, self.live_calls, self.last_match_body = [], 0, b""
 
     def handler(self, request: httpx.Request) -> httpx.Response:
         if self.down:
             raise httpx.ConnectError("down")
         if request.url.path == "/match":
             self.calls += 1
+            self.last_match_body = request.content
             assert b"image/jpeg" in request.content  # a real JPEG upload
             return httpx.Response(200, json=self.match_replies.pop(0))
+        if request.url.path.startswith("/liveness/"):
+            self.live_calls += 1
+            assert b"image/jpeg" in request.content
+            return httpx.Response(200, json=self.live_replies.pop(0))
         if request.url.path.startswith("/session/"):
             return httpx.Response(200, json={"user_id": "alice", "wallet": "W"})
         return httpx.Response(404)
@@ -159,3 +165,101 @@ def test_detector_falls_back_when_cascade_unavailable(monkeypatch):
     warnings = []
     d = detector.make_detector(warn=warnings.append)
     assert isinstance(d, detector.AlwaysDetector) and d.has_face(FRAME) and warnings
+
+
+# ---- liveness challenge
+def challenge(direction="left", ttl=10, user="alice"):
+    return {"matched": True, "user_id": user, "score": 0.9, "liveness_required": True,
+            "challenge_id": "c1", "direction": direction, "expires_in": ttl, "hint": f"turn {direction}"}
+
+
+def passed(user="alice", token="live1"):
+    return {"status": "passed", "user_id": user, "session_token": token, "expires_in": 60}
+
+
+PENDING = {"status": "pending", "hint": "Look straight at the camera."}
+
+
+def test_challenge_then_pass_opens_session_only_at_the_end(env):
+    srv, _, events, loop = env
+    srv.match_replies = [challenge("right")]
+    srv.live_replies = [PENDING, PENDING, passed()]
+    loop.step(FRAME, 0)
+    assert kinds(events) == ["challenge_started"] and events[0]["direction"] == "right"
+    assert loop.current_session(0) is None  # recognised is not enough
+    loop.step(FRAME, 0.1)  # first challenge frame goes out immediately
+    assert srv.live_calls == 1
+    loop.step(FRAME, 0.2)  # inside challenge_interval (0.25s): nothing sent
+    assert srv.live_calls == 1
+    for t in (0.6, 0.9):
+        loop.step(FRAME, t)
+    assert kinds(events) == ["challenge_started", "session_started"]
+    assert events[1]["wallet"] == "W" and loop.current_session(1).token == "live1"
+    assert srv.calls == 1  # frames went to the liveness endpoint, not /match
+
+
+def test_challenge_frames_are_sent_even_if_local_detector_sees_no_face(env):
+    srv, det, events, loop = env
+    srv.match_replies = [challenge()]
+    srv.live_replies = [PENDING]
+    loop.step(FRAME, 0)
+    det.face = False  # person turned away; the server decides what counts
+    loop.step(FRAME, 0.3)
+    assert srv.live_calls == 1
+
+
+def test_failed_challenge_denies_and_cools_down(env):
+    srv, _, events, loop = env
+    srv.match_replies = [challenge(), denied()]
+    srv.live_replies = [{"status": "failed", "reason": "different_person"}]
+    loop.step(FRAME, 0)
+    loop.step(FRAME, 0.3)
+    assert events[-1] == {"event": "denied", "reason": "liveness_different_person"}
+    calls = srv.calls
+    loop.step(FRAME, 1.0)  # inside the 2s denied cooldown
+    assert srv.calls == calls and loop.current_session(1) is None
+
+
+def test_challenge_times_out_locally(env):
+    srv, _, events, loop = env
+    srv.match_replies = [challenge(ttl=5)]
+    srv.live_replies = [PENDING] * 40
+    loop.step(FRAME, 0)
+    for i in range(1, 25):
+        loop.step(FRAME, i * 0.25)
+    loop.step(FRAME, 5.5)
+    assert events[-1] == {"event": "denied", "reason": "liveness_expired"} and loop.current_session(5.5) is None
+
+
+def test_refresh_sends_session_token_and_keeps_session(env):
+    srv, _, events, loop = env
+    srv.match_replies = [challenge(), matched("alice", "live2")]
+    srv.live_replies = [passed(token="live1")]
+    loop.step(FRAME, 0)
+    loop.step(FRAME, 0.3)
+    loop.step(FRAME, 6)  # recheck due
+    assert b"live1" in srv.last_match_body  # token forwarded so the server can skip a new challenge
+    assert loop.current_session(6).token == "live2" and kinds(events) == ["challenge_started", "session_started"]
+
+
+def test_stale_liveness_proof_ends_session_and_rechallenges(env):
+    srv, _, events, loop = env
+    srv.match_replies = [challenge(), challenge("right")]
+    srv.live_replies = [passed()]
+    loop.step(FRAME, 0)
+    loop.step(FRAME, 0.3)
+    loop.step(FRAME, 6)  # server says: prove liveness again
+    assert kinds(events)[-2:] == ["session_ended", "challenge_started"]
+    assert events[-2]["why"] == "liveness_required" and loop.current_session(6) is None
+
+
+def test_server_dies_mid_challenge(env):
+    srv, _, events, loop = env
+    srv.match_replies = [challenge()]
+    loop.step(FRAME, 0)
+    srv.down = True
+    loop.step(FRAME, 0.3)
+    assert kinds(events) == ["challenge_started", "error"]
+    srv.down, srv.match_replies = False, [matched()]
+    loop.step(FRAME, 4)  # backoff over, back to normal matching
+    assert kinds(events)[-1] == "session_started"

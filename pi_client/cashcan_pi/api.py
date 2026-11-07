@@ -8,8 +8,15 @@ class FaceApi:
     def __init__(self, base_url: str, timeout: float = 5.0, transport: httpx.BaseTransport | None = None):
         self._http = httpx.Client(base_url=base_url.rstrip("/"), timeout=timeout, transport=transport)
 
-    def match(self, jpeg: bytes) -> dict:
-        r = self._http.post("/match", files={"frame": ("frame.jpg", jpeg, "image/jpeg")})
+    def match(self, jpeg: bytes, session_token: str | None = None) -> dict:
+        """session_token: pass the current live session so the same person can refresh without a new challenge."""
+        data = {"session_token": session_token} if session_token else None
+        r = self._http.post("/match", files={"frame": ("frame.jpg", jpeg, "image/jpeg")}, data=data)
+        r.raise_for_status()
+        return r.json()
+
+    def liveness_frame(self, challenge_id: str, jpeg: bytes) -> dict:
+        r = self._http.post(f"/liveness/{challenge_id}/frame", files={"frame": ("frame.jpg", jpeg, "image/jpeg")})
         r.raise_for_status()
         return r.json()
 

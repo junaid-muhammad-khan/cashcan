@@ -9,6 +9,7 @@ import cv2
 import numpy as np
 
 from . import config
+from .liveness import turn_ratio
 
 
 @dataclass
@@ -17,6 +18,7 @@ class FaceResult:
     det_score: float
     box: tuple[int, int, int, int]  # x1, y1, x2, y2
     sharpness: float
+    turn: float | None = None  # head-turn ratio, see liveness.turn_ratio; None if unavailable
 
 
 class FaceEngine(Protocol):
@@ -67,5 +69,6 @@ class InsightFaceEngine:
             gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
             sharp = float(cv2.Laplacian(gray, cv2.CV_64F).var())
             emb = np.asarray(f.normed_embedding, dtype=np.float32)
-            out.append(FaceResult(emb, float(f.det_score), (x1, y1, x2, y2), sharp))
+            turn = turn_ratio(np.asarray(f.kps)) if getattr(f, "kps", None) is not None else None
+            out.append(FaceResult(emb, float(f.det_score), (x1, y1, x2, y2), sharp, turn))
         return out

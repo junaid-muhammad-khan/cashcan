@@ -18,6 +18,7 @@ JSON lines on **stdout**; human status on stderr.
 
 ```json
 {"event": "session_started", "user_id": "alice", "wallet": "9xQe...", "token": "...", "expires_in": 60, "score": 0.98}
+{"event": "challenge_started", "user_id": "alice", "direction": "left"}
 {"event": "session_ended", "user_id": "alice", "why": "expired | different_person | unrecognised_face"}
 {"event": "denied", "reason": "below_threshold | ambiguous | no_enrolled_users", "score": 0.1}
 {"event": "error", "message": "ConnectError: ..."}
@@ -26,6 +27,10 @@ A payout is allowed only while a `session_started` has no matching `session_ende
 `GET /session/{token}` on the API if you want the server to be the source of truth.
 
 ## How it behaves
+- **Liveness:** when the server asks for a head turn, the bin shows the prompt (console or amber LED), streams frames
+  every 0.25 s to the challenge, and opens the session only when the server says it passed. `session_started`
+  therefore means *recognised and live*. If a live session's proof gets too old the client emits `session_ended`
+  (`why: liveness_required`) and asks again.
 - A cheap local Haar detector decides when to upload (every 0.7 s with a face in view). It is frontal-only and can
   miss real faces, so it **fails open**: with nothing detected it still sends one probe frame every 3 s.
   On OpenCV 5 the detector does not exist, so every frame goes out at the send interval (works, uses a bit more bandwidth).

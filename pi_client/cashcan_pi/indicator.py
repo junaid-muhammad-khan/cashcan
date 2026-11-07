@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import sys
 
-STATES = ("idle", "scanning", "matched", "denied", "error")
+STATES = ("idle", "scanning", "challenge", "matched", "denied", "error")
 
 
 class ConsoleIndicator:
@@ -18,7 +18,7 @@ class ConsoleIndicator:
 
 
 class GpioIndicator(ConsoleIndicator):
-    """green = matched, red = denied/error, amber = scanning. Pins are BCM numbers."""
+    """green = matched, red = denied/error, amber = scanning or doing the head-turn challenge. Pins are BCM numbers."""
 
     def __init__(self, green: int, red: int, amber: int, **kw):
         super().__init__(**kw)
@@ -28,6 +28,6 @@ class GpioIndicator(ConsoleIndicator):
 
     def set(self, state: str, message: str = "") -> None:
         super().set(state, message)
-        on = {"matched": "green", "denied": "red", "error": "red", "scanning": "amber"}.get(state)
+        on = {"matched": "green", "denied": "red", "error": "red", "scanning": "amber", "challenge": "amber"}.get(state)
         for name, led in self._leds.items():
             led.on() if name == on else led.off()
