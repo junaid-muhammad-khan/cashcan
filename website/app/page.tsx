@@ -1,9 +1,10 @@
 import Link from "next/link";
 import HomeMotion from "@/components/HomeMotion";
 import LiveFeed from "@/components/LiveFeed";
+import ProblemStory from "@/components/ProblemStory";
 import SiteFooter from "@/components/SiteFooter";
 import SiteNav from "@/components/SiteNav";
-import { Check, Coin, Drop, Person, Pin } from "@/components/icons";
+import { Check, Person } from "@/components/icons";
 import { GATES, PRIVACY, STEPS } from "@/lib/content";
 
 export default function Home() {
@@ -73,36 +74,8 @@ export default function Home() {
           </div>
         </section>
 
-        {/* ===== PROBLEM ===== */}
-        <section className="section" id="rules">
-          <div className="container">
-            <div style={{ maxWidth: 760 }} data-reveal>
-              <div className="eyebrow">The problem</div>
-              <h2>One greasy container can ruin a whole batch of recycling.</h2>
-              <p className="section-lede">
-                Sorting rules are local and confusing, smart bins classify material instead of what your city accepts,
-                and there is little reason for anyone to get it right. CashCan fixes all three at the bin.
-              </p>
-            </div>
-            <div className="three">
-              <article className="card" data-reveal>
-                <div className="icon-tile" style={{ background: "#E3F5EB" }}><Pin /></div>
-                <h3>Your city&apos;s rules, not a material label</h3>
-                <p>Every decision is looked up against a local rule table, so the bin says where an item really goes in Metro Vancouver, and why.</p>
-              </article>
-              <article className="card" data-reveal>
-                <div className="icon-tile" style={{ background: "#FBF1D8" }}><Drop /></div>
-                <h3>Catches contamination</h3>
-                <p>A top camera and a front camera must agree. Food-soiled or greasy items are flagged and earn a reduced reward instead of slipping through.</p>
-              </article>
-              <article className="card" data-reveal>
-                <div className="icon-tile" style={{ background: "#E4EEF8" }}><Coin /></div>
-                <h3>A reason to get it right</h3>
-                <p>Reward-eligible items pay out instantly to your Solana wallet. The hauler that buys the sorted material funds the rewards.</p>
-              </article>
-            </div>
-          </div>
-        </section>
+        {/* ===== PROBLEM (pinned scroll story) ===== */}
+        <ProblemStory />
 
         {/* ===== STORY ===== */}
         <section className="section story" id="how">
