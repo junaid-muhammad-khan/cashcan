@@ -13,7 +13,7 @@ class ConsoleIndicator:
 
     def set(self, state: str, message: str = "") -> None:
         self.state, self.message = state, message
-        key = (state, message)
+        key = (state, message if state in ("denied", "error", "challenge") else "")   # 'scanning' flips between messages every frame: print state changes only
         if key != self._last:
             self._last = key
             print(f"[indicator] {state}" + (f": {message}" if message else ""), file=self._out)

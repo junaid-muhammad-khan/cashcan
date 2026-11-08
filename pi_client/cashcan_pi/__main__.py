@@ -34,8 +34,8 @@ def main(argv=None) -> int:
                     help="camera index, device path, or a video file for testing (loops)")
     ap.add_argument("--width", type=int, default=640)
     ap.add_argument("--height", type=int, default=480)
-    ap.add_argument("--send-interval", type=float, default=0.7)
-    ap.add_argument("--recheck-interval", type=float, default=5.0)
+    ap.add_argument("--send-interval", type=float, default=0.5)
+    ap.add_argument("--recheck-interval", type=float, default=1.0, help="re-check the face of a verified person this often (seconds)")
     ap.add_argument("--no-face-precheck", action="store_true", help="send every frame to the server instead of only when the local Haar check sees a face")
     ap.add_argument("--led-pins", metavar="GREEN,RED,AMBER", help="BCM pins; needs gpiozero (on the Pi)")
     ap.add_argument("--liveness", action="store_true", help="with --local-identity: after a face is recognised, also ask for a head turn (off by default: the bin verifies on the face match alone)")
@@ -49,6 +49,8 @@ def main(argv=None) -> int:
     g.add_argument("--min-confidence", type=float, default=0.60, help="below this the item goes to the waste lid and earns nothing")
     g.add_argument("--lid-seconds", type=float, default=6.0)
     g.add_argument("--show", action="store_true", help="open a preview window with the bin's decisions drawn on the camera frame (q to quit)")
+    g.add_argument("--teach-file", metavar="FILE.npz", help="where taught examples are remembered (default ~/.cashcan/taught.npz)")
+    g.add_argument("--teach-dir", metavar="DIR", help="where photos of taught items are kept, one folder per bin (default ~/.cashcan/taught_photos)")
     g.add_argument("--save-items", metavar="DIR", help="save a photo of every item the bin classifies, with the decision in the file name (to retrain on this camera)")
     g.add_argument("--lids", metavar="FILE.json", help='{"cans": {"open": "cmd", "close": "cmd"}, ...}; omit to simulate lids on stderr')
     a = ap.parse_args(argv)
@@ -81,7 +83,7 @@ def main(argv=None) -> int:
     loop = BackgroundIdentity(loop)   # server calls run on their own thread: the camera and the window never wait on them
     runner, roi = loop, (0.15, 0.40, 0.85, 1.0)
     if a.classify:
-        from .classifier import OnnxClassifier
+        from .classifier import OnnxClassifier, TeachableClassifier
         from .controller import BinController, Outbox
         from .itemgate import ItemGate
         from .lid import CommandLid, LidController, SimulatedLid
@@ -90,7 +92,8 @@ def main(argv=None) -> int:
             print("cashcan_pi: no --bin-key / CASHCAN_BIN_KEY: items will be sorted but the server will refuse the records", file=sys.stderr)
         roi = tuple(float(v) for v in a.item_roi.split(","))
         driver = CommandLid(json.loads(open(a.lids).read())) if a.lids else SimulatedLid()
-        runner = BinController(loop, ItemGate(roi=roi), OnnxClassifier(a.model), LidController(driver, a.lid_seconds),
+        classifier = OnnxClassifier(a.model) if a.model else TeachableClassifier(store=a.teach_file, photos=a.teach_dir)   # a named model file is used as is (no teaching)
+        runner = BinController(loop, ItemGate(roi=roi), classifier, LidController(driver, a.lid_seconds),
                                Outbox(api, on_event=emit), emit, min_confidence=a.min_confidence, save_dir=a.save_items)
 
     is_file = not a.camera.isdigit() and os.path.isfile(a.camera)
@@ -127,8 +130,15 @@ def main(argv=None) -> int:
                 except cv2.error:
                     print("cashcan_pi: --show needs a GUI build of OpenCV: pip uninstall -y opencv-python-headless && pip install 'opencv-python<5'", file=sys.stderr)
                     return 2
-                if cv2.waitKey(1) & 0xFF == ord("q"):
+                key = cv2.waitKey(1) & 0xFF
+                if key == ord("q"):
                     break
+                if a.classify and key in (ord("r"), ord("o"), ord("w")):
+                    label = {"r": "cans", "o": "organics", "w": "waste"}[chr(key)]
+                    if runner.teach(label, now) is None:
+                        print("cashcan_pi: nothing to teach yet: hold the item still in the box until the bin has looked at it, then press the key", file=sys.stderr)
+                elif a.classify and key == ord("u"):
+                    runner.forget_last_teaching()
             time.sleep(0.02 if a.show else 0.05)
     except KeyboardInterrupt:
         return 0

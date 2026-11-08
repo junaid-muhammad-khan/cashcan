@@ -126,14 +126,15 @@ def test_different_person_replaces_session(env):
     assert events[1]["why"] == "different_person" and loop.current_session(7).user_id == "bob"
 
 
-def test_two_unrecognised_checks_end_session_but_one_does_not(env):
+def test_three_unrecognised_checks_end_session_but_fewer_do_not(env):
     srv, _, events, loop = env
-    srv.match_replies = [matched(), denied(), denied()]
+    srv.match_replies = [matched(), denied(), denied(), denied()]
     loop.step(FRAME, 0)
     loop.step(FRAME, 6)
-    assert loop.current_session(6) is not None  # one miss is tolerated
     loop.step(FRAME, 12)
-    assert loop.current_session(12) is None and events[-1]["why"] == "unrecognised_face"
+    assert loop.current_session(12) is not None  # two misses in a row are tolerated (a face turned away, a hand in front)
+    loop.step(FRAME, 18)
+    assert loop.current_session(18) is None and events[-1]["why"] == "unrecognised_face"
 
 
 def test_bad_frame_never_ends_session(env):

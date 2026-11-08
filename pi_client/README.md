@@ -111,3 +111,10 @@ Add `--liveness` to ask for one random head turn at the bin as well; that stops 
 meant it often never noticed them), ignores a person who fills most of the box, and the classifier is given a square crop tightly around the item, not the whole box. In a simulation (held-out can, bottle and waste photos pasted at webcam size on a plain desk),
 judging the whole box got 23% of cans and bottles right; the tight crop got about 62-68%; the same photos with no scene around them get 97%. The remaining gap is the difference between public photo sets and a webcam picture:
 **photos from your own camera (`--save-items`) are the way to close it.**
+
+## Checking every second, and teaching the bin
+- **Face:** a verified person is re-checked every second (`--recheck-interval 1`; a session ends only after 3 misses in a row, so a face turned away for a moment does not end it). With the default server mode each check is a network call; `--local-identity` makes it instant.
+- **Item:** while something is held in the amber box the bin looks at it again every second and averages the last three looks. A confident change moves the lid (and records the corrected item, which the server decides a reward for); one unsure look never flips a confident decision.
+- **Teach it (`--classify`, window must be focused):** when the bin gets an item wrong, hold the item still so it is in the box and press **R** (it is recycle: cans, bottles), **O** (organics) or **W** (waste). The bin remembers it at once, judges the item again, and remembers it after a restart
+  (`~/.cashcan/taught.npz`; photos kept in `~/.cashcan/taught_photos/<bin>/`). **U** undoes the last teaching. Teaching compares the model's own picture features with what you taught and only overrides the model when an item looks close to a taught one;
+  measured on simulated webcam scenes, items shown again went from 78% to 100% right, other cans improved by 15 points, and waste was unaffected. A few examples of each thing (3 to 5, from different angles) work best. Teaching needs the FP32 model (the default); passing `--model` uses that file as is, without teaching.

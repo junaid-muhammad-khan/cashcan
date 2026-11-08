@@ -179,5 +179,5 @@ class BinLoop:
         self.emit({"event": "denied", "reason": reason, "score": res.get("score")})
         if self._session:
             self._denials += 1
-            if self._denials >= 2:
+            if self._denials >= 3:
                 self._end("unrecognised_face")

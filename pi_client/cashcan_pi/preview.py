@@ -60,6 +60,9 @@ def draw(frame: np.ndarray, status: dict, indicator_state: str, indicator_msg: s
            f"{rep.get('reason', '-')}" + (f" {rep['score'] * 100:.0f}%" if rep.get("score") is not None else "")) if rep else "no answer yet"
     _text(out, f"local face check: {'face' if seen else 'no face' if seen is False else '-'}  |  server: {srv}", (12, h - 58), (200, 200, 200), 0.45)
 
+    if status.get("can_teach"):
+        n = status.get("taught", 0)
+        _text(out, f"wrong? press  R = recycle   O = organics   W = waste   U = undo      taught: {n}", (12, h - 78), (200, 200, 200), 0.45)
     bw = w // 3
     for i, name in enumerate(LIDS):
         lit = status["open_lid"] == name

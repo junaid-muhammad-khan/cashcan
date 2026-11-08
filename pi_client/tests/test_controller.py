@@ -279,3 +279,108 @@ def test_item_crop_is_tight_square_around_the_item_and_a_person_filling_the_box_
         person.step(EMPTY, t / 10)
     body = np.full((480, 640, 3), (40, 40, 160), np.uint8)               # a torso: the whole box changes
     assert not any(person.step(body, 1.2 + t / 10) for t in range(0, 20))
+
+
+def test_teaching_makes_the_bin_recognise_what_it_was_shown(tmp_path):
+    import cv2
+    from cashcan_pi.classifier import TeachableClassifier
+
+    rng = np.random.default_rng(1)
+    can = np.clip(rng.normal(120, 60, (200, 200, 3)), 0, 255).astype(np.uint8); can[40:160, 70:130] = (20, 20, 220)     # a red tall thing
+    other = np.clip(rng.normal(120, 60, (200, 200, 3)), 0, 255).astype(np.uint8); other[60:140, 40:160] = (230, 230, 30)  # something else
+    c = TeachableClassifier(store=tmp_path / "t.npz", photos=tmp_path / "ph")
+    before = c.probs(can)
+    assert c.teach("cans", can) == 1 and c.teach("waste", other) == 1
+    after = c.probs(can)
+    assert max(after, key=after.get) == "cans" and after["cans"] > before["cans"]            # what was shown is now recognised
+    assert max(c.probs(other), key=c.probs(other).get) == "waste"
+    assert len(list((tmp_path / "ph" / "cans").glob("*.jpg"))) == 1                           # the taught photo is kept for retraining
+    again = TeachableClassifier(store=tmp_path / "t.npz", photos=tmp_path / "ph")             # and it is remembered after a restart
+    assert again.labels == ["cans", "waste"] and max(again.probs(can), key=again.probs(can).get) == "cans"
+    assert again.forget_last() == "waste" and again.labels == ["cans"]
+    with pytest.raises(ValueError):
+        c.teach("metal", can)
+
+
+class StateGate:
+    """A gate whose state the test controls: fires once, then stays 'present' until set to 'empty'."""
+    roi = (0, 0, 1, 1)
+
+    def __init__(self):
+        self.state, self._fire = "empty", True
+
+    def crop(self, f):
+        return f
+
+    def step(self, f, now):
+        if self._fire and self.state == "empty":
+            self._fire, self.state = False, "present"
+            return True
+        return False
+
+
+class ScriptedClassifier:
+    """Answers whatever the test sets; supports teaching like the real one."""
+
+    def __init__(self, p):
+        self.p, self.taught = p, []
+        self.labels = []
+
+    def probs(self, f):
+        return self.p
+
+    def teach(self, label, crop):
+        self.labels.append(label)
+        self.p = {"cans": 0.95, "organics": 0.02, "waste": 0.03} if label == "cans" else self.p
+        return len(self.labels)
+
+    def forget_last(self):
+        return self.labels.pop() if self.labels else None
+
+
+def make_live(probs):
+    api, events, drv, gate = FakeApi(), [], SimulatedLid(out=open("/dev/null", "w")), StateGate()
+    ids = iter(f"id-{i}" for i in range(100))
+    clf = ScriptedClassifier(probs)
+    c = BinController(FakeLoop(SESSION), gate, clf, LidController(drv, hold=30), Outbox(api, on_event=events.append), events.append,
+                      votes=1, new_id=lambda: next(ids), reeval_interval=1.0)
+    return c, api, events, drv, gate, clf
+
+
+def test_the_item_is_judged_again_every_second_and_a_confident_change_moves_the_lid():
+    c, api, events, drv, gate, clf = make_live({"cans": 0.2, "organics": 0.1, "waste": 0.7})
+    c.step(EMPTY, 1.0)
+    assert drv.log == [("waste", True)] and c.last_item["bin"] == "waste"
+    c.step(EMPTY, 1.5)                                          # too soon: not looked at again
+    assert clf.p["waste"] == 0.7 and len(api.sent) == 1
+    clf.p = {"cans": 0.9, "organics": 0.05, "waste": 0.05}      # the person turns the can so its shape shows
+    c.step(EMPTY, 2.2)
+    assert c.last_item["bin"] == "waste"                        # one look is not enough: the last three looks are averaged
+    c.step(EMPTY, 3.4)
+    assert c.last_item["bin"] == "cans" and drv.log[-2:] == [("waste", False), ("cans", True)]
+    assert any(e["event"] == "item_revised" and e["from"] == "waste" and e["bin"] == "cans" for e in events)
+    assert [p["item_class"] for p in api.sent] == ["waste", "cans"]    # the corrected item is recorded too (new id)
+    clf.p = {"cans": 0.4, "organics": 0.3, "waste": 0.3}        # a single unsure look does not flip a confident decision
+    c.step(EMPTY, 4.6)
+    assert drv.log[-1] == ("cans", True) and len(api.sent) == 2
+
+
+def test_nothing_is_recorded_twice_and_the_decision_is_forgotten_when_the_item_leaves():
+    c, api, events, drv, gate, clf = make_live({"cans": 0.9, "organics": 0.05, "waste": 0.05})
+    c.step(EMPTY, 1.0)
+    for t in (2.2, 3.4, 4.6):
+        c.step(EMPTY, t)
+    assert len(api.sent) == 1                                   # same answer each second: still one record
+    gate.state = "empty"; gate._fire = True
+    c.step(EMPTY, 6.0)                                          # item left, a new one arrives
+    assert len(api.sent) == 2
+
+
+def test_teaching_in_the_window_fixes_the_decision_straight_away():
+    c, api, events, drv, gate, clf = make_live({"cans": 0.05, "organics": 0.05, "waste": 0.9})     # a soda can wrongly called waste
+    c.step(EMPTY, 1.0)
+    assert c.last_item["bin"] == "waste"
+    assert c.teach("cans", 1.2) == {"label": "cans", "examples": 1}
+    assert c.last_item["bin"] == "cans" and drv.log[-1] == ("cans", True)
+    assert api.sent[-1]["item_class"] == "cans" and c.status(1.3)["can_teach"] and c.status(1.3)["taught"] == 1
+    assert c.forget_last_teaching() == "cans"

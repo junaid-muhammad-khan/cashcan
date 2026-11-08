@@ -98,12 +98,16 @@ class BinController:
     min_confidence: float = 0.60
     votes: int = 3
     new_id: Callable[[], str] = lambda: uuid.uuid4().hex
+    reeval_interval: float = 1.0   # while an item is held in the box, look at it again this often and update the decision
     save_dir: str | None = None   # save a photo of every item the bin looks at (see _save_photo): the raw material for retraining on this camera
 
     def __post_init__(self):
         self._votes: list[dict] | None = None
         self._first_crop = None
         self._crop = None
+        self._committed: dict | None = None   # the decision currently in force for the item in the box: bin, confidence, reason
+        self._recent: list[dict] = []         # the last few looks, averaged so one odd frame does not flip the decision
+        self._next_reeval = 0.0
         self.last_item: dict | None = None   # most recent decision, for the preview window
         self.last_item_at = 0.0
 
@@ -115,7 +119,8 @@ class BinController:
                 "collecting_looks": self._votes is not None,
                 "open_lid": self.lid.open_bin,
                 "last_item": self.last_item if now - self.last_item_at < 15 else None,
-                "identity": self.loop.info() if hasattr(self.loop, "info") else {}}
+                "identity": self.loop.info() if hasattr(self.loop, "info") else {},
+                "can_teach": hasattr(self.classifier, "teach"), "taught": len(getattr(self.classifier, "labels", []))}
 
     def step(self, frame, now: float) -> None:
         self.loop.step(frame, now)          # identity: keeps the session fresh
@@ -133,6 +138,65 @@ class BinController:
             self._votes = [self.classifier.probs(self._crop)]
             if len(self._votes) >= self.votes:
                 self._decide(now)
+            return
+        state = getattr(self.gate, "state", None)
+        if state == "empty":
+            self._committed, self._recent = None, []             # the item is gone: forget its decision
+        elif state == "present" and self._committed and now >= self._next_reeval:
+            self._crop = getattr(self.gate, "item_crop", self.gate.crop)(frame)
+            self._reeval(now)
+
+    def _reeval(self, now: float, fresh: bool = False) -> None:
+        """Look at the item in the box again (every `reeval_interval` s while it is held). The decision and the lid follow what the bin sees NOW;
+        a confident change to Recycle or Organics also records a new item (the server decides any reward). `fresh` drops the earlier looks (after teaching)."""
+        if self._committed is None or self._crop is None:
+            return
+        self._next_reeval = now + self.reeval_interval
+        p = self.classifier.probs(self._crop)
+        self._recent = ([p] if fresh else self._recent + [p])[-3:]
+        bin_name, conf, reason = decide(self._recent, self.min_confidence)
+        old = self._committed["bin"]
+        item = self.last_item
+        if item is not None:
+            item.update(bin=bin_name, confidence=round(conf, 3), reason=reason)
+            self.last_item_at = now
+        if bin_name == old:
+            self._committed.update(confidence=conf, reason=reason)
+            return
+        if reason != "ok" and not fresh:      # an unsure look must not flip a decision that was made confidently
+            return
+        self.lid.open(bin_name, now)
+        self._committed = {"bin": bin_name, "confidence": conf, "reason": reason}
+        self.on_event({"event": "item_revised", "from": old, "bin": bin_name, "confidence": round(conf, 3), "reason": reason})
+        if bin_name != "waste":               # waste needs no record of its own; Recycle and Organics do (the server decides the reward)
+            session = self.loop.current_session(now)
+            iid = self.new_id()
+            payload = {"interaction_id": iid, "item_class": bin_name, "confidence": round(conf, 4)}
+            if session:
+                payload["session_token"], payload["user_id"] = session.token, session.user_id
+            if item is not None:
+                item.update(interaction_id=iid, user_id=session.user_id if session else None, payout_status=None, reward_cents=None)
+            res = self.outbox.send(payload, now)
+            if res is not None:
+                if item is not None:
+                    item.update(server_outcome(res))
+                self.on_event({"event": "interaction_recorded", "interaction_id": iid, "after_retries": 0, **server_outcome(res)})
+
+    def teach(self, label: str, now: float) -> dict | None:
+        """The person says what the item in the box really is. The bin remembers it and judges the item again straight away."""
+        if not hasattr(self.classifier, "teach") or self._crop is None:
+            return None
+        n = self.classifier.teach(label, self._crop)
+        self.on_event({"event": "taught", "label": label, "examples": n})
+        if self._committed is not None:
+            self._reeval(now, fresh=True)
+        return {"label": label, "examples": n}
+
+    def forget_last_teaching(self) -> str | None:
+        gone = self.classifier.forget_last() if hasattr(self.classifier, "forget_last") else None
+        if gone:
+            self.on_event({"event": "forgot", "label": gone})
+        return gone
 
     def _save_photo(self, bin_name: str, conf: float, reason: str, iid: str) -> None:
         """Keep the picture the classifier saw, named by its decision: <time>_<bin>_<confidence>[_unsure]_<id>.jpg. Sort these into folders
@@ -152,6 +216,7 @@ class BinController:
     def _decide(self, now: float) -> None:
         votes, self._votes = self._votes, None
         bin_name, conf, reason = decide(votes, self.min_confidence)
+        self._committed, self._recent, self._next_reeval = {"bin": bin_name, "confidence": conf, "reason": reason}, list(votes)[-3:], now + self.reeval_interval
         session = self.loop.current_session(now)   # a live, verified person right now?
         self.lid.open(bin_name, now)
         iid = self.new_id()
