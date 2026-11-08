@@ -30,3 +30,10 @@ sudo python3 -m cashcan_pi --classify --servos cans=0:0 --servo-open-angle 90 --
 ```
 `bin=chip:channel`, comma separated: `cans=0:0,organics=0:1,waste=1:0`. A bin without a servo is ignored, so you can start with the cans lid alone.
 `--servo-dry-run` prints pulses only. `--servos` and `--lids` cannot be combined (use `--lids` if you would rather call your own shell commands).
+
+## Open when the camera sees a can (simplest mode)
+```bash
+sudo python3 -m cashcan_pi.canwatch --camera 0 --chip 0 --channel 0 --show
+```
+The lid opens after the camera sees a can on 3 looks in a row, stays open while the can is there, and closes 3 s after it is gone (`--hold`). No can: it stays shut.
+`--threshold` (default 0.6) is how sure the camera must be, `--confirm` the looks in a row, `--dry-run` prints pulses without moving the servo.

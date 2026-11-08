@@ -50,7 +50,7 @@ should work with `--camera 0`. Frames travel over plain http on your network and
 python -m cashcan_pi --camera 0 --server https://www.cashcan.biz/face-api --classify --bin-key "$CASHCAN_BIN_KEY" \
   --item-roi 0.15,0.40,0.85,1.0 --lids lids.json     # omit --lids to simulate the lids on stderr
 ```
-For hobby-servo lids use `--servos cans=0:0` instead of `--lids`: a can opens the cans lid, no can leaves it shut. See [SERVO.md](SERVO.md) (not yet tried on real hardware).
+Simplest: `python3 -m cashcan_pi.canwatch` opens the lid whenever the camera sees a can (see SERVO.md). For hobby-servo lids in the full bin use `--servos cans=0:0` instead of `--lids`: a can opens the cans lid, no can leaves it shut. See [SERVO.md](SERVO.md) (not yet tried on real hardware).
 One camera frame feeds two jobs. **Who:** the existing loop (face match + head-turn check) keeps a live session = a logged-in, verified person.
 **What:** `ItemGate` notices an item held still in the region of interest, `OnnxClassifier` (ml/models/mobilenetv2_cashcan.onnx, same preprocessing as
 training) averages 3 looks into organics / cans / waste, and `LidController` opens that one lid.
