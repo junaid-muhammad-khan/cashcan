@@ -1,9 +1,9 @@
+# Runtime only (what Vercel installs). Kept small: the whole Python bundle must stay under Vercel's 500 MB limit.
+# The face models live in models/ and run through app/lean_engine.py (no insightface package needed).
 fastapi>=0.110
 uvicorn>=0.29
 python-multipart>=0.0.9
 numpy>=1.26
 opencv-python-headless>=4.9
-insightface>=0.7.3
 onnxruntime>=1.17
-pytest>=8
 httpx>=0.27

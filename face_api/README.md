@@ -6,7 +6,7 @@ Face enrollment and matching for the bin. Stores 512-d ArcFace embeddings only, 
 
 ```bash
 cd face_api
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 uvicorn app.main:app_factory --factory --port 8000
 python -m pytest -q
 ```
@@ -65,7 +65,7 @@ git clone https://github.com/junaid-muhammad-khan/cashcan.git   # skip if you al
 cd cashcan && git checkout integration/face-system-and-payout
 cd face_api
 python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 # the camera preview needs the windowed OpenCV. The two OpenCV packages share the same files, so remove BOTH and
 # install one (uninstalling only the headless one leaves cv2 broken):
 pip uninstall -y opencv-python opencv-python-headless && pip install opencv-python

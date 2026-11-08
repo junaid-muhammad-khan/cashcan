@@ -29,6 +29,13 @@ SOLANA_ADDR_RE = re.compile(r"^[1-9A-HJ-NP-Za-km-z]{32,44}$")  # base58 public k
 STATIC = Path(__file__).parent / "static"
 
 
+def make_engine() -> FaceEngine:
+    """The lean onnxruntime engine when the two model files are present (always, on Vercel), else the full insightface package."""
+    from .lean_engine import LeanEngine, models_available
+
+    return LeanEngine() if models_available() else InsightFaceEngine()
+
+
 def make_store():
     """Databricks when configured (CASHCAN_STORE / DATABRICKS_* env), else the local SQLite file."""
     if config.STORE == "databricks":
@@ -46,7 +53,7 @@ def create_app(engine: FaceEngine | None = None, store: FaceStore | None = None,
 
     def get_engine() -> FaceEngine:
         if state["engine"] is None:  # lazy: model load is slow
-            state["engine"] = InsightFaceEngine()
+            state["engine"] = make_engine()
         return state["engine"]
 
     @app.get("/", include_in_schema=False)

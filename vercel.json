@@ -4,9 +4,24 @@
     "website": {
       "root": "website",
       "framework": "nextjs"
+    },
+    "face_api": {
+      "root": "face_api",
+      "framework": "fastapi"
     }
   },
   "rewrites": [
-    { "source": "/(.*)", "destination": { "service": "website" } }
+    {
+      "source": "/face-api/(.*)",
+      "destination": {
+        "service": "face_api"
+      }
+    },
+    {
+      "source": "/(.*)",
+      "destination": {
+        "service": "website"
+      }
+    }
   ]
 }

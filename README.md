@@ -162,7 +162,7 @@ Try it on a laptop (tested on macOS and Linux with Python 3.13 and 3.14; the fir
 ```bash
 cd face_api
 python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 pip uninstall -y opencv-python opencv-python-headless && pip install opencv-python
 python -m tools.face_demo enroll --name yourname --count 3
 python -m tools.face_demo identify --webcam

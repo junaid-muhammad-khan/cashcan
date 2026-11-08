@@ -1,0 +1,4 @@
+# Local development, tests, tools and evaluation: everything in requirements.txt plus insightface (full engine), tests.
+-r requirements.txt
+insightface>=0.7.3
+pytest>=8
