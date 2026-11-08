@@ -2,7 +2,10 @@
 //   POST {interaction_id, to, reward_cents} -> live SOL/CAD rate -> lamports -> devnet transfer with memo "cashcan:<id>"
 //        -> {signature, lamports, cad_per_sol, rate_source}. Idempotent: an existing transfer with that memo is returned instead.
 //   GET  ?interaction_id=... -> {found, signature, lamports} (used by the reconcile job for rows stuck in "sending").
+// Demo mode (PAYOUT_MODE=demo, or no TREASURY_SECRET_KEY): everything above happens except the transfer. The answer carries a
+// placeholder signature "demo_<hash>" and `simulated: true`; no SOL moves. For demos without a funded treasury.
 // Kept out of the route file so tests can pass in a fake connection, treasury and rate.
+import { createHash } from "node:crypto";
 import type { Connection, Keypair } from "@solana/web3.js";
 import { centsToLamports, MAX_PAYOUT_CENTS } from "./solana/convert";
 import { PayoutError, findTransfer, parseWallet, sendTransfer } from "./solana/payout";
@@ -16,7 +19,15 @@ export interface Deps {
   quote: () => Promise<Quote | null>;
   find?: typeof findTransfer;
   send?: typeof sendTransfer;
+  mode?: "devnet" | "demo";
 }
+
+export const DEMO_PREFIX = "demo_";
+/** Placeholder rate for demo mode when no live price can be read, so the demo never stalls. */
+export const DEMO_FALLBACK_CAD_PER_SOL = 125;
+/** Same interaction -> same placeholder signature, so a retry looks exactly like the real idempotent answer. */
+export const demoSignature = (interactionId: string) =>
+  DEMO_PREFIX + createHash("sha256").update(`cashcan:${interactionId}`).digest("hex").slice(0, 40);
 
 const ID_RE = /^[A-Za-z0-9_.:-]{1,128}$/;
 const json = (body: unknown, status = 200) => Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
@@ -46,6 +57,12 @@ export async function handlePost(req: Request, deps: Deps): Promise<Response> {
     return fail(`\`reward_cents\` must be a whole number from 1 to ${MAX_PAYOUT_CENTS}.`, 400, "bad_request");
   try {
     const to = parseWallet(body.to);
+    if (deps.mode === "demo") {
+      const q = await deps.quote().catch(() => null);
+      const cadPerSol = q?.cadPerSol ?? DEMO_FALLBACK_CAD_PER_SOL;
+      return json({ signature: demoSignature(id), lamports: centsToLamports(cents, cadPerSol), cad_per_sol: cadPerSol,
+                    rate_source: q ? `${q.source} (demo, no transfer)` : "placeholder (demo, no transfer)", duplicate: false, simulated: true });
+    }
     const conn = deps.connection(), treasury = deps.treasury();
     const already = await (deps.find ?? findTransfer)(conn, treasury.publicKey, id);
     const q = await deps.quote();
@@ -67,6 +84,7 @@ export async function handleGet(req: Request, deps: Deps): Promise<Response> {
   if (denied) return denied;
   const id = new URL(req.url).searchParams.get("interaction_id");
   if (!id || !ID_RE.test(id)) return fail("`interaction_id` is missing or invalid.", 400, "bad_request");
+  if (deps.mode === "demo") return json({ found: false, simulated: true }); // nothing on chain: the reconcile job simply re-sends
   try {
     const found = await (deps.find ?? findTransfer)(deps.connection(), deps.treasury().publicKey, id);
     return json(found ? { found: true, ...found } : { found: false });

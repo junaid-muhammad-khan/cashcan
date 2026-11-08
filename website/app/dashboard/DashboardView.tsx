@@ -271,9 +271,9 @@ export default function DashboardView({ firstName, walletAddress, onSaveWallet, 
                             )}
                             <span className="db-time">{dayFmt.format(when)} · {timeFmt.format(when)}</span>
                           </button>
-                          {isOpen && d.tx_signature && (
-                            <a className="db-link db-tx" href={explorerTx(d.tx_signature)} target="_blank" rel="noreferrer">View transaction on Solana Explorer (devnet) <Arrow /></a>
-                          )}
+                          {isOpen && d.tx_signature && (d.tx_signature.startsWith("demo_")
+                            ? <p className="db-meta db-tx">Demo payout: recorded as paid, but no SOL was sent.</p>
+                            : <a className="db-link db-tx" href={explorerTx(d.tx_signature)} target="_blank" rel="noreferrer">View transaction on Solana Explorer (devnet) <Arrow /></a>)}
                         </li>
                       );
                     })}

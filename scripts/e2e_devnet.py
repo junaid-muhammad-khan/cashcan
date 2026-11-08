@@ -20,7 +20,8 @@ Two modes.
 
 Both modes then check: the interaction row reaches `paid` with a signature that is confirmed on devnet and carries the memo
 cashcan:<interaction_id>, /me/activity shows it, and workspace.cashcan_app.city_activity includes it (needs Databricks env).
-Exit code 0 only if every check passed. Test rows use interaction ids starting with "e2e-" and the user "e2e-test-user".
+In demo mode (the website has PAYOUT_MODE=demo or no TREASURY_SECRET_KEY) the payout is simulated, so the on-chain checks are
+skipped and noted. Exit code 0 only if every check passed. Test rows use interaction ids starting with "e2e-" and the user "e2e-test-user".
 """
 from __future__ import annotations
 
@@ -53,6 +54,9 @@ def rpc(method: str, params: list):
 
 
 def check_chain(sig: str, iid: str, wallet: str | None):
+    if sig.startswith("demo_"):  # the website runs in demo mode (PAYOUT_MODE=demo or no treasury key): nothing was sent
+        print(f"[NOTE] demo payout {sig}: no on-chain transaction to check", flush=True)
+        return
     tx = None
     for _ in range(10):
         tx = rpc("getTransaction", [sig, {"encoding": "jsonParsed", "commitment": "confirmed", "maxSupportedTransactionVersion": 0}])

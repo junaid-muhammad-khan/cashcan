@@ -62,6 +62,10 @@ without JavaScript, and everything that moves is skipped when the visitor has re
 | `GET /api/rate` | the browser | live SOL/CAD (Coinbase -> CoinGecko -> Kraken, `lib/rateQuote.ts`, the same code the payout uses) |
 | `GET /api/balance?address=` | the dashboard | devnet balance of a wallet |
 
+**Demo mode** (`PAYOUT_MODE=demo`, or no `TREASURY_SECRET_KEY`): the route does everything except the transfer and answers with a placeholder
+signature `demo_<hash>` (`simulated: true`), so the whole flow (paid status, dashboards, city view) works without a funded treasury. The dashboard
+labels these "Demo payout: no SOL was sent".
+
 Code: `lib/payoutHandler.ts`, `lib/solana/` (treasury key only from `TREASURY_SECRET_KEY`, RPC from `SOLANA_RPC_URL`, mainnet refused).
 `/prices` reads the reward table from `GET /face-api/rewards` (revalidated every 5 minutes), with `lib/prices.ts` as the fallback.
 Tests: `npm test` (vitest: cents -> lamports, the route's auth and validation with a mocked Solana connection).

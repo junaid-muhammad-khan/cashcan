@@ -119,7 +119,7 @@ Each folder has its own README with setup and commands.
 ### Must have (MVP)
 - [x] **Classifier:** 3 physical bins (organics / cans / waste), matching the hardware's 3 openings (see `ml/class_map.yaml`). MobileNetV2 trained on TrashNet, GD and RealWaste, plus our own photos to patch gaps found in live-webcam testing. 92%+ on a held-out test set. Live-tested on a webcam (`ml/scripts/live_predict.py`), not yet on the bin's cameras.
 - [x] **Bin controller:** `pi_client --classify` uses one camera for both the face match and the item, opens the item's lid and records the interaction with a retry outbox. Unit-tested and tried on a laptop webcam with `--show`; lids are simulated until the hardware is chosen.
-- [x] **Payout path:** the face API decides the reward and pays it at once through the website's `/api/payout` (devnet, memo per interaction), holds rewards until a wallet exists, and a cron retries failures. Tested with unit tests and against the real Databricks tables and the real route; **the on-chain transfer itself is verified only once the devnet treasury is funded** (see the PR).
+- [x] **Payout path:** the face API decides the reward and pays it at once through the website's `/api/payout` (devnet, memo per interaction), holds rewards until a wallet exists, and a cron retries failures. Runs end to end in **demo mode** (simulated transfer, verified 7/7 against the real Databricks tables and the real route); real devnet transfers need a funded treasury and `PAYOUT_MODE=devnet`.
 - [ ] Local rule lookup table (item -> correct bin + reason)
 - [ ] Real lid hardware and bin camera; tune the item region and thresholds on them
 - [x] **Reward table:** one server-side table (`face_api/app/rewards.py`): 5¢ CAD per can (half the BC deposit), converted to SOL at the live rate when paid; confidence gate and per-user cooldown on the server.
@@ -148,9 +148,11 @@ Each folder has its own README with setup and commands.
 
 1. **Database** (once): run `databricks/002_interactions_payouts.sql` in a SQL warehouse (`cd dashboard && python dbsql.py -f ../databricks/002_interactions_payouts.sql`).
    The owner of `workspace.cashcan` runs `databricks/003_retire_activity_log.sql`. Add each bin to `workspace.cashcan_app.bins`.
-2. **Treasury:** `cd backend && npm install && npm run init-treasury`, fund the printed address with devnet SOL at https://faucet.solana.com
-   (a person has to; the RPC faucet is closed), then `npm run cli -- export-secret` for the next step.
-3. **Vercel env vars** (project-wide, Production and Preview): `TREASURY_SECRET_KEY`, `SOLANA_RPC_URL=https://api.devnet.solana.com`,
+2. **Payouts: demo or real.** For a demo, skip the treasury: with `PAYOUT_MODE=demo` (or no `TREASURY_SECRET_KEY`) payouts are simulated
+   (status `paid`, placeholder signature `demo_...`, no SOL moves). For real devnet transfers: `cd backend && npm install && npm run init-treasury`,
+   fund the printed address at https://faucet.solana.com (a person has to; the RPC faucet is closed), set `TREASURY_SECRET_KEY`
+   (`npm run cli -- export-secret`) and `PAYOUT_MODE=devnet`.
+3. **Vercel env vars** (project-wide, Production and Preview): `PAYOUT_MODE`, `TREASURY_SECRET_KEY` (real mode only), `SOLANA_RPC_URL=https://api.devnet.solana.com`,
    `PAYOUT_URL=https://cashcan.biz/api/payout`, `PAYOUT_SECRET`, `CRON_SECRET` and `SESSION_SECRET` (long random strings), `BIN_API_KEYS="bin-1:<key>"`, plus the
    existing `DATABRICKS_*` and `AUTH0_*`. See `face_api/.env.example` and `website/.env.example`. Redeploy.
 4. **Check the money path:** `python scripts/e2e_devnet.py deployed --base-url https://cashcan.biz --bin-key <key> --session-token <live bin session>

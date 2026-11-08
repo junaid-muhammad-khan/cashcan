@@ -75,6 +75,24 @@ describe("POST /api/payout", () => {
   });
 });
 
+describe("demo mode (no treasury)", () => {
+  it("answers like a payout but never touches Solana", async () => {
+    const d = deps({ mode: "demo", connection: () => { throw new Error("no chain in demo"); }, treasury: () => { throw new Error("no key in demo"); } });
+    const a = await (await handlePost(post(good), d)).json();
+    const b = await (await handlePost(post(good), d)).json();
+    expect(a).toMatchObject({ lamports: 500_000, cad_per_sol: 100, simulated: true });
+    expect(a.signature).toMatch(/^demo_[0-9a-f]{40}$/);
+    expect(b.signature).toBe(a.signature);                         // same interaction, same placeholder
+    expect(d.send).not.toHaveBeenCalled(); expect(d.find).not.toHaveBeenCalled();
+  });
+  it("still needs the secret and a valid wallet, and works without a live rate", async () => {
+    const d = deps({ mode: "demo", quote: async () => null });
+    expect((await handlePost(post(good, "Bearer no"), d)).status).toBe(401);
+    expect((await handlePost(post({ ...good, to: "nope" }), d)).status).toBe(400);
+    expect(await (await handlePost(post(good), d)).json()).toMatchObject({ cad_per_sol: 125, rate_source: "placeholder (demo, no transfer)" });
+  });
+});
+
 describe("GET /api/payout (memo lookup)", () => {
   const get = (q: string, auth = `Bearer ${SECRET}`) => new Request(`http://x/api/payout?${q}`, { headers: { authorization: auth } });
   it("needs the secret and an id", async () => {
