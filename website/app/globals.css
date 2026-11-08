@@ -247,6 +247,12 @@ p { margin: 0; }
 .footer { border-top: 1px solid var(--line); padding: 32px 24px; }
 .footer .container { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; font-size: 14px; color: var(--muted); }
 .footer nav { display: flex; gap: 20px; }
+.footer-brand { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.footer-logo { gap: 8px; }
+.footer-logo span { font-size: 17px; }
+.footer-logo .logo-mark { border-radius: 6px; }
+.footer-note::before { content: "· "; }
+@media (max-width: 520px) { .footer-note { flex-basis: 100%; } .footer-note::before { content: none; } }
 
 /* ---------- auth ---------- */
 .auth { min-height: 100vh; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }

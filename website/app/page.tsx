@@ -1,6 +1,7 @@
 import Link from "next/link";
 import HomeMotion from "@/components/HomeMotion";
 import LiveFeed from "@/components/LiveFeed";
+import SiteFooter from "@/components/SiteFooter";
 import SiteNav from "@/components/SiteNav";
 import { Check, Coin, Drop, Person, Pin } from "@/components/icons";
 
@@ -236,12 +237,7 @@ export default function Home() {
         </section>
       </main>
 
-      <footer className="footer">
-        <div className="container">
-          <span><strong style={{ fontFamily: "var(--font-display)", color: "#0F1F17" }}>cashcan</strong> · a HackCamp 2026 prototype. Payouts use Solana devnet test tokens only.</span>
-          <nav aria-label="Footer"><a href="#privacy">Privacy</a><a href="#how">How it works</a><Link href="/login">Log in</Link></nav>
-        </div>
-      </footer>
+      <SiteFooter />
     </HomeMotion>
   );
 }

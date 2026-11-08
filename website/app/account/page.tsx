@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect } from "react";
 import RequireFace from "@/components/RequireFace";
 import type { Me } from "@/lib/faceApi";
+import SiteFooter from "@/components/SiteFooter";
 import SiteNav from "@/components/SiteNav";
 
 export default function AccountPage() {
@@ -34,6 +35,7 @@ function AccountBody({ me }: { me: Me | null }) {
   const firstName = (user.given_name ?? user.name ?? user.email ?? "there").split(" ")[0];
 
   return (
+    <>
     <div style={{ padding: "0 24px 96px" }}>
       <SiteNav />
       <main className="container" style={{ maxWidth: 720, marginTop: 48 }}>
@@ -64,5 +66,7 @@ function AccountBody({ me }: { me: Me | null }) {
         </div>
       </main>
     </div>
+    <SiteFooter />
+    </>
   );
 }
