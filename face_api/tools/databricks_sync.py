@@ -48,6 +48,19 @@ def main(argv=None) -> int:
     a = ap.parse_args(argv)
 
     dbx, store = DatabricksFaces(), FaceStore(a.db)
+    dbx.notify = lambda m: print(m, flush=True)
+    try:
+        return run(a, dbx, store)
+    except KeyboardInterrupt:
+        if dbx.writes_done:
+            print("\nInterrupted while waiting for the search index. Your templates ARE saved in Databricks; the index catches up on its "
+                  "own (check with `status`).")
+        else:
+            print("\nInterrupted before finishing. Run `status` to see what is in Databricks, then repeat the command (use --replace to overwrite).")
+        return 130
+
+
+def run(a, dbx, store) -> int:
     if a.cmd == "push":
         if not store.user_exists(a.name):
             print(f"'{a.name}' is not enrolled locally. Run tools.face_demo enroll first.", file=sys.stderr); return 1
@@ -57,7 +70,7 @@ def main(argv=None) -> int:
             remote = dbx.get_wallet(a.name)
             if remote and wallet == PLACEHOLDER_WALLET:
                 wallet = remote  # never overwrite a real wallet in Databricks with the local placeholder
-            dbx.delete_user(a.name)
+            dbx.delete_user(a.name, sync=False)  # push_user refreshes the index once, afterwards
             print(f"replaced the existing '{a.name}' in Databricks")
         print(f"pushed {dbx.push_user(a.name, wallet, list(embs))} templates for '{a.name}' to Databricks "
               "(Vector Search sees them in ~2 min)")

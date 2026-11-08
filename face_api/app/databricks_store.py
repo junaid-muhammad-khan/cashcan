@@ -52,6 +52,8 @@ class DatabricksFaces:
         if not host.startswith("http"):
             host = "https://" + host
         self.schema, self.index, self.endpoint = schema, index, endpoint
+        self.notify = None          # optional callable(str) for progress messages (the CLI prints them)
+        self.writes_done = False    # True once a push has written its rows (only the index sync may still be pending)
         self._http = httpx.Client(base_url=host.rstrip("/"), headers={"Authorization": f"Bearer {token}"},
                                   timeout=timeout, transport=transport)
 
@@ -94,6 +96,7 @@ class DatabricksFaces:
         for emb in embeddings:
             self.sql(f"INSERT INTO {self.schema}.face_templates VALUES (:t, :u, {_array_literal(emb)}, :m, current_timestamp())",
                      {"t": uuid.uuid4().hex, "u": user_id, "m": MODEL_VERSION})
+        self.writes_done = True
         self.sync_index()
         return len(embeddings)
 
@@ -145,13 +148,15 @@ class DatabricksFaces:
         mat = np.array([json.loads(r[1]) if isinstance(r[1], str) else r[1] for r in rows], np.float32)
         return owners, mat.reshape(len(owners), 512), wallets
 
-    def delete_user(self, user_id: str) -> bool:
-        """Hard-delete the person's templates and record (biometric deletion), then refresh the index."""
+    def delete_user(self, user_id: str, sync: bool = True) -> bool:
+        """Hard-delete the person's templates and record (biometric deletion), then refresh the index
+        (sync=False when a push follows immediately, so the index is refreshed once, not twice)."""
         if not self.user_exists(user_id):
             return False
         self.sql(f"DELETE FROM {self.schema}.face_templates WHERE user_id = :u", {"u": user_id})
         self.sql(f"DELETE FROM {self.schema}.users WHERE user_id = :u", {"u": user_id})
-        self.sync_index()
+        if sync:
+            self.sync_index()
         return True
 
     # ---- vector search
@@ -167,6 +172,9 @@ class DatabricksFaces:
             if r.status_code < 400:
                 return True
             if r.status_code == 400 and "not ready to sync" in r.text:
+                if attempt == 0 and self.notify:
+                    self.notify("Waiting for the previous search-index update to finish (up to ~2 min). Your data is already saved; "
+                                "Ctrl+C is safe.")
                 if attempt < retries - 1:
                     sleep(wait)
                 continue

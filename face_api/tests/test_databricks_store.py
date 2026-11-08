@@ -191,3 +191,42 @@ def test_delete_many_deletes_templates_and_users_with_bound_ids():
 def test_get_wallet_returns_none_for_unknown_user(db):
     d, fake = db
     assert d.get_wallet("nobody") is None
+
+
+def test_delete_can_skip_the_index_sync_so_replace_syncs_once(db):
+    d, fake = db
+    d.push_user("alice", "W", [vec(1)])
+    syncs = lambda: sum(1 for _, path, _ in fake.other if path.endswith("/sync"))
+    before = syncs()
+    assert d.delete_user("alice", sync=False) and syncs() == before          # no sync on delete
+    d.push_user("alice", "W", [vec(2)])
+    assert syncs() == before + 1                                             # exactly one, after the push
+
+
+def test_sync_tells_the_user_why_it_is_waiting():
+    calls = []
+
+    def busy_then_ok(req):
+        calls.append(1)
+        return httpx.Response(400, text="Index is not ready to sync yet") if len(calls) < 3 else httpx.Response(200, json={})
+
+    d = DatabricksFaces("https://x.example", "tok", "wh1", transport=httpx.MockTransport(busy_then_ok))
+    msgs = []
+    d.notify = msgs.append
+    assert d.sync_index(sleep=lambda s: None) is True
+    assert len(msgs) == 1 and "already saved" in msgs[0] and "Ctrl+C is safe" in msgs[0]   # said once, not every retry
+
+
+def test_cli_ctrl_c_is_a_clean_exit_that_says_whether_data_is_saved(monkeypatch, capsys, tmp_path):
+    from tools import databricks_sync as ds
+
+    class Stub:
+        writes_done, notify = True, None
+
+    monkeypatch.setattr(ds, "DatabricksFaces", Stub)
+    monkeypatch.setattr(ds, "run", lambda a, dbx, store: (_ for _ in ()).throw(KeyboardInterrupt()))
+    assert ds.main(["--db", str(tmp_path / "x.db"), "status"]) == 130
+    assert "ARE saved" in capsys.readouterr().out
+    Stub.writes_done = False
+    assert ds.main(["--db", str(tmp_path / "x.db"), "status"]) == 130
+    assert "Interrupted before finishing" in capsys.readouterr().out
