@@ -21,8 +21,8 @@ for local dev, `https://cashcan.biz` in production) or login/logout will fail wi
 | Route | What it is |
 |---|---|
 | `/` | Home page with scroll-triggered reveals, untilting hero mockup, floating cards, live drop feed, drifting gradient background, count-up numbers, pinned five-step "how it works" story, and a dashboard preview that expands on scroll |
-| `/signup` | Redirects straight to Auth0 Universal Login with `screen_hint: signup` |
-| `/login` | Redirects straight to Auth0 Universal Login; `?next=/path` returns you where you were |
+| `/signup` | Two-panel signup design; the right panel (`components/AuthPanel.tsx`) has "Continue with Google" / "Continue with email", both redirecting to Auth0 Universal Login with `screen_hint: signup` |
+| `/login` | Two-panel login design, same `AuthPanel`; `?next=/path` returns you where you were after login |
 | `/account` | Signed-in only (client-side redirect to `/login` if not); shows name, email and a log-out button |
 
 All motion is in `components/HomeMotion.tsx` and `components/AuthShell.tsx`. Content is visible
@@ -33,8 +33,17 @@ without JavaScript, and everything that moves is skipped when the visitor has re
   (`isAuthenticated`, `user`, `loginWithRedirect`, `logout`) is client-side only — there is no server session,
   so pages that need to gate on auth (`/account`) are Client Components that redirect in a `useEffect` once
   `useAuth0()` resolves, rather than a server-side `redirect()`.
-- Credentials, password reset, and signup are entirely handled by Auth0's hosted Universal Login — this app
-  never sees a password.
+- `/signup` and `/login` use a custom-designed right panel (`components/AuthPanel.tsx` + `.module.css`) with
+  two buttons — "Continue with Google" and "Continue with email" — that both call `loginWithRedirect()` from
+  `@auth0/auth0-react`, redirecting to Auth0's hosted Universal Login (Google goes straight to Google's own
+  account picker via `connection: "google-oauth2"`; email goes to Auth0's database-connection screen, which
+  itself handles password, magic link and passkey). No embedded widget, no cross-origin auth config, no extra
+  bundler workarounds — this app previously tried embedding the `auth0-lock` widget for a true one-page flow
+  (kept in git history if that's worth revisiting), but it added real complexity (a bundler bug in `auth0-js`
+  needing a webpack workaround, and a third-party-cookie reliability caveat for the cross-origin auth flow)
+  without look-identical wins, so it was replaced with this simpler redirect-based panel.
+- Credentials, password reset, and signup are entirely handled by Auth0's own hosted pages and APIs — this
+  app's own code never sees a password.
 - Not carried over from the old custom auth: the wallet-address and face-opt-in fields that used to live in
   the account store have no replacement yet. `/account` shows them as static placeholders ("Not linked yet" /
   "Not enrolled"). Reintroducing them means a small profile store keyed by the Auth0 `sub` claim (e.g. verify

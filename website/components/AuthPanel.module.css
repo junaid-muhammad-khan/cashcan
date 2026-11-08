@@ -1,0 +1,164 @@
+.panel {
+  width: 100%;
+  min-height: 100%;
+  background: #f4f4ef;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.inner {
+  width: 100%;
+  max-width: 400px;
+  padding: 48px;
+}
+
+.heading {
+  font-size: 2.5rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #0f1f17;
+  margin: 0 0 12px;
+  line-height: 1.1;
+}
+
+.subtitle {
+  font-size: 1.05rem;
+  color: #5b6660;
+  margin: 0 0 36px;
+  line-height: 1.5;
+}
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.googleBtn,
+.emailBtn {
+  height: 52px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-size: 0.98rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.1s ease, opacity 0.15s ease;
+}
+
+.googleBtn {
+  background: #fff;
+  border: 1px solid #dcdcd4;
+  color: #0f1f17;
+}
+.googleBtn:hover:not(:disabled) {
+  background: #fafaf6;
+  border-color: #c9c9bf;
+}
+
+.emailBtn {
+  background: #1f3d2c;
+  border: 1px solid transparent;
+  color: #fff;
+}
+.emailBtn:hover:not(:disabled) {
+  background: #2a5139;
+}
+
+.googleBtn:active:not(:disabled),
+.emailBtn:active:not(:disabled) {
+  transform: scale(0.99);
+}
+
+.googleBtn:disabled,
+.emailBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.googleBtn:focus-visible,
+.emailBtn:focus-visible,
+.link:focus-visible {
+  outline: 3px solid #6fcf97;
+  outline-offset: 2px;
+}
+
+.divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #8a938e;
+  font-size: 0.85rem;
+}
+.divider span {
+  flex: 1;
+  height: 1px;
+  background: #dcdcd4;
+}
+
+.hint {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #8a938e;
+  text-align: center;
+}
+
+.faceCard {
+  margin-top: 36px;
+  background: #e8f3ec;
+  border: 1px solid #cfe6d7;
+  border-radius: 14px;
+  padding: 16px 18px;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.faceIcon {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.faceCard b {
+  display: block;
+  font-size: 0.95rem;
+  color: #0f1f17;
+}
+.faceCard p {
+  margin: 4px 0 0;
+  font-size: 0.88rem;
+  color: #3f4a44;
+  line-height: 1.4;
+}
+
+.footer {
+  margin: 24px 0 0;
+  text-align: center;
+  font-size: 0.92rem;
+  color: #5b6660;
+}
+
+.link {
+  color: #2f8f5b;
+  font-weight: 700;
+  text-decoration: underline;
+  border-radius: 4px;
+}
+
+@media (max-width: 480px) {
+  .inner {
+    padding: 32px 24px;
+  }
+  .heading {
+    font-size: 2rem;
+  }
+}
