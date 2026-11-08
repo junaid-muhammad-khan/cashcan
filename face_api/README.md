@@ -90,6 +90,7 @@ side light**, so your templates cover the distances and lighting you will really
 `python -m tools.databricks_sync push --name junaid --replace`. Do not enroll the same person under a second name: two similar
 names are rejected as "ambiguous" (verified: a 0.90 match is refused when the same person exists under two names).
 `--replace` swaps the person's templates in Databricks and keeps a real wallet that is already stored there.
+A person can hold up to 40 templates (`--max-templates`); `--add` checks there is room before it captures anything, so a refused add never wastes a session.
 
 **Steadier decisions (on by default in live mode):** the main face is judged on the average of its last 5 good frames (`--smooth 5`;
 `--smooth 1` turns it off). One bad frame (blink, motion, a light flicker) no longer flips the answer, and the average is cleared the moment the

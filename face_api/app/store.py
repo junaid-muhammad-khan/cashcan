@@ -7,6 +7,9 @@ import time
 import numpy as np
 
 
+MAX_TEMPLATES = 40  # per person; matching 40 templates is still instant, and more variety is the point
+
+
 class FaceStore:
     def __init__(self, path: str):
         self._db = sqlite3.connect(path, check_same_thread=False)
@@ -40,7 +43,11 @@ class FaceStore:
                 [(user_id, e.astype(np.float32).tobytes()) for e in embeddings],
             )
 
-    def add_embeddings(self, user_id: str, embeddings: list[np.ndarray], max_total: int = 20) -> int:
+    def room_for(self, user_id: str, max_total: int = MAX_TEMPLATES) -> int:
+        """How many more templates this person can take."""
+        return max(max_total - len(self.embeddings_for(user_id)), 0)
+
+    def add_embeddings(self, user_id: str, embeddings: list[np.ndarray], max_total: int = MAX_TEMPLATES) -> int:
         """Add more templates to an existing person (e.g. webcam frames next to a studio photo). Returns the new total."""
         if not self.user_exists(user_id):
             raise KeyError(user_id)

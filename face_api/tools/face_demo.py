@@ -184,6 +184,14 @@ def cmd_enroll(a, engine, store) -> int:
               f"To start over run `delete --name {name}`.", file=sys.stderr)
         return 1
     embs: list[np.ndarray] = []
+    if a.add:  # check BEFORE capturing, so a refused add never wastes a capture session
+        room = store.room_for(name, a.max_templates)
+        need = GUIDED_TOTAL if a.guided else config.MIN_ENROLL_FRAMES
+        if room < need:
+            print(f"'{name}' already has {a.max_templates - room} templates and the limit is {a.max_templates}, so there is room for "
+                  f"{room} more but this needs {need}. Raise the limit with --max-templates, or start over with `delete --name {name}`.",
+                  file=sys.stderr)
+            return 1
     if a.images:
         for p in list_images(a.images):
             try:
@@ -200,7 +208,7 @@ def cmd_enroll(a, engine, store) -> int:
     embs = embs[: (GUIDED_TOTAL if a.guided else config.MAX_ENROLL_FRAMES)]
     if a.add:
         try:
-            total = store.add_embeddings(name, embs)
+            total = store.add_embeddings(name, embs, a.max_templates)
         except ValueError as e:
             print(e, file=sys.stderr)
             return 1
@@ -547,6 +555,7 @@ def main(argv=None) -> int:
     e.add_argument("--camera", default="0"); e.add_argument("--interval", type=float, default=1.0)
     e.add_argument("--guided", action="store_true", help="step-by-step prompts that also vary distance and lighting (best for robust scores)")
     e.add_argument("--lead", type=float, default=4.0, help="seconds to get into position at each guided step")
+    e.add_argument("--max-templates", type=int, default=40, help="most templates one person may hold (default 40)")
     e.add_argument("--add", action="store_true", help="add templates to a person who is already saved (best way to improve scores)")
     e.add_argument("--no-window", action="store_true"); e.set_defaults(fn=cmd_enroll)
 

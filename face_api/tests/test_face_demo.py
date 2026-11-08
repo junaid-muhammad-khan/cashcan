@@ -18,7 +18,7 @@ def write(tmp_path, folder, name, pid, **kw):
 def args(tmp_path, **kw):
     base = dict(db=str(tmp_path / "d.db"), name="me", images=None, camera="0", count=5, interval=1.0,
                 no_window=True, threshold=config.MATCH_THRESHOLD, margin=config.AMBIGUITY_MARGIN,
-                mine=None, others=None, add=False, guided=False, lead=4.0)
+                mine=None, others=None, add=False, guided=False, lead=4.0, max_templates=40)
     return Namespace(**{**base, **kw})
 
 
@@ -146,8 +146,9 @@ def test_store_add_embeddings_has_a_cap(tmp_path):
     store = FaceStore(str(tmp_path / "s.db"))
     store.add_user("me", "W", [np.ones(512, np.float32)] * 3)
     assert store.add_embeddings("me", [np.ones(512, np.float32)] * 2) == 5
+    assert store.room_for("me") == 35 and store.room_for("me", max_total=6) == 1
     with pytest.raises(ValueError):
-        store.add_embeddings("me", [np.ones(512, np.float32)] * 20)
+        store.add_embeddings("me", [np.ones(512, np.float32)] * 36)
     with pytest.raises(KeyError):
         store.add_embeddings("ghost", [np.ones(512, np.float32)])
 
@@ -162,3 +163,21 @@ def test_debug_line_shows_the_threshold_that_was_actually_used():
     strict = fd.report_for(face, owners, gal, 0.90, 0.05)
     assert lenient.matched and "need 45% to match" in fd.describe(lenient)
     assert not strict.matched and "need 90% to match" in fd.describe(strict)     # used to say 45% here
+
+
+def test_add_checks_for_room_before_capturing_anything(tmp_path, capsys):
+    from app.store import FaceStore
+
+    store = FaceStore(str(tmp_path / "f.db"))
+    store.add_user("me", "W", [np.ones(512, np.float32)] * 10)
+    cam_used = []
+
+    class Boom:
+        def analyse(self, img):
+            cam_used.append(1)
+            raise AssertionError("must not capture when there is no room")
+
+    a = args(tmp_path, add=True, guided=True, max_templates=20)          # 10 held + 13 planned > 20
+    assert fd.cmd_enroll(a, Boom(), store) == 1 and not cam_used
+    err = capsys.readouterr().err
+    assert "room for 10 more but this needs 13" in err and "--max-templates" in err
