@@ -44,11 +44,15 @@ session. The bin streams frames to `/liveness/{id}/frame`; only a pass returns t
 ## Try it on your Mac (save your face, then test it)
 
 ```bash
-git fetch origin && git checkout feature/mac-demo
+git clone https://github.com/junaid-muhammad-khan/cashcan.git   # skip if you already have it; check `git remote -v` says cashcan
+cd cashcan && git checkout integration/face-system-and-payout
 cd face_api
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-pip uninstall -y opencv-python-headless && pip install opencv-python   # the windowed build, for the camera preview
+# the camera preview needs the windowed OpenCV. The two OpenCV packages share the same files, so remove BOTH and
+# install one (uninstalling only the headless one leaves cv2 broken):
+pip uninstall -y opencv-python opencv-python-headless && pip install opencv-python
+python -c "import cv2; print(cv2.__version__)"   # must print a version
 ```
 If `pip install insightface` fails while building, run `xcode-select --install` and retry. The first run downloads the
 face model (~125 MB). When macOS asks, allow the camera for your terminal. If camera 0 is your phone, add `--camera 1`.
