@@ -1,4 +1,6 @@
-# CashCan face API
+# CashCan face API (`face_api/`)
+
+Python face recognition for the bin. Not to be confused with `../backend/`, which is the Node/TypeScript Solana payout service; see the root `README.md` for how the folders fit together.
 
 Face enrollment and matching for the bin. Stores 512-d ArcFace embeddings only, never photos.
 

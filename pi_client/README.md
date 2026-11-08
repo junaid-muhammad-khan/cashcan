@@ -1,4 +1,4 @@
-# CashCan bin client (Raspberry Pi)
+# CashCan bin client (`pi_client/`, Raspberry Pi or Radxa)
 
 Watches the **front camera**, asks the face API who is at the bin, and keeps a short session so the
 payout step knows whose wallet to pay. It does not classify items or pay anyone; it only answers "who is here".
