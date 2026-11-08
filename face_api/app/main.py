@@ -9,6 +9,7 @@ DELETE /users/{user_id}   delete all biometric data for a user
 """
 from __future__ import annotations
 
+import logging
 import re
 
 from pathlib import Path
@@ -28,6 +29,10 @@ from .store import FaceStore
 USER_ID_RE = re.compile(r"^[A-Za-z0-9_.-]{1,64}$")
 SOLANA_ADDR_RE = re.compile(r"^[1-9A-HJ-NP-Za-km-z]{32,44}$")  # base58 public key
 STATIC = Path(__file__).parent / "static"
+log = logging.getLogger("cashcan.match")
+log.setLevel(logging.INFO)
+if not logging.getLogger().handlers:  # make sure these lines reach the host's log (Vercel shows stdout/stderr)
+    logging.basicConfig(level=logging.INFO)
 
 
 def make_engine() -> FaceEngine:
@@ -188,6 +193,10 @@ def create_app(engine: FaceEngine | None = None, store: FaceStore | None = None,
             return {"matched": False, "reason": "bad_frame", "message": str(e)}
         owners, gallery = state["store"].all_embeddings()
         res = match(face.embedding, owners, gallery)
+        # Scores belong in the log, not in what a user sees (no embeddings are ever logged).
+        log.info("match matched=%s user=%s similarity=%.3f threshold=%.2f margin=%.2f reason=%s",
+                 res.matched, res.user_id if res.matched else "-", res.score, config.MATCH_THRESHOLD, config.AMBIGUITY_MARGIN,
+                 res.reason or "ok")
         if not res.matched:
             return {"matched": False, "reason": res.reason, "score": round(res.score, 3)}
         base = {"matched": True, "user_id": res.user_id, "score": round(res.score, 3)}

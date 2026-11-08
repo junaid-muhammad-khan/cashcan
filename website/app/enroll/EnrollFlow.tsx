@@ -161,6 +161,8 @@ export default function EnrollFlow() {
     try {
       const res = f ? await matchFrame(f) : null;
       const isMe = !!res?.matched && (!me?.user_id || res.user_id === me.user_id);
+      // The numbers stay in the log, not on screen: similarity from the face API, 45% is the match threshold (face_api MATCH_THRESHOLD).
+      console.info("[cashcan] face test", { matched: isMe, similarity: res?.score ?? null, threshold: 0.45, reason: res?.reason ?? null });
       setTest({
         busy: false, ok: isMe, score: res?.score != null ? Math.round(res.score * 100) : undefined,
         message: isMe ? undefined : res?.message ?? "The test frame didn't match yet. Better light usually fixes it.",
@@ -326,8 +328,8 @@ export default function EnrollFlow() {
           {error && <div className="alert" role="alert" style={{ marginTop: 14 }}>{error}</div>}
           {problems.length > 0 && <ul className="en-problems">{problems.map((p) => <li key={p}>{p}</li>)}</ul>}
 
-          {step === "test" && !test.busy && test.score != null && (
-            <p className="en-score">Similarity <b>{test.score}%</b> · a bin accepts 45% or higher</p>
+          {step === "test" && !test.busy && test.ok && (
+            <p className="en-score"><b>Go ahead, grab your cashback.</b></p>
           )}
 
           <div className="cta-row" style={{ marginTop: 20 }}>

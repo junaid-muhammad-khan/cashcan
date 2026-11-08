@@ -120,3 +120,14 @@ def test_a_face_cannot_be_enrolled_under_a_second_account(client):
     assert r.status_code == 409 and "already registered" in r.text
     other = [("frames", ("f.png", png(12), "image/png"))]  # a different person is fine
     assert client.post("/enroll", data={"user_id": "third", "wallet": WALLET, "consent": "true"}, files=other).status_code == 200
+
+
+def test_match_logs_similarity_and_threshold_but_the_response_keeps_its_shape(client, caplog):
+    import logging
+    from tests.conftest import png, WALLET
+    client.post("/enroll", data={"user_id": "logme", "wallet": WALLET, "consent": "true"}, files=[("frames", ("f.png", png(21), "image/png"))])
+    with caplog.at_level(logging.INFO, logger="cashcan.match"):
+        r = client.post("/match", files={"frame": ("f.png", png(21), "image/png")}).json()
+    assert r["matched"] is True
+    line = next(m for m in caplog.messages if m.startswith("match "))
+    assert "matched=True" in line and "user=logme" in line and "similarity=" in line and "threshold=0.45" in line
