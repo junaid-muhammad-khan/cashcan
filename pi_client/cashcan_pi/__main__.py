@@ -38,7 +38,8 @@ def main(argv=None) -> int:
     ap.add_argument("--recheck-interval", type=float, default=5.0)
     ap.add_argument("--no-face-precheck", action="store_true", help="send every frame to the server instead of only when the local Haar check sees a face")
     ap.add_argument("--led-pins", metavar="GREEN,RED,AMBER", help="BCM pins; needs gpiozero (on the Pi)")
-    ap.add_argument("--no-liveness", action="store_true", help="with --local-identity: verify on the face match alone, without asking for a head turn (weaker against a photo held up to the camera)")
+    ap.add_argument("--liveness", action="store_true", help="with --local-identity: after a face is recognised, also ask for a head turn (off by default: the bin verifies on the face match alone)")
+    ap.add_argument("--no-liveness", action="store_true", help=argparse.SUPPRESS)  # old spelling: now the default
     ap.add_argument("--local-identity", action="store_true", help="identify people on this device (fast, works offline) using a gallery downloaded from the server with --bin-key")
     g = ap.add_argument_group("object classifier + lids (turns the identity loop into the full bin controller)")
     g.add_argument("--classify", action="store_true", help="also classify the item on the same camera and open the right lid")
@@ -72,9 +73,8 @@ def main(argv=None) -> int:
         gallery = Gallery(api._http)
         gallery.maybe_refresh(0.0)
         print(f"cashcan_pi: local identity, {len(set(gallery.owners))} people in the gallery", file=sys.stderr)
-        loop_api = LocalApi(gallery, require_liveness=False if a.no_liveness else None)
-        if a.no_liveness:
-            print("cashcan_pi: head-turn check is OFF, a recognised face is verified straight away", file=sys.stderr)
+        loop_api = LocalApi(gallery, require_liveness=bool(a.liveness))
+        print("cashcan_pi: head-turn check is " + ("ON" if a.liveness else "OFF: a recognised face is verified from the match alone"), file=sys.stderr)
     loop = BinLoop(loop_api, detector, ind, emit,
                    send_interval=a.send_interval, recheck_interval=a.recheck_interval)
     loop = BackgroundIdentity(loop)   # server calls run on their own thread: the camera and the window never wait on them

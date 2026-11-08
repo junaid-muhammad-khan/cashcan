@@ -158,3 +158,8 @@ def test_replace_is_refused_when_the_photos_match_two_accounts_or_nobody(client)
     assert client.post("/enroll", data=d("n2", replace="true"), files=half).status_code == 409
     assert client.post("/enroll", data=d("n3", replace="true"), files=[("frames", ("f.png", png(44), "image/png"))]).status_code == 200  # nothing to replace: normal enroll
     assert client.post("/match", files={"frame": ("f.png", png(41), "image/png")}).json()["user_id"] == "a1"       # a1 untouched by the refusals
+
+
+def test_live_matching_needs_no_head_turn_by_default():
+    from app import config
+    assert config.REQUIRE_LIVENESS is False   # enrollment collects the head turns; the bin verifies on the best similarity alone (CASHCAN_LIVENESS=on to ask again)
