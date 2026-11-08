@@ -143,3 +143,46 @@ def test_pull_into_adds_only_missing_people(tmp_path):
     assert added == ["alice", "bob"]
     assert store.wallet("alice") == "WA" and len(store.embeddings_for("alice")) == 2
     assert store.wallet("local-only") == "W0" and len(store.embeddings_for("local-only")) == 1  # untouched
+
+
+class Recorder:
+    def __init__(self, existing=()):
+        self.stmts, self.existing = [], list(existing)
+
+    def handler(self, req):
+        body = json.loads(req.content) if req.content else {}
+        if req.url.path == "/api/2.0/sql/statements":
+            params = {p["name"]: p["value"] for p in body.get("parameters", [])}
+            self.stmts.append((body["statement"], params))
+            data = [[u] for u in self.existing] if body["statement"].startswith("SELECT user_id") else []
+            return httpx.Response(200, json={"status": {"state": "SUCCEEDED"}, "result": {"data_array": data}})
+        return httpx.Response(200, json={})
+
+
+def test_push_many_batches_rows_and_binds_every_string():
+    rec = Recorder()
+    d = DatabricksFaces("https://x.example", "tok", "wh", transport=httpx.MockTransport(rec.handler))
+    people = {f"u{i}'; --": (f"W{i}", [vec(i), vec(i + 100), vec(i + 200)]) for i in range(7)}  # 7 people, 21 templates
+    assert d.push_many(people, chunk=10) == (7, 21)
+    inserts = [(s, p) for s, p in rec.stmts if s.startswith("INSERT")]
+    assert len(inserts) == 1 + 3                      # one for users, templates in chunks of 10 -> 3
+    assert all("u0'" not in s and "W0" not in s for s, _ in rec.stmts)   # never inlined
+    assert inserts[0][1]["w0"] == "W0" and inserts[0][1]["u0"] == "u0'; --"
+    assert sum(s.count("CAST(array(") for s, _ in inserts) == 21
+
+
+def test_push_many_refuses_existing_users_before_writing():
+    rec = Recorder(existing=["u0"])
+    d = DatabricksFaces("https://x.example", "tok", "wh", transport=httpx.MockTransport(rec.handler))
+    with pytest.raises(DatabricksError, match="already exist"):
+        d.push_many({"u0": ("W", [vec(1)]), "u1": ("W", [vec(2)])})
+    assert not any(s.startswith("INSERT") for s, _ in rec.stmts)
+
+
+def test_delete_many_deletes_templates_and_users_with_bound_ids():
+    rec = Recorder(existing=["a", "b"])
+    d = DatabricksFaces("https://x.example", "tok", "wh", transport=httpx.MockTransport(rec.handler))
+    assert d.delete_many(["a", "b", "c"]) == 2
+    deletes = [(s, p) for s, p in rec.stmts if s.startswith("DELETE")]
+    assert [("face_templates" in s) for s, _ in deletes] == [True, False] and deletes[0][1] == {"d0": "a", "d1": "b", "d2": "c"}
+    assert d.delete_many([]) == 0

@@ -93,6 +93,43 @@ class DatabricksFaces:
         self.sync_index()
         return len(embeddings)
 
+    def push_many(self, people: dict[str, tuple[str, list[np.ndarray]]], chunk: int = 20) -> tuple[int, int]:
+        """Bulk version of push_user: {user_id: (wallet, templates)} in a few statements instead of one per row.
+        Refuses if any user already exists. Strings are bound parameters; returns (users, templates)."""
+        ids = list(people)
+        if not ids:
+            return 0, 0
+        marks = ",".join(f":e{i}" for i in range(len(ids)))
+        clash = self.sql(f"SELECT user_id FROM {self.schema}.users WHERE user_id IN ({marks})", {f"e{i}": u for i, u in enumerate(ids)})
+        if clash:
+            raise DatabricksError(f"already exist in Databricks: {[r[0] for r in clash]}; delete them first.")
+        params, rows = {}, []
+        for i, u in enumerate(ids):
+            params[f"u{i}"], params[f"w{i}"] = u, people[u][0]
+            rows.append(f"(:u{i}, :w{i}, current_timestamp(), current_timestamp(), 'active')")
+        self.sql(f"INSERT INTO {self.schema}.users VALUES " + ",".join(rows), params)
+        flat = [(u, e) for u in ids for e in people[u][1]]
+        for start in range(0, len(flat), chunk):
+            params, rows = {"m": MODEL_VERSION}, []
+            for j, (u, emb) in enumerate(flat[start:start + chunk]):
+                params[f"t{j}"], params[f"x{j}"] = uuid.uuid4().hex, u
+                rows.append(f"(:t{j}, :x{j}, {_array_literal(emb)}, :m, current_timestamp())")
+            self.sql(f"INSERT INTO {self.schema}.face_templates VALUES " + ",".join(rows), params)
+        self.sync_index()
+        return len(ids), len(flat)
+
+    def delete_many(self, user_ids: list[str]) -> int:
+        """Bulk hard-delete (templates + user rows), then refresh the index. Returns how many users existed."""
+        if not user_ids:
+            return 0
+        marks = ",".join(f":d{i}" for i in range(len(user_ids)))
+        params = {f"d{i}": u for i, u in enumerate(user_ids)}
+        n = len(self.sql(f"SELECT user_id FROM {self.schema}.users WHERE user_id IN ({marks})", params))
+        self.sql(f"DELETE FROM {self.schema}.face_templates WHERE user_id IN ({marks})", params)
+        self.sql(f"DELETE FROM {self.schema}.users WHERE user_id IN ({marks})", params)
+        self.sync_index()
+        return n
+
     def pull_all(self) -> tuple[list[str], np.ndarray, dict[str, str]]:
         """All active users' templates for local matching: (owners per template, matrix, wallets)."""
         rows = self.sql(f"SELECT t.user_id, t.embedding FROM {self.schema}.face_templates t "
