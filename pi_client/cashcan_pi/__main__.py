@@ -38,6 +38,7 @@ def main(argv=None) -> int:
     ap.add_argument("--recheck-interval", type=float, default=5.0)
     ap.add_argument("--no-face-precheck", action="store_true", help="send every frame to the server instead of only when the local Haar check sees a face")
     ap.add_argument("--led-pins", metavar="GREEN,RED,AMBER", help="BCM pins; needs gpiozero (on the Pi)")
+    ap.add_argument("--local-identity", action="store_true", help="identify people on this device (fast, works offline) using a gallery downloaded from the server with --bin-key")
     g = ap.add_argument_group("object classifier + lids (turns the identity loop into the full bin controller)")
     g.add_argument("--classify", action="store_true", help="also classify the item on the same camera and open the right lid")
     g.add_argument("--model", help="ONNX classifier (default ml/models/mobilenetv2_cashcan.onnx)")
@@ -63,7 +64,15 @@ def main(argv=None) -> int:
     threading.Thread(target=lambda: print("cashcan_pi: server warm" if api.warm() else "cashcan_pi: server did not answer /warm", file=sys.stderr),
                      daemon=True).start()   # wake the face server now so the first match is not the slow one
     detector = AlwaysDetector() if a.no_face_precheck else make_detector(warn=lambda m: print(m, file=sys.stderr))
-    loop = BinLoop(api, detector, ind, emit,
+    loop_api = api
+    if a.local_identity:
+        from .local import Gallery, LocalApi
+
+        gallery = Gallery(api._http)
+        gallery.maybe_refresh(0.0)
+        print(f"cashcan_pi: local identity, {len(set(gallery.owners))} people in the gallery", file=sys.stderr)
+        loop_api = LocalApi(gallery)
+    loop = BinLoop(loop_api, detector, ind, emit,
                    send_interval=a.send_interval, recheck_interval=a.recheck_interval)
     loop = BackgroundIdentity(loop)   # server calls run on their own thread: the camera and the window never wait on them
     runner, roi = loop, (0.15, 0.40, 0.85, 1.0)

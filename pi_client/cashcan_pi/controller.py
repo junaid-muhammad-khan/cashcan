@@ -141,6 +141,7 @@ class BinController:
         self.on_event(item)
         payload = {"interaction_id": iid, "item_class": bin_name, "confidence": round(conf, 4), "reward_lamports": reward}
         if session:
-            payload["session_token"] = session.token
+            payload["session_token"] = session.token   # meaningful only if the server issued it
+            payload["user_id"] = session.user_id       # a bin that identifies people itself names them; the bin key vouches for it
         if self.outbox.send(payload, now):
             self.on_event({"event": "interaction_recorded", "interaction_id": iid, "after_retries": 0})

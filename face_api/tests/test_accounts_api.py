@@ -214,3 +214,31 @@ def test_replacing_an_old_account_also_deletes_its_profile(env):
     assert ok.status_code == 200 and ok.json()["replaced_old_account"] is True
     assert "auth0|abc" not in db.users and old_id not in [u["user_id"] for u in db.users.values()]    # the old profile row is gone
     assert not c.store.user_exists(old_id)                                                                # and its face data
+
+
+def test_gallery_is_bin_only_cacheable_and_decodes_to_the_templates(env):
+    import base64
+    import numpy as np
+    c, _, _ = env
+    c.put("/me", json={"sol_wallet": WALLET}, headers=auth())
+    c.post("/enroll", data={"consent": "true"}, files=[("frames", ("f.png", png(7), "image/png")), ("frames", ("f.png", png(7), "image/png"))], headers=auth())
+    assert c.get("/gallery").status_code == 401 and c.get("/gallery", headers={"X-Bin-Key": "wrong"}).status_code == 401
+    r = c.get("/gallery", headers={"X-Bin-Key": "secretkey"})
+    g = r.json()
+    uid = c.get("/me", headers=auth()).json()["user_id"]
+    assert r.status_code == 200 and g["dim"] == 512 and [p["user_id"] for p in g["people"]] == [uid]
+    mat = np.frombuffer(base64.b64decode(g["people"][0]["embeddings_b64"]), np.float16).reshape(-1, 512).astype(np.float32)
+    assert mat.shape == (2, 512) and np.allclose(np.linalg.norm(mat, axis=1), 1, atol=5e-3)
+    assert c.get("/gallery", headers={"X-Bin-Key": "secretkey", "If-None-Match": g["version"]}).status_code == 304   # unchanged: nothing resent
+
+
+def test_interaction_can_name_the_user_when_the_bin_identified_them_locally(env):
+    c, db, _ = env
+    c.put("/me", json={"sol_wallet": WALLET}, headers=auth())
+    c.post("/enroll", data={"consent": "true"}, files=[("frames", ("f.png", png(7), "image/png"))], headers=auth())
+    uid = c.get("/me", headers=auth()).json()["user_id"]
+    h = {"X-Bin-Key": "secretkey"}
+    ok = c.post("/interactions", json={"interaction_id": "L-1", "user_id": uid, "item_class": "cans", "reward_lamports": 5000}, headers=h).json()
+    assert ok["user_id"] == uid and db.inter["L-1"]["user"] == uid and db.inter["L-1"]["status"] == "pending"
+    ghost = c.post("/interactions", json={"interaction_id": "L-2", "user_id": "not-a-user", "item_class": "cans", "reward_lamports": 5000}, headers=h).json()
+    assert ghost["user_id"] is None and db.inter["L-2"]["status"] == "none"       # an unknown user id is not trusted

@@ -61,13 +61,13 @@ def _nms(dets: np.ndarray, thresh: float) -> list[int]:
 
 class LeanEngine:
     def __init__(self, det_size: int = 320, det_thresh: float = 0.5, nms_thresh: float = 0.4,
-                 model_dir: Path = MODEL_DIR):
+                 model_dir: Path = MODEL_DIR, recognizer: str = RECOGNIZER):
         import onnxruntime as ort
 
         opts = ort.SessionOptions()
         opts.log_severity_level = 3
         mk = lambda name: ort.InferenceSession(str(model_dir / name), opts, providers=["CPUExecutionProvider"])
-        self._det, self._rec = mk(DETECTOR), mk(RECOGNIZER)
+        self._det, self._rec = mk(DETECTOR), mk(recognizer)
         self._det_in, self._rec_in = self._det.get_inputs()[0].name, self._rec.get_inputs()[0].name
         self.size, self.det_thresh, self.nms_thresh = det_size, det_thresh, nms_thresh
         self._anchors: dict[tuple[int, int, int], np.ndarray] = {}
@@ -105,10 +105,13 @@ class LeanEngine:
         dets = np.hstack([bx, sc[:, None]]).astype(np.float32)
         return [(bx[i], float(sc[i]), kp[i]) for i in _nms(dets, self.nms_thresh)]
 
+    @staticmethod
+    def align(img: np.ndarray, kps: np.ndarray) -> np.ndarray:
+        """The 112x112 aligned face crop the recognizer sees."""
+        return cv2.warpAffine(img, _similarity(kps.astype(np.float32), ARCFACE_DST), (112, 112), borderValue=0.0)
+
     def _embed(self, img: np.ndarray, kps: np.ndarray) -> np.ndarray:
-        m = _similarity(kps.astype(np.float32), ARCFACE_DST)
-        crop = cv2.warpAffine(img, m, (112, 112), borderValue=0.0)
-        blob = cv2.dnn.blobFromImage(crop, 1.0 / 127.5, (112, 112), (127.5, 127.5, 127.5), swapRB=True)
+        blob = cv2.dnn.blobFromImage(self.align(img, kps), 1.0 / 127.5, (112, 112), (127.5, 127.5, 127.5), swapRB=True)
         e = self._rec.run(None, {self._rec_in: blob})[0][0].astype(np.float32)
         return e / np.linalg.norm(e)
 

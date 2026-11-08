@@ -239,3 +239,7 @@ enforce unique keys, so the code does: users are created with `MERGE` on `auth0_
 Settings: `AUTH0_DOMAIN` + `AUTH0_AUDIENCE` (Auth0 API identifier), `BIN_API_KEYS="bin-1:key,bin-2:key"`, plus the three `DATABRICKS_*` variables.
 Not built yet: the website calling these endpoints, an Auth0 "API" for the audience, the bin client sending `/interactions`, and a retry queue (only needed if the bin goes offline).
 Tested against a fake database, not yet against the real workspace.
+
+## For bins that identify people on the device
+`GET /gallery` (X-Bin-Key) returns every person's face templates (float16, base64) with an `ETag` version; `If-None-Match` gets a 304 when nothing changed. `POST /interactions`
+accepts a `user_id` from a bin (the bin key vouches for it; unknown ids are ignored). See `../pi_client/README.md` (`--local-identity`) and `../ml/QUANTIZATION.md` for the measurements.

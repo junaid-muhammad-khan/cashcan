@@ -123,7 +123,7 @@ def test_verified_person_throws_a_can_right_lid_opens_and_a_reward_is_due():
     c, api, events, drv = make(SESSION, CANS)
     c.step(EMPTY, 1.0)
     assert drv.log == [("cans", True)]
-    assert api.sent == [{"interaction_id": "id-0", "item_class": "cans", "confidence": 0.92, "reward_lamports": 4_000_000, "session_token": "tok123"}]
+    assert api.sent == [{"interaction_id": "id-0", "item_class": "cans", "confidence": 0.92, "reward_lamports": 4_000_000, "session_token": "tok123", "user_id": "user-1"}]
     assert any(e["event"] == "item" and e["user_id"] == "user-1" for e in events)
 
 
