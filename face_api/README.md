@@ -146,6 +146,12 @@ put the right person first 5/5; push, pull (exact round trip) and delete worked;
 - **Who can read the face tables:** no grants beyond the owner exist, but Trevor Lau is also a workspace admin, and admins can read
   everything. Treat the tables as readable by both of you. Biometric data: consent, deletion on request, no photos stored.
 
+## Enrolling with only 1 to 3 photos
+Users will take 1 photo, or 3 at most. `/enroll` and the web page accept 1-3 photos (the page takes 3 quick pictures). On LFW, recognition at the 45% line is
+93.6% with 1 photo, 97.8% with 2 and 99.0% with 3, with no wrong names. What is saved matters more than how many: one ordinary frontal frame from the **bin's own camera**
+recognised 90% of a person's later webcam frames, against 81% for a studio or phone photo, and extra copies or variants of one photo add nothing. Details, the
+threshold table and the self-updating-template idea (not built) are in [`ENROLLMENT.md`](ENROLLMENT.md).
+
 ## Measured accuracy (LFW, latest re-run 2026-11-08 with the two-tier gates)
 Full tables in [`EVAL.md`](EVAL.md); regenerate with `python -m tools.eval_lfw --data <dir>` (see its docstring).
 Real pipeline, threshold 0.45, 150 enrolled people (3 photos each), 757 later photos of them, 831 photos of 600 strangers:

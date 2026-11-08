@@ -39,15 +39,19 @@ def test_enroll_from_images_saves_templates_only(tmp_path):
     assert len(store.all_embeddings()[0]) == 3
 
 
-def test_enroll_needs_enough_usable_images(tmp_path):
+def test_enroll_needs_at_least_one_usable_image(tmp_path):
     from app.store import FaceStore
 
     store = FaceStore(str(tmp_path / "d.db"))
     write(tmp_path, "enroll", "a.png", 1)
     write(tmp_path, "enroll", "b.png", 1, bad=True)   # fails the quality gate
     write(tmp_path, "enroll", "c.png", 1, noface=True)
-    assert fd.cmd_enroll(args(tmp_path, images=[str(tmp_path / "enroll")]), FakeEngine(), store) == 1
-    assert not store.user_exists("me")
+    assert fd.cmd_enroll(args(tmp_path, images=[str(tmp_path / "enroll")]), FakeEngine(), store) == 0   # one good photo is enough
+    assert len(store.embeddings_for("me")) == 1
+    write(tmp_path, "unusable", "x.png", 2, bad=True)
+    write(tmp_path, "unusable", "y.png", 2, noface=True)
+    assert fd.cmd_enroll(args(tmp_path, name="nobody", images=[str(tmp_path / "unusable")]), FakeEngine(), store) == 1
+    assert not store.user_exists("nobody")
 
 
 def test_identify_names_the_enrolled_person_and_rejects_strangers(tmp_path):

@@ -553,7 +553,7 @@ def main(argv=None) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     e = sub.add_parser("enroll"); e.add_argument("--name", required=True)
-    e.add_argument("--images", nargs="+"); e.add_argument("--count", type=int, default=5)
+    e.add_argument("--images", nargs="+"); e.add_argument("--count", type=int, default=3)
     e.add_argument("--camera", default="0"); e.add_argument("--interval", type=float, default=1.0)
     e.add_argument("--guided", action="store_true", help="step-by-step prompts that also vary distance and lighting (best for robust scores)")
     e.add_argument("--lead", type=float, default=4.0, help="seconds to get into position at each guided step")

@@ -31,10 +31,17 @@ def test_consent_required(client):
     assert match(client, 1)["reason"] == "no_enrolled_users"  # nothing stored
 
 
-def test_enroll_needs_enough_good_frames(client):
-    assert enroll(client, "a", 1, n=2).status_code == 400
-    assert enroll(client, "a", 1, bad=True).status_code == 422
-    assert enroll(client, "a", 1, noface=True).status_code == 422
+def test_enroll_accepts_one_to_three_photos_and_refuses_none_usable_or_too_many(client):
+    assert enroll(client, "one", 1, n=1).json()["frames_used"] == 1            # a single photo is enough
+    assert enroll(client, "two", 2, n=2).status_code == 200
+    assert enroll(client, "three", 3, n=3).json()["frames_used"] == 3
+    assert enroll(client, "many", 4, n=4).status_code == 400                   # more than the 3 people will take
+    assert enroll(client, "bad", 5, n=3, bad=True).status_code == 422          # nothing usable
+    assert enroll(client, "none", 6, n=1, noface=True).status_code == 422
+    files = [("frames", ("a.png", png(7), "image/png")), ("frames", ("b.png", png(7, bad=True), "image/png")),
+             ("frames", ("c.png", png(7, noface=True), "image/png"))]
+    mixed = client.post("/enroll", data={"user_id": "mixed", "wallet": WALLET, "consent": "true"}, files=files).json()
+    assert mixed["frames_used"] == 1 and len(mixed["problems"]) == 2           # one good photo among bad ones still enrolls
 
 
 def test_duplicate_and_bad_user_id(client):

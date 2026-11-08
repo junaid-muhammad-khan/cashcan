@@ -118,7 +118,7 @@
   <!-- 3. Camera -->
   <section class="card" id="step-camera" aria-labelledby="h-camera" hidden>
     <h2 id="h-camera">Scan your face</h2>
-    <p class="sub" style="margin-bottom:12px">Good light on your face, no hat or sunglasses. We take 5 quick pictures.</p>
+    <p class="sub" style="margin-bottom:12px">Good light on your face, no hat or sunglasses. We take 3 quick pictures.</p>
     <div class="video-wrap">
       <video id="video" autoplay playsinline muted></video>
       <div class="oval"></div>
@@ -153,9 +153,8 @@
 (() => {
   const $ = (id) => document.getElementById(id);
   const ORDER = ["consent", "wallet", "camera", "done"];
-  const FRAMES = 5;
-  const PROMPTS = ["Look straight at the camera", "Turn slightly left", "Turn slightly right",
-                   "Lift your chin a little", "Look straight again"];
+  const FRAMES = 3;
+  const PROMPTS = ["Look straight at the camera", "Turn slightly left", "Turn slightly right"];
   const HANDLE_RE = /^[A-Za-z0-9_.-]{1,64}$/;
   const WALLET_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
   let stream = null, handle = "", wallet = "";
@@ -295,7 +294,7 @@
     const d = err.body && err.body.detail;
     if (err.status === 409) return "That name is already registered. Pick another name, or delete the existing registration first.";
     if (err.status === 422 && d && d.problems) {
-      return "We could not get 3 clear pictures. " + [...new Set(d.problems.map((p) => p.replace(/^frame \d+: /, "")))].join(" ");
+      return "We could not get a clear picture. " + [...new Set(d.problems.map((p) => p.replace(/^frame \d+: /, "")))].join(" ");
     }
     return typeof d === "string" ? d : "Something went wrong. Please try again.";
   }
