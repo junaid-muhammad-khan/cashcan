@@ -249,3 +249,15 @@ def test_loop_remembers_face_seen_and_last_reply():
     lp = BinLoop(A(), D(), ConsoleIndicator(out=open("/dev/null", "w")))
     lp.step(EMPTY, 1.0)
     assert lp.face_seen is True and lp.last_reply["reason"] == "below_threshold"
+
+
+def test_item_photos_are_saved_with_the_decision_in_the_name(tmp_path):
+    c, _, _, _ = make(SESSION, CANS)
+    c.save_dir = str(tmp_path / "photos")
+    c.step(with_item(), 1.0)
+    files = list((tmp_path / "photos").glob("*.jpg"))
+    assert len(files) == 1 and "_cans_92_" in files[0].name and "unsure" not in files[0].name and files[0].stat().st_size > 500
+    c2, _, _, _ = make(None, {"cans": 0.4, "organics": 0.35, "waste": 0.25})
+    c2.save_dir = str(tmp_path / "p2")
+    c2.step(with_item(), 1.0)
+    assert "_waste_" in next((tmp_path / "p2").glob("*.jpg")).name and "_unsure_" in next((tmp_path / "p2").glob("*.jpg")).name

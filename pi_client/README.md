@@ -103,3 +103,6 @@ server's own code from `../face_api`, so the rules are identical. A full identif
 **Head turn: enrollment only (default).** You turn your head once when you set up face match on the website; that is how the saved face vectors are made. At the bin a recognised face
 is verified from the match alone: the live frame is compared with every stored vector and the highest similarity decides (threshold 45%, and the best person must lead the runner-up by 5 points).
 Add `--liveness` to ask for one random head turn at the bin as well; that stops a still photo held up to the camera, but not a video. Without it, a photo or video of a person could also be recognised.
+
+`--save-items DIR` keeps a photo of every item the classifier looks at, named `<time>_<bin>_<confidence>[_unsure]_<id>.jpg`. Hold a few of each kind of item, then sort the photos into
+`cans/`, `organics/` and `waste/` folders by what the item REALLY was. Those are training photos from this very camera (the model was trained on public photo sets, not on a bin camera).

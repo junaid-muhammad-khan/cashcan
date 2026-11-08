@@ -98,10 +98,12 @@ class BinController:
     min_confidence: float = 0.60
     votes: int = 3
     new_id: Callable[[], str] = lambda: uuid.uuid4().hex
+    save_dir: str | None = None   # save a photo of every item the bin looks at (see _save_photo): the raw material for retraining on this camera
 
     def __post_init__(self):
         self._votes: list[dict] | None = None
         self._first_crop = None
+        self._crop = None
         self.last_item: dict | None = None   # most recent decision, for the preview window
         self.last_item_at = 0.0
 
@@ -121,14 +123,31 @@ class BinController:
         self.outbox.flush(now)
 
         if self._votes is not None:         # collecting looks at the item that just settled
-            self._votes.append(self.classifier.probs(self.gate.crop(frame)))
+            self._crop = self.gate.crop(frame)
+            self._votes.append(self.classifier.probs(self._crop))
             if len(self._votes) >= self.votes:
                 self._decide(now)
             return
         if self.gate.step(frame, now):
-            self._votes = [self.classifier.probs(self.gate.crop(frame))]
+            self._crop = self.gate.crop(frame)
+            self._votes = [self.classifier.probs(self._crop)]
             if len(self._votes) >= self.votes:
                 self._decide(now)
+
+    def _save_photo(self, bin_name: str, conf: float, reason: str, iid: str) -> None:
+        """Keep the picture the classifier saw, named by its decision: <time>_<bin>_<confidence>[_unsure]_<id>.jpg. Sort these into folders
+        (cans / organics / waste) by what the item REALLY was, and they become training photos from this very camera."""
+        if not self.save_dir or self._crop is None:
+            return
+        import time as _t
+        from pathlib import Path
+
+        import cv2
+
+        d = Path(self.save_dir).expanduser()
+        d.mkdir(parents=True, exist_ok=True)
+        name = f"{_t.strftime('%Y%m%d-%H%M%S')}_{bin_name}_{int(conf * 100)}{'_unsure' if reason != 'ok' else ''}_{iid[:6]}.jpg"
+        cv2.imwrite(str(d / name), self._crop, [cv2.IMWRITE_JPEG_QUALITY, 92])
 
     def _decide(self, now: float) -> None:
         votes, self._votes = self._votes, None
@@ -136,6 +155,7 @@ class BinController:
         session = self.loop.current_session(now)   # a live, verified person right now?
         self.lid.open(bin_name, now)
         iid = self.new_id()
+        self._save_photo(bin_name, conf, reason, iid)
         item = {"event": "item", "interaction_id": iid, "bin": bin_name, "confidence": round(conf, 3), "reason": reason,
                 "user_id": session.user_id if session else None, "payout_status": None, "reward_cents": None}
         self.last_item, self.last_item_at = item, now

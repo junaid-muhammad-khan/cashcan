@@ -49,6 +49,7 @@ def main(argv=None) -> int:
     g.add_argument("--min-confidence", type=float, default=0.60, help="below this the item goes to the waste lid and earns nothing")
     g.add_argument("--lid-seconds", type=float, default=6.0)
     g.add_argument("--show", action="store_true", help="open a preview window with the bin's decisions drawn on the camera frame (q to quit)")
+    g.add_argument("--save-items", metavar="DIR", help="save a photo of every item the bin classifies, with the decision in the file name (to retrain on this camera)")
     g.add_argument("--lids", metavar="FILE.json", help='{"cans": {"open": "cmd", "close": "cmd"}, ...}; omit to simulate lids on stderr')
     a = ap.parse_args(argv)
 
@@ -90,7 +91,7 @@ def main(argv=None) -> int:
         roi = tuple(float(v) for v in a.item_roi.split(","))
         driver = CommandLid(json.loads(open(a.lids).read())) if a.lids else SimulatedLid()
         runner = BinController(loop, ItemGate(roi=roi), OnnxClassifier(a.model), LidController(driver, a.lid_seconds),
-                               Outbox(api, on_event=emit), emit, min_confidence=a.min_confidence)
+                               Outbox(api, on_event=emit), emit, min_confidence=a.min_confidence, save_dir=a.save_items)
 
     is_file = not a.camera.isdigit() and os.path.isfile(a.camera)
     cam, fails = open_camera(a.camera, a.width, a.height), 0
