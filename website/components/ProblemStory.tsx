@@ -9,7 +9,8 @@ import "./ProblemStory.css";
 
 gsap.registerPlugin(ScrollTrigger, useGSAP);
 
-// The team's headline figure. Shown on the page as the team's working figure; cite a source before launch.
+// Canada's waste sent to disposal (landfill + incineration) in 2022: Statistics Canada, summarized by madeinca.ca.
+const SOURCE_URL = "https://madeinca.ca/recycling-canada-statistics/";
 const TONS_MILLION = 26.6;
 const BEARS = 27; // one polar-bear icon per ~1 million (26.6 rounds to 27 icons, the last one partly filled)
 
@@ -22,8 +23,8 @@ const BinIcon = () => (
 const CHAPTERS = [
   {
     key: "scale",
-    title: "26.6 million tons in the wrong bin",
-    body: "Recyclables keep landing in the trash, and trash in the recycling. Every misplaced item is material that never gets a second life.",
+    title: "26.6 million tonnes thrown away",
+    body: "In 2022 Canada recycled or composted only about 27% of its waste. A record 26.6 million tonnes went to landfill or incineration, and plenty of it could have been recycled.",
     tile: "#E4EEF8",
     Icon: BinIcon,
   },
@@ -37,7 +38,7 @@ const CHAPTERS = [
   {
     key: "cash",
     title: "Cash back for getting it right",
-    body: "Recyclables sorted into the right container pay out instantly to your Solana wallet. The hauler that buys the sorted material funds the rewards.",
+    body: "Put a recyclable in the right container and the reward pays out instantly to your Solana wallet. Recycling right finally pays.",
     tile: "#FBF1D8",
     Icon: Coin,
   },
@@ -90,7 +91,6 @@ export default function ProblemStory() {
         // Scene 3 start state
         gsap.set(q(".ps-item"), { y: -90, autoAlpha: 0 });
         gsap.set(q(".ps-coin"), { autoAlpha: 0, x: 0, y: 0, scale: 0.6 });
-        gsap.set(q(".ps-fund"), { autoAlpha: 0, y: 12 });
         gsap.set(q(".ps-bar i"), { scaleX: 0 });
         const amount = q<HTMLElement>(".ps-amount")[0];
         const cash = { v: 0 };
@@ -124,8 +124,7 @@ export default function ProblemStory() {
           .to(q(".ps-coin"), { keyframes: { y: [0, -110, 4], ease: "sine.inOut" }, duration: 0.35 }, 2.38)
           .to(q(".ps-coin"), { scale: 0.4, autoAlpha: 0, duration: 0.06 }, 2.72)
           .to(cash, { v: 0.004, duration: 0.25, onUpdate: () => { if (amount) amount.textContent = `+${cash.v.toFixed(4)}`; } }, 2.7)
-          .to(q(".ps-wallet"), { scale: 1.04, yoyo: true, repeat: 1, duration: 0.06 }, 2.72)
-          .to(q(".ps-fund"), { autoAlpha: 1, y: 0, ease: "power2.out", duration: 0.2 }, 2.78);
+          .to(q(".ps-wallet"), { scale: 1.04, yoyo: true, repeat: 1, duration: 0.06 }, 2.72);
 
         const st = ScrollTrigger.create({
           trigger: root.current,
@@ -189,10 +188,13 @@ export default function ProblemStory() {
       <div className="container ps-grid">
         <div className="ps-copy">
           <div className="eyebrow">The problem</div>
-          <h2 id="ps-h">26.6 million tons of recycling end up in the wrong bin.</h2>
+          <h2 id="ps-h">Canada threw away a record 26.6 million tonnes in 2022.</h2>
           <p className="section-lede">
-            That&apos;s heavier than 26.6 million polar bears. CashCan is a smart bin that tracks what you throw away,
-            shows you the right container, and pays you cash back when you get it right.
+            That&apos;s heavier than 26.6 million polar bears, and plenty of it could have been recycled. CashCan is a smart
+            bin that tracks what you throw away, shows you the right container, and pays you cash back when you get it right.
+          </p>
+          <p className="ps-source">
+            Source: Statistics Canada 2022 data, via <a href={SOURCE_URL} target="_blank" rel="noopener noreferrer">madeinca.ca</a>
           </p>
           <ol className="ps-cards">
             {CHAPTERS.map((c, i) => (
@@ -222,9 +224,9 @@ export default function ProblemStory() {
               <span className="ps-mobile-label">01 · The scale</span>
               <svg viewBox="0 0 420 300" className="ps-svg">
                 <text x="30" y="70" fontSize="52" fontWeight="800" fill="#0F1F17" letterSpacing="-2" fontFamily="var(--font-display)">
-                  <tspan className="ps-tons">26.6</tspan><tspan fontSize="30" dx="4">M tons</tspan>
+                  <tspan className="ps-tons">26.6</tspan><tspan fontSize="30" dx="4">M tonnes</tspan>
                 </text>
-                <text x="32" y="96" fontSize="13" fill="#4A5A51">of recyclable material in the wrong bin</text>
+                <text x="32" y="96" fontSize="13" fill="#4A5A51">of waste sent to landfill or incineration in Canada, 2022</text>
                 <g>
                   {Array.from({ length: BEARS }, (_, i) => {
                     const x = 30 + (i % cols) * 40, y = 120 + Math.floor(i / cols) * 34;
@@ -308,14 +310,9 @@ export default function ProblemStory() {
                   <text x="254" y="164" fontSize="26" fontWeight="800" fill="#5FD79A" className="ps-amount">+0.0040</text>
                   <text x="254" y="188" fontSize="11" fill="#B9C7BF">SOL · aluminum can</text>
                 </g>
-                <g className="ps-fund">
-                  <rect x="196" y="236" width="214" height="40" rx="12" fill="#E4EEF8" />
-                  <text x="210" y="261" fontSize="11.5" fill="#2C5F8A" fontWeight="600">Funded by the hauler that buys it</text>
-                </g>
               </svg>
             </div>
           </div>
-          <p className="ps-note">Illustration. 26.6 million tons is our working figure; each polar bear stands for about 1 million tons.</p>
         </div>
       </div>
     </section>
