@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { LogoMark } from "@/components/icons";
 import { useEffect, useRef, useState } from "react";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
@@ -293,7 +294,7 @@ export default function DashboardView({ firstName, walletAddress, onSaveWallet, 
           </div>
 
           <footer className="db-footer">
-            <span>Cashcan · Thoughtful sorting, one item at a time.</span>
+            <span className="db-footer-brand"><LogoMark size={18} />Cashcan · Thoughtful sorting, one item at a time.</span>
             <span>Demo data · Metro Vancouver · All times local</span>
           </footer>
         </div>

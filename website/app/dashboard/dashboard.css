@@ -100,7 +100,9 @@
 .db-bar-labels { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); padding-left: 40px; margin-top: 12px; }
 .db-bar-labels span { text-align: center; font-size: 14px; font-weight: 600; transition: opacity .25s ease; }
 .db-foot { font-size: 12px; color: #39443b; margin: 22px 0 0 40px; }
-.db-footer { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 28px; font-size: 10.5px; color: var(--db-muted); }
+.db-footer { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 28px; font-size: 10.5px; color: var(--db-muted); }
+.db-footer-brand { display: inline-flex; align-items: center; gap: 8px; }
+.db-footer .logo-mark { flex-shrink: 0; border-radius: 5px; background: #157a46; display: flex; align-items: center; justify-content: center; }
 
 @media (max-width: 1100px) { .db-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 980px) {
