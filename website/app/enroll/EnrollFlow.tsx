@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useAuth0 } from "@auth0/auth0-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import AuthShell from "@/components/AuthShell";
@@ -28,6 +29,7 @@ const stepIndex = (s: Step) => (s === "consent" || s === "loading" || s === "alr
 
 export default function EnrollFlow() {
   const { user, getAccessTokenSilently } = useAuth0();
+  const router = useRouter();
   const cam = useCamera();
   const [step, setStep] = useState<Step>("loading");
   const [token, setToken] = useState<string | undefined>();
@@ -60,10 +62,15 @@ export default function EnrollFlow() {
       setToken(t);
       setMe(profile);
       if (profile?.sol_wallet) setWallet(profile.sol_wallet);
+      if (profile?.face_enrolled && profile.sol_wallet) {
+        // Already set up (e.g. an existing account logging in again): nothing to do here, go straight to the dashboard.
+        router.replace("/dashboard");
+        return;
+      }
       setStep(profile?.face_enrolled ? "already" : "consent");
     })();
     return () => { cancelled = true; };
-  }, [getAccessTokenSilently]);
+  }, [getAccessTokenSilently, router]);
 
   const needsWallet = !me?.sol_wallet;
 
@@ -139,7 +146,7 @@ export default function EnrollFlow() {
     } catch (e) {
       const err = e as FaceApiError;
       if (runId.current !== id) return;
-      if (err.status === 409) { cam.stop(); setStep("already"); return; }
+      if (err.status === 409 && /already enrolled/i.test(err.message)) { cam.stop(); try { sessionStorage.removeItem("cashcan.profile.v1"); } catch { /* ignore */ } router.replace("/dashboard"); return; }
       setProblems(err.problems.map(friendlyProblem));
       setError(err.status === 422 ? "Some pictures weren't clear enough to save. Check the tips below and scan again." : err.message);
       setStep("camera");
