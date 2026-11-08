@@ -21,7 +21,8 @@ npm run dev                  # http://localhost:3000
 | `/login` | Email + password, "Keep me logged in for 7 days" (off = browser-session cookie, 12 h max), forgot-password link; `?next=/path` returns you where you were |
 | `/forgot-password` | Asks for an email and always answers the same way, so it can't reveal which emails have accounts |
 | `/reset-password?token=…` | New password + confirm, with strength bar; single-use token valid 30 minutes, logs you in when saved |
-| `/account` | Signed-in only; shows the profile and a log-out button |
+| `/dashboard` | Signed-in only, where login/signup/reset land. Recent detections (click to expand), rewards card (pending configuration, shows your wallet if linked), four summary cards, and the sorting-outcomes chart. The date-range menu updates every number; clicking a bar filters the detections. **All figures are demo data** (`app/dashboard/data.ts`) until drops are linked to accounts |
+| `/account` | Signed-in only; profile details and log out ("Profile" in the dashboard header) |
 
 All motion is in `components/HomeMotion.tsx` and `components/AuthShell.tsx`. Content is visible
 without JavaScript, and everything that moves is skipped when the visitor has reduced motion on.

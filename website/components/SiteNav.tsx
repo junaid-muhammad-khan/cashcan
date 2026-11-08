@@ -16,7 +16,7 @@ export default function SiteNav({ signedInName }: { signedInName?: string | null
       </div>
       <div className="nav-actions">
         {signedInName ? (
-          <Link href="/account" className="btn btn-dark">Your account</Link>
+          <Link href="/dashboard" className="btn btn-dark">Dashboard</Link>
         ) : (
           <>
             <Link href="/login" className="text-link">Log in</Link>

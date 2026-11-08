@@ -33,9 +33,12 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
           </dl>
         </section>
 
-        <form action="/api/auth/logout" method="post" style={{ marginTop: 28 }}>
-          <button type="submit" className="btn btn-ghost">Log out</button>
-        </form>
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 28 }}>
+          <a href="/dashboard" className="btn btn-primary">Back to dashboard</a>
+          <form action="/api/auth/logout" method="post">
+            <button type="submit" className="btn btn-ghost">Log out</button>
+          </form>
+        </div>
       </main>
     </div>
   );

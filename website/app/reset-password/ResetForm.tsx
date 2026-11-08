@@ -50,7 +50,7 @@ export default function ResetForm() {
         else setFormError(data.error ?? "We couldn't change your password just now. Try again in a moment.");
         return;
       }
-      router.push("/account");
+      router.push("/dashboard");
       router.refresh();
     } catch {
       setFormError("We couldn't reach CashCan. Check your connection and try again.");

@@ -6,6 +6,6 @@ import SignupForm from "./SignupForm";
 export const metadata: Metadata = { title: "Sign up — CashCan" };
 
 export default async function SignupPage() {
-  if (await getCurrentUser()) redirect("/account");
+  if (await getCurrentUser()) redirect("/dashboard");
   return <SignupForm />;
 }

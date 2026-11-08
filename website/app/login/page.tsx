@@ -8,7 +8,7 @@ import LoginForm from "./LoginForm";
 export const metadata: Metadata = { title: "Log in — CashCan" };
 
 export default async function LoginPage() {
-  if (await getCurrentUser()) redirect("/account");
+  if (await getCurrentUser()) redirect("/dashboard");
   return (
     <AuthShell
       heading="Sort it right. Get paid for it."

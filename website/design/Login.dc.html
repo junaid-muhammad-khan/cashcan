@@ -67,8 +67,11 @@ a{color:#157A46}a:hover{color:#0E5A33}
         <div style="background: #FFFFFF; border: 1px solid #DCE4DD; border-radius: 20px; padding: 32px; text-align: center">
           <div style="width: 56px; height: 56px; border-radius: 50%; background: #E3F5EB; margin: 0 auto; display: flex; align-items: center; justify-content: center"><svg aria-hidden="true" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#157A46" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"></path></svg></div>
           <h1 style="font-family: 'Space Grotesk', sans-serif; font-size: 28px; letter-spacing: -0.02em; margin: 18px 0 0">You're logged in</h1>
-          <p style="color: #4A5A51; font-size: 15px; margin: 8px 0 0">In the real site this goes to your account page.</p>
-          <button type="button" class="btn" onClick="{{reset}}" style="margin-top: 22px; background: #FFFFFF; color: #0F1F17; border: 1px solid #DCE4DD; padding: 0 22px">Back to the form</button>
+          <p style="color: #4A5A51; font-size: 15px; margin: 8px 0 0">Your drops, rewards and wallet are waiting.</p>
+          <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 22px">
+            <a href="Dashboard.dc.html" style="display: inline-flex; align-items: center; min-height: 48px; padding: 0 22px; border-radius: 999px; background: #157A46; color: #FFFFFF; text-decoration: none; font-weight: 600">Go to your dashboard</a>
+            <button type="button" class="btn" onClick="{{reset}}" style="background: #FFFFFF; color: #0F1F17; border: 1px solid #DCE4DD; padding: 0 22px">Back to the form</button>
+          </div>
         </div>
       </sc-if>
 

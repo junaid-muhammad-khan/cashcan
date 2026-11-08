@@ -37,7 +37,7 @@ export default function LoginForm() {
         return;
       }
       const dest = params.get("next");
-      router.push(dest && dest.startsWith("/") && !dest.startsWith("//") ? dest : "/account");
+      router.push(dest && dest.startsWith("/") && !dest.startsWith("//") ? dest : "/dashboard");
       router.refresh();
     } catch {
       setFormError("We couldn't reach CashCan. Check your connection and try again.");

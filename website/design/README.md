@@ -5,6 +5,7 @@ https://claude.ai/artifact/TkYWfdG7fJxha1xG49K4ga (private until shared from its
 
 - `Main.dc.html` — the page (Design Component format: HTML markup plus a small logic class)
 - `Login.dc.html`, `Signup.dc.html` — the log-in and sign-up screens
+- `Dashboard.dc.html` — the signed-in dashboard
 - `canvas.json` — the canvas index
 
 What it includes: scroll-triggered reveals, hero mockup that untilts on scroll, floating

@@ -82,7 +82,7 @@ export default function SignupForm() {
         else setFormError(data.error ?? "We couldn't create your account just now. Try again in a moment.");
         return;
       }
-      router.push("/account?welcome=1");
+      router.push("/dashboard?welcome=1");
       router.refresh();
     } catch {
       setFormError("We couldn't reach CashCan. Check your connection and try again.");
