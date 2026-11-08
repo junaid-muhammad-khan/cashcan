@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useAuth0 } from "@auth0/auth0-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import AuthShell from "@/components/AuthShell";
-import { Check } from "@/components/icons";
+import { Check, LogoMark } from "@/components/icons";
 import { checkPose, enroll, FaceApiError, getMe, matchFrame, saveWallet, userIdFromSub, type Me } from "@/lib/faceApi";
 import { useCamera } from "./useCamera";
 
@@ -214,7 +214,7 @@ export default function EnrollFlow() {
 
       {step === "already" && (
         <div className="success-panel en-fade" role="status">
-          <span className="ok-badge"><Check size={26} strokeWidth={2.6} /></span>
+          <span className="en-done-mark"><LogoMark size={56} /><span className="en-done-check"><Check size={13} color="#fff" strokeWidth={3.2} /></span></span>
           <h1>Face match is already set up</h1>
           <p className="sub">Your face template is saved, so any CashCan bin can recognise you. To redo it, delete it from your profile first.</p>
           <div className="cta-row" style={{ marginTop: 22 }}>
@@ -339,7 +339,7 @@ export default function EnrollFlow() {
 
       {step === "done" && (
         <div className="success-panel en-fade" role="status">
-          <span className="ok-badge"><Check size={26} strokeWidth={2.6} /></span>
+          <span className="en-done-mark"><LogoMark size={56} /><span className="en-done-check"><Check size={13} color="#fff" strokeWidth={3.2} /></span></span>
           <h1>Face match is ready</h1>
           <p className="sub">
             Next time you&apos;re at a CashCan bin, look at the front camera. It asks you to turn your head once so it knows you&apos;re really there,
