@@ -1,9 +1,84 @@
 # CashCan
 
-**Smart sorting bins that know your city's rules, and pay you for sorting correctly.**
+**Canada sent a record 26.6 million tonnes of waste to disposal in 2022. Plenty of it could have been recycled. CashCan is a smart bin that pays you to recycle right.**
 
-> Hackathon project (24 hours). Theme: solve a problem in this world.
-> Status: in progress. **Built and tested on their own:** the Solana payout service (`backend/`), the garbage classifier (`ml/`), the face recognition system (`face_api/`, `pi_client/`) with its Databricks face database, and the website (`website/`). The face system is merged and has been tried on a real laptop webcam with the team. **Not done yet:** wiring the pieces together on the device (see "Wiring the pieces together"), the local rule table, the dashboard, and a hardware demo. Nothing has been run on the real bin hardware yet.
+> Hackathon project (24 hours, HackCamp 2026). Theme: solve a problem in this world.
+> **Status: in progress.** Built: the website (live at cashcan.biz), face enrollment and match (`face_api/`), the bin controller that identifies the person, classifies the item and opens the right lid (`pi_client/ --classify`, tested on a laptop webcam), the Solana payout service (`backend/`), and the Databricks dashboard (`dashboard/`, on synthetic demo data). **Not done yet:** the worker that pays out recorded interactions on Solana, the local rule table, contamination detection, and the real bin hardware (lids, camera). Nothing has run on the real bin yet.
+
+---
+
+## The problem
+
+In 2022, Canada generated **36.5 million tonnes** of solid waste. Only **9.9 million tonnes (about 27%)** was recycled or composted. The other **26.6 million tonnes** went to landfill or incineration, the most since tracking began in 2002.
+
+Sources: [Statistics Canada](https://statcan.gc.ca/o1/en/plus/6850-less-diversion-and-more-non-residential-sources-push-canadas-waste-disposal-new-high-2022), [Environment and Climate Change Canada](https://www.canada.ca/en/environment-climate-change/services/environmental-indicators/solid-waste-diversion-disposal.html), summarized by [madeinca.ca](https://madeinca.ca/recycling-canada-statistics/). (The 26.6M figure is *all* disposed waste, not only recyclables. Say it that way in the pitch.)
+
+Why so much recyclable material still ends up in the garbage:
+
+- **No reason to bother.** Recycling right takes effort, and nobody gets anything for it. Signage and outreach help, but they don't change the habit.
+- **The rules are confusing and local.** In Metro Vancouver, an item labelled "compostable" may not be accepted in the green bin. Food-soiled paper and foodware confuse people.
+- **Contamination wastes the effort of people who do sort.** One greasy container can ruin a whole batch, so correctly sorted material goes to landfill too.
+- **Existing smart bins sort by material** (plastic, paper, metal, glass), not by what your city actually accepts.
+
+## Our solution
+
+**Pay people, instantly, for every item they recycle correctly.** Then make sure the reward only goes to items that will actually be recycled.
+
+A CashCan bin:
+
+1. **Recognises you** with an opt-in face match and a head-turn liveness check, so the reward goes to your wallet without a card or phone.
+2. **Identifies the item** (organics / cans / waste) and **opens the right lid**, so the item lands in the right container. The goal is to decide by **local Metro Vancouver rules**, not just by material.
+3. **Pays you cash back in SOL** for reward-eligible items (today: cans, the BC Return-It deposit containers).
+4. **Logs every decision** to Databricks, so cities and haulers can see what goes where and what people get wrong.
+5. *Planned:* catch contamination (for example, a greasy container) and pay a reduced reward, since contaminated items can ruin a batch. The backend already has a 25% contaminated multiplier; the classifier can't detect contamination yet.
+
+**Who pays for the rewards:** the recycling or hauling company that collects the bin pays for the sorted material. CashCan converts part of that revenue into SOL to fund the reward wallet. Cleaner material is worth more, so the incentive pays for itself.
+
+**Our edge:** a direct, per-item incentive to recycle, with the bin itself routing each item to the right container, so the money goes to sorting that works. We searched and found no product doing exactly this. That's a search result, not proof that none exists.
+
+---
+
+## How it works
+
+```
+Sign up on cashcan.biz -> enroll face -> add Solana wallet on the profile page
+   -> At the bin: face match identifies the user (with a head-turn liveness check)
+   -> The same camera sees the item held in the item region
+   -> Classifier: organics / cans / waste (3-look average; unsure -> waste)
+   -> The bin opens that lid
+   -> Reward table decides the reward (verified person + paying class only)
+   -> Interaction recorded (POST /interactions) -> SOL payout -> Databricks -> dashboard
+   -> next item
+```
+
+How the pieces connect in code:
+
+```
+website sign-up -> face_api /enroll (consent, 1-3 photos, templates only)
+                          face templates <-> Databricks (workspace.cashcan_faces)
+camera -> pi_client --classify ─┬─ face_api /match + liveness -> live session (who)
+                                └─ ItemGate -> ONNX classifier -> LidController (what)
+                                        -> face_api POST /interactions (pending reward)
+                                        -> [payout worker: NOT BUILT] -> backend Solana payout
+                                        -> POST /interactions/{id}/payout (paid + tx signature)
+backend payout -> Databricks activity_log -> dashboard
+```
+
+### Reward table
+The classifier detects the item, then a lookup table decides whether it earns a reward.
+- **Cans** (BC Return-It deposit containers): 0.004 SOL. **Organics and waste:** 0 for now (`backend/src/rewardTable.ts`).
+- Only a verified person gets a reward. Nobody identified: the lid still opens, reward 0.
+- Unsure item (low confidence): goes to waste, reward 0.
+- Contaminated item: 25% of the reward, once contamination detection exists.
+- All amounts are placeholders (devnet SOL has no value). The real figures are a team decision.
+
+### Anti-abuse (judges will ask)
+- Rate limit per user per time window (per-user cooldown in `backend/`).
+- Minimum classifier confidence before any reward.
+- A reward needs a live verified face session. The head-turn liveness check rejects a held-up photo or screen. It does **not** stop a replayed video, a 3D mask or a deepfake, and we say so openly.
+- Each interaction has a bin-chosen id and is stored once, so retries can't pay twice.
+- The bin must send a bin key to record interactions; one face can't be enrolled to two accounts.
+- Not built yet: rejecting repeated identical items, and a second camera that must agree. The item gate also can't tell a hand from an item.
 
 ---
 
@@ -11,153 +86,91 @@
 
 ```
 cashcan/
-├── README.md        this file: plan, status, layout
+├── README.md        this file: problem, solution, status, plan
 ├── backend/         Node/TypeScript Solana payout service + Databricks activity log
 ├── ml/              garbage classifier (3 bins): training, results, model comparison, RKNN conversion scripts
-├── face_api/        Python face recognition: API + enrollment web page, matching, liveness,
+├── face_api/        Python face recognition: API + enrollment page, matching, liveness,
 │   │                SQLite and Databricks face stores, tools, measured results
 │   ├── app/         FastAPI app (main.py), face_engine, matching, liveness, sessions, stores
-│   ├── tools/       face_demo (enroll, identify, selftest), databricks_sync (push, pull, search), and the
+│   ├── tools/       face_demo (enroll, identify, selftest), databricks_sync (push, pull, search),
 │   │                evaluation, robustness and training experiments
 │   ├── tests/
 │   └── EVAL.md, ENROLLMENT.md, ROBUSTNESS.md, TRAINING.md, DATABRICKS_CHECK.md    measured results
-├── pi_client/       bin-side client: front camera -> /match -> liveness challenge -> session events
-│                    (plain Python/OpenCV; runs on a Raspberry Pi or the Radxa board)
-└── website/         Next.js + GSAP site: scroll-animated home, sign-up, log-in, account pages
-                     (prototype auth; not yet linked to face_api/)
+├── pi_client/       bin controller: camera -> face match + liveness (who) and item classifier (what)
+│                    -> opens the right lid -> records the interaction (Python/OpenCV; Pi, Radxa or a Mac)
+├── dashboard/       Databricks AI/BI dashboard over activity_log: build, deploy, demo seed data
+├── databricks/      SQL for the app tables (users, bins, interactions), website accounts, activity_log
+└── website/         Next.js + GSAP site (cashcan.biz): home with the scroll story, sign-up / log-in (Auth0),
+                     face enrollment, dashboard, profile + wallet, prices and info pages
 ```
 
-Each folder has its own README with setup and commands. To try the face recognition on your own laptop see "Face recognition: where it stands" below, then `face_api/README.md` for the full steps.
-
-How the pieces are meant to connect (the arrows into the payout are **not built yet**):
-
-```
-website sign-up -> (not linked yet) -> face_api /enroll
-front camera -> pi_client -> face_api /match + liveness -> live session {user, wallet}  ─┐
-                                   face templates <-> Databricks (workspace.cashcan_faces) │
-item camera  -> ml classifier -> item + confidence ─────────────────────────────────────┤
-                                                                                         v
-                                       backend payout (Solana) -> Databricks activity_log
-```
+Each folder has its own README with setup and commands.
 
 ---
 
-## The problem
-
-People sort waste wrong, and contamination ruins whole batches of recycling and compost.
-
-- Sorting rules are local and confusing. In Metro Vancouver, an item labelled "compostable" may not be accepted in the green bin. Food-soiled paper and foodware cause confusion.
-- Existing smart bins mostly classify by **material** (plastic, paper, metal, glass), not by **what your city actually accepts**.
-- Image classifiers that score 95%+ on benchmarks often fail on real, contaminated items, and no public dataset of contaminated recyclables exists (per a June 2026 preprint).
-- Signage and outreach reduce contamination but do not eliminate it. There is little immediate reason for a person to get it right.
-
-## Our idea
-
-A bin with a camera and sensor that:
-
-1. Identifies the item and decides the correct bin **by local Metro Vancouver rules**, not just by material.
-2. Detects **contamination** (for example, a greasy container).
-3. Uses **two cameras (one on top, one on the front)** to look at the item from two angles, so detection is more reliable and harder to fool.
-4. **Rewards** the user with a small crypto payout depending on what the item is detected as (which items earn a reward, and how much, is defined in the reward table below).
-5. Logs everything to a dashboard, so we can show where and what people get wrong.
-
-**Our edge:** local-rule-aware plus contamination-aware sorting, tied to an incentive. We searched and found no product doing exactly this. That is a search result, not proof that none exists.
-
----
-
-## How it works
-
-```
-Register user
-   -> Facial registration (enroll face, link it to the user's account)
-   -> Connect Solana wallet
-   -> At the bin: face match identifies the user
-   -> Two cameras (top + front) capture the item
-   -> Classifier (item + local rule + contamination)
-   -> Reward table decides which items earn a payout
-   -> Payout (devnet SOL)
-   -> Activity log / dashboard
-   -> (loops back for the next item)
-```
-
-### Reward table
-The classifier detects the item, then a lookup table decides whether it earns a reward.
-- Reward-eligible item, clean: payout.
-- Reward-eligible item, contaminated: reduced or no payout.
-- Item that earns no reward: no payout, but the bin still tells the user where it goes.
-- Which items are reward-eligible and the exact amounts: **TBD** (the whiteboard note "Payout SOL by Classifier / 2" needs to be defined by the team).
-
-### Anti-abuse (required, judges will ask)
-- Rate limit per user per time window.
-- Minimum classifier confidence before any payout.
-- Reject repeated identical items in quick succession.
-- Top and front camera detections must agree before a payout is issued.
-- Face match must succeed before a payout. A head-turn liveness check (rejects a photo or screen held up) is built in `face_api/`; it does not stop a replayed video, a 3D mask or a deepfake, and that limit should be stated openly. Nothing enforces this gate at the payout yet (see "Wiring the pieces together").
-
----
-
-## Scope
+## Scope and status
 
 ### Must have (MVP)
-- [x] Classifier — scope changed from "12 material classes" to **3 physical bins** (organics / cans / waste, matching the hardware's 3 openings — see `ml/class_map.yaml` for why). MobileNetV2, trained on public datasets (TrashNet, GD, RealWaste) plus real photos of actual items after live-webcam testing exposed gaps. 92%+ on a held-out test set; live-tested with a webcam (`ml/scripts/live_predict.py`), not yet on the real bin hardware/cameras
+- [x] **Classifier:** 3 physical bins (organics / cans / waste), matching the hardware's 3 openings (see `ml/class_map.yaml`). MobileNetV2 trained on TrashNet, GD and RealWaste, plus our own photos to patch gaps found in live-webcam testing. 92%+ on a held-out test set. Live-tested on a webcam (`ml/scripts/live_predict.py`), not yet on the bin's cameras.
+- [x] **Bin controller:** `pi_client --classify` uses one camera for both the face match and the item, opens the item's lid and records the interaction with a retry outbox. Unit-tested and tried on a laptop webcam with `--show`; lids are simulated until the hardware is chosen.
+- [ ] Payout worker that settles `pending` interactions on Solana and reports back via `POST /interactions/{id}/payout`
 - [ ] Local rule lookup table (item -> correct bin + reason)
-- [ ] Two cameras (top and front) + Raspberry Pi capturing each item
-- [ ] Bin indicator (LEDs or display) showing the correct bin and why
-- [x] Reward table + devnet SOL payout for reward-eligible items — backend built and verified end-to-end (reward lookup, contamination multiplier, confidence gate, per-user cooldown, real signed transfer); see `backend/README.md`. Reward amounts in the table are still placeholders (see Open questions)
-- [x] Facial registration and face match at the bin, so each payout goes to the right user's wallet (opt-in consent screen, store face embeddings only, never raw photos, delete on request) — merged: `face_api/` and `pi_client/` enroll from 1 to 3 photos behind a consent screen, store only the numeric templates (locally and in Databricks Delta + Vector Search), run a head-turn liveness check, and offer a delete endpoint. Measured: 99.0% / 97.8% / 93.6% of enrolled people recognised on public photos with 3 / 2 / 1 enrollment photos (0 wrong names), and 7 of 7 correct on a real laptop webcam with the owner and three friends (`face_api/EVAL.md`, `ENROLLMENT.md`). **Not yet tested on the real bin hardware or with a real head turn, and not wired to the payout**
-- [x] Activity log to Databricks (Delta table). `backend/src/activityLog.ts` writes each payout decision (paid or rejected) to `workspace.cashcan.activity_log` via the Databricks SQL Statement API, wired into the payout CLI; gated on `DATABRICKS_SERVER_HOSTNAME`/`DATABRICKS_HTTP_PATH`/`DATABRICKS_TOKEN` in `.env` and never throws (a Databricks hiccup must not block a real payout). Verified end-to-end against the live workspace (Free Edition, Serverless Starter Warehouse) — a real row round-tripped. The AI/BI **dashboard** on top of this table is not yet built; do that once there's more than a couple of seed rows
-- [ ] Gemini API: generate the plain-language "why" text and auto-label photos to speed up data collection
+- [ ] Real lid hardware and bin camera; tune the item region and thresholds on them
+- [ ] Contamination detection
+- [x] **Reward table + devnet SOL payout:** verified end-to-end, covering reward lookup (keyed to the classifier's 3 classes), contamination multiplier, confidence gate, per-user cooldown and a real signed transfer. `classify-and-pay` runs a photo through the classifier and pays in one step (`backend/README.md`). Reward amounts are placeholders.
+- [x] **Face registration and match:** the website's enroll page and `face_api/` enroll from 1 to 3 photos behind a consent screen (mandatory before using the dashboard; a face already registered to another account is refused) and store only numeric templates, never photos (locally and in Databricks Delta + Vector Search). They also run a head-turn liveness check and offer a delete endpoint. Recognised 99.0% / 97.8% / 93.6% of enrolled people on public photos with 3 / 2 / 1 enrollment photos (0 wrong names), and 7 of 7 on a real laptop webcam with four people. **Not yet tested on the bin hardware.**
+- [x] **Activity log to Databricks:** `backend/src/activityLog.ts` writes each payout decision (paid or rejected) to `workspace.cashcan.activity_log` through the SQL Statement API. It never throws, so a Databricks hiccup can't block a payout. Verified against the live workspace.
+- [x] **Dashboard:** Databricks AI/BI dashboard showing items sorted, contamination rate by item, SOL paid and anti-abuse rejections (`dashboard/README.md`). Published on ~1,400 synthetic demo events (`workspace.cashcan_demo`). Not yet pointed at real bin data.
+- [ ] Gemini API: plain-language "why this bin" text and auto-labeling of photos
 
-### Nice to have (only if time remains)
-- [ ] Simple user account page with payout history
+### Nice to have
+- [ ] Account page with payout history
 - [ ] Short in-app walkthrough
 
 ### Cut for the 24-hour build
-- Real money and the $ -> SOL -> $ conversion loop. Demo on **Solana devnet** with free test tokens only. Mock the conversion in the pitch.
+- Real money and the $ -> SOL -> $ conversion. The demo runs on **Solana devnet** (or a local test validator) with test tokens only. The conversion is mocked in the pitch.
 
 ---
 
-## Proposed tech stack (not locked)
+## What's left to connect
 
-| Area | Proposed |
+The bin controller is built (`pi_client/README.md`, "Full bin controller"). It records every sorted item to `POST /interactions` with a pending reward. Still missing:
+
+1. **A payout worker** that picks up `pending` interactions, sends the SOL through `backend/`, and reports the result with `POST /interactions/{id}/payout` (paid + tx signature).
+2. **One `user_id` across tables.** The payout's `activity_log` logs the wallet address; the app tables use the account's `user_id`. Map one to the other so the dashboard can show per-user totals.
+3. **Remaining anti-abuse checks:** reject repeated identical items, and tell a hand from an item.
+4. **Real hardware:** lid actuators (`--lids lids.json` maps each bin to shell commands) and the bin camera, then tune the item region and thresholds on them.
+
+---
+
+## Tech stack (not locked)
+
+| Area | Choice |
 |---|---|
-| Face recognition | InsightFace `buffalo_s` (face detector + MobileFaceNet/ArcFace 512-number embeddings), embeddings only, never photos — see `face_api/`. The pretrained weights are **non-commercial research only**; a commercial product needs a different licence |
-| Vision model | MobileNetV2 classifier into 3 bins (organics / cans / waste) — see `ml/` (92%+ on a held-out dataset). Compared against YOLO11n-cls (same ballpark, ~92-94% either way — confirms the model wasn't the bottleneck, training-data coverage was) and kept MobileNetV2 since it matches the RK3582's official RKNN conversion example. Patched twice with real photos after live-webcam testing found gaps: a tall/slim can shape the public datasets don't show, and general live-camera conditions (lighting, clutter) vs. the datasets' clean photos — both documented in `ml/class_map.yaml` with before/after numbers. RKNN conversion script is in `ml/scripts/`, not yet verified on the board |
-| Edge device | Radxa ROCK 5C Lite (RK3582, NPU) per `ml/README.md`; earlier plan was a Raspberry Pi. The bin client `pi_client/` is plain Python/OpenCV and runs on either. Camera layout: see Open questions |
-| Backend | Two services: Node/TypeScript payout (`backend/`) and Python face recognition API (`face_api/`) |
-| Website | Next.js 15 + GSAP, see `website/` (sign-up, log-in, account; prototype auth). Its sign-up form has an opt-in face-enrollment checkbox that is not connected to `face_api/` yet |
-| Face database | Databricks Delta tables + Vector Search index in `workspace.cashcan_faces` (schema separate from `workspace.cashcan`), with local matching on the device after a pull — see `face_api/README.md` |
-| Payout | Solana **devnet** — see `backend/` (Node/TypeScript, `@solana/web3.js`); demoing against a local `solana-test-validator` for reliability, see `backend/README.md` |
-| Dashboard | Web app, data in Databricks (Free Edition: Delta table + AI/BI dashboard). `workspace.cashcan.activity_log` table live and receiving rows via `backend/src/activityLog.ts`; the AI/BI dashboard view itself not yet built |
-| Gemini API | Plain-language "why this bin" explanations (English / Cantonese / Mandarin) and auto-labeling of our photo dataset. Keep the local model as the main classifier path, so the demo never depends on venue wifi |
-| Domain | cashcan.com (set). See the domain note under "Awards we're targeting" |
-| Version control | Git |
+| Vision model | MobileNetV2, 3 bins (organics / cans / waste), 92%+ held-out. Compared with YOLO11n-cls (about 92-94% either way, so training data mattered more than the model). Kept MobileNetV2 because it matches the RK3582's official RKNN conversion example. RKNN script is in `ml/scripts/`, not yet verified on the board. |
+| Face recognition | InsightFace `buffalo_s` (detector + MobileFaceNet/ArcFace, 512-number templates). Templates only, never photos. Weights are **non-commercial research only**, so a commercial product needs a different licence. |
+| Edge device | Radxa ROCK 5C Lite (RK3582 with NPU); earlier plan was a Raspberry Pi. `pi_client/` runs on either. |
+| Backend | Node/TypeScript payout (`backend/`) + Python FastAPI face service (`face_api/`) |
+| Payout | Solana devnet via `@solana/web3.js`. The demo uses a local `solana-test-validator` for reliability. |
+| Data | Databricks Free Edition: `workspace.cashcan.activity_log` (live), `workspace.cashcan_faces` (Delta + Vector Search, about 250 ms per lookup), and an AI/BI dashboard (`dashboard/`) |
+| Website | Next.js 15 + GSAP (`website/`), Auth0 log-in, face enrollment through `face_api/`. Live at cashcan.biz. |
+| Gemini API | "Why this bin" explanations (English / Cantonese / Mandarin) and photo auto-labeling. The local model stays the main classifier so the demo never depends on venue wifi. |
+| Domain | cashcan.biz |
 
 ---
-
-## Wiring the pieces together (not built yet)
-
-Each piece works alone; nothing calls the next one yet. What is missing is one small "bin controller" process on the device:
-
-1. Read the bin client's JSON events (`session_started` carries the user's wallet, `session_ended` closes it) — `pi_client/README.md`.
-2. Run the item classifier from `ml/` on the item camera and get an item class and confidence.
-3. When a classification is stable **and a live face session exists**, call the payout (`backend/`: `payout --user <wallet> --item <class> --confidence <0-1>`). No live session means no payout; this is the face-match gate the payout README lists as missing.
-4. Decide what `activity_log.user_id` holds. The payout currently logs the wallet address; the face system identifies people by a name. Log both or map one to the other.
-5. Still missing from the anti-abuse list: rejecting repeated identical items and requiring the two cameras to agree.
 
 ## Face recognition: where it stands
 
-| Question | Answer (all measured; limits in the reports under `face_api/`) |
+| Question | Answer (measured; limits in the reports under `face_api/`) |
 |---|---|
-| How does it recognise someone? | A pretrained face detector plus a MobileFaceNet model (InsightFace `buffalo_s`) turn a face into a 512-number template. Matching is cosine similarity against the saved templates, with a 45% line. No photos are stored. |
-| How many photos at enrollment? | 1 to 3. On public photos, 93.6% / 97.8% / 99.0% of enrolled people are recognised with 1 / 2 / 3 photos, with no wrong names. What is saved matters more than how many: one ordinary frontal frame from the **bin's own camera** recognised 90% of later frames, against 81% for a phone or studio photo. |
-| Real-world check | Laptop webcam, owner plus three friends (each enrolled from one photo): the right person came out on top 7 of 7 times, right-person scores 58-83%, highest wrong-person score 19%. Small sample. |
-| Distance and lighting | The model copes with dim, dark, side and warm light (92-98% in simulation). Faces narrower than about 48 px are asked to move closer (with realistic camera noise the model alone drops to about 73% at 38 px and 42% at 28 px); the quality gates are strict for enrollment and lenient for recognising. |
-| Where the vectors live | Databricks (`workspace.cashcan_faces`): a Delta table plus a Vector Search index, about 250 ms per lookup. The bin itself matches locally after pulling the templates. |
-| Liveness | A random head-turn challenge. Stops a held-up photo or screen; not a replayed video, mask or deepfake. Not yet tried with a real head turn on a camera. |
-| Not done | Running on the bin hardware, the NPU conversion of the face model, the bin controller below, and self-updating templates (they need consent, a cap and liveness first). |
+| How it works | A face becomes a 512-number template. Matching is cosine similarity against saved templates, with a 45% threshold. No photos are stored. |
+| Photos at enrollment | 1 to 3. On public photos: 93.6% / 97.8% / 99.0% recognised with 1 / 2 / 3 photos, no wrong names. One frame from the **bin's own camera** recognised 90% of later frames, against 81% for a phone or studio photo. |
+| Real-world check | Laptop webcam, four people, one enrollment photo each: right person on top 7 of 7 times. Right-person scores were 58-83%, the highest wrong-person score was 19%. Small sample. |
+| Distance and lighting | Copes with dim, dark, side and warm light (92-98% in simulation). Faces narrower than about 48 px are asked to move closer. |
+| Liveness | Random head-turn challenge. Stops a photo or screen; not a replayed video, mask or deepfake. Not yet tried with a real head turn. |
+| Not done | Running on the bin hardware, NPU conversion of the face model, self-updating templates. |
 
-Try it on a laptop (tested on macOS and Linux with Python 3.13 and 3.14; the first run downloads the face model, about 125 MB). Full steps, including the Databricks sync, are in `face_api/README.md`:
+Try it on a laptop (macOS or Linux, Python 3.13/3.14; first run downloads about 125 MB). Full steps in `face_api/README.md`:
 
 ```bash
 cd face_api
@@ -169,119 +182,83 @@ python -m tools.face_demo identify --webcam
 python -m tools.face_demo selftest --outsider
 ```
 
-## Data plan (what actually happened)
+---
 
-The original plan below (photograph ~12 items ourselves) didn't happen — public datasets turned out
-to be the faster path, with our own photos used surgically to patch specific gaps instead of as the
-primary data source:
+## Data
 
-- Trained on three public datasets (TrashNet, GD, RealWaste — credited with licenses in `ml/README.md`), collapsed onto the 3-bin scheme.
-- Kept a genuine **held-out test set** (a slice of RealWaste never trained on) and reported honest accuracy, including early failures (one iteration scored 63% before a fix — see `ml/class_map.yaml`'s notes).
-- When live-webcam testing found specific gaps (a tall can shape, general webcam lighting/clutter conditions), took a *small* number of our own photos (20-40) targeting exactly those gaps, rather than a large from-scratch shoot — much faster, and the before/after is documented in `ml/class_map.yaml`.
-- Verify rules against the current Recycle BC and Metro Vancouver accepted-materials lists before hard-coding anything. **Not yet verified** — `ml/rules.yaml` still has all values as TODO on purpose.
+- Trained on three public datasets (TrashNet, GD, RealWaste, credited with licences in `ml/README.md`), mapped onto the 3-bin scheme.
+- Kept a real **held-out test set** (a slice of RealWaste never trained on) and report honest accuracy, including early failures (one iteration scored 63% before a fix; see `ml/class_map.yaml`).
+- When live-webcam testing found gaps (a tall can shape, webcam lighting and clutter), we added 20-40 of our own photos targeting exactly those gaps. Before/after numbers are in `ml/class_map.yaml`.
+- Local rules must be checked against the current Recycle BC and Metro Vancouver accepted-materials lists before anything is hard-coded. **Not yet verified**: `ml/rules.yaml` is all TODO on purpose.
 
 ---
 
-## 24-hour timeline
-
-| Hours | Goal |
-|---|---|
-| 0-2 | Lock scope, pick 12 items, pull and verify local rules, assign roles |
-| 2-8 | Collect and label photos, split off test set |
-| 8-14 | Fine-tune model, wire to rule table, output bin + reason |
-| 14-18 | Hardware demo: two cameras, Pi, bin indicators, devnet payout |
-| 18-22 | Dashboard, anti-abuse checks, seeded demo flow that never depends on live luck |
-| 22-24 | Rehearse the 3-minute pitch out loud, twice |
-
-## Team roles
-
-| Role | Owner |
-|---|---|
-| Hardware (two cameras, Pi, indicators) | TBD |
-| Data + model + rule table | TBD |
-| Backend + payout + dashboard | TBD |
-| Pitch + demo script | TBD |
-
----
-
-## Awards we're targeting (HackCamp 2026)
-
-We are a **beginner team**, so the Beginner stream applies.
+## Awards we're targeting (HackCamp 2026, beginner team)
 
 | Award | Why we fit | What we must do |
 |---|---|---|
-| Overall Winner / Beginner Overall Winner | Automatic, no opt-in | Working demo, clear pitch |
-| Best Problem-Solution Fit (beginner only) | Clear problem (local sorting rules + contamination) and a direct solution | Opt in. Write a problem statement and solution description in Devpost |
-| Best Hardware | Two cameras + Raspberry Pi bin | Opt in. Show the physical bin working in the demo |
-| Community Impact | Cleaner recycling and compost streams for a community | Opt in. Write a brief impact statement in Devpost |
-| MLH: Best Use of Solana | Reward payouts on Solana | Opt in. Solana must be a real part of the flow. Confirm with MLH mentors that devnet is acceptable |
-| Sponsor: Best Use of Databricks | Activity log and contamination analytics, plus the face-template store (Delta table + Vector Search index) | Opt in. Use at least one Databricks product for real (Delta table + dashboard); the Vector Search lookups are verified, the dashboard is not built yet |
-| MLH: Best Use of Gemini API | Explanations and photo auto-labeling | Opt in. Gemini must do real work in the product, not a token call |
-| MLH: Best Domain (GoDaddy Registry) | Only if our domain is eligible | See the domain note below |
+| Overall / Beginner Overall Winner | Automatic | Working demo, clear pitch |
+| Best Problem-Solution Fit (beginner) | Clear problem (26.6M tonnes disposed, only 27% diverted, no incentive to recycle) and a direct fix (pay per correctly recycled item) | Opt in. Problem statement + solution description on Devpost |
+| Best Hardware | Smart bin with a camera, edge board and lids that open for the right container | Opt in. Show the physical bin working |
+| Community Impact | Less recyclable material in landfill, cleaner recycling streams | Opt in. Brief impact statement on Devpost |
+| MLH: Best Use of Solana | Rewards paid on Solana | Opt in. Confirm with MLH mentors that devnet is acceptable |
+| Sponsor: Best Use of Databricks | Activity log, app tables, sorting analytics dashboard, face-template store (Delta + Vector Search) | Opt in. Dashboard is built on demo data; show it in the demo |
+| MLH: Best Use of Gemini API | Explanations and photo auto-labeling | Opt in. Gemini must do real work (not built yet) |
+| MLH: Best Domain (GoDaddy Registry) | cashcan.biz. .biz is run by GoDaddy Registry, so it is likely eligible | Opt in. Confirm with MLH that .biz is on the eligible list |
 
-**Not targeting:** Most Accessible Design and Best Design (both need a Figma file and design time we don't have). Revisit only if a teammate wants to own Figma.
-
-### Domain note (important)
-- cashcan.com is a **.com**, which is run by Verisign, not GoDaddy Registry. The award requires an "eligible GoDaddy Registry domain name", so cashcan.com is **likely not eligible**.
-- GoDaddy Registry operates TLDs such as .co, .us, .biz, .club, .nyc, .design and .tv. A domain like **cashcan.co** would likely qualify.
-- Availability of cashcan.co (or similar) is **not checked**, and the exact eligible list should be confirmed with MLH or the GoDaddy Registry table at the event.
-- Decide before the hackathon: keep cashcan.com for branding and skip this award, or register an eligible domain too. Do not claim the award with an ineligible domain.
+**Not targeting:** Most Accessible Design and Best Design (they need a Figma file and design time we don't have).
 
 ## Submission checklist (Devpost)
 
-- [ ] Link to GitHub repository
-- [ ] Recorded demo video, max 4 minutes (optional but highly recommended)
-- [ ] Figma link (only if applying for a design award)
-- [ ] Opt in to each award we want, and read each award's extra requirements
-- [ ] Problem statement and solution description (Best Problem-Solution Fit)
-- [ ] Brief impact statement (Community Impact)
-- [ ] Hardware component shown (Best Hardware)
-- [ ] Databricks product used, with a short explanation
-- [ ] Gemini API usage, with a short explanation
-- [ ] Solana integration, with a short explanation
+- [ ] GitHub repository link
+- [ ] Demo video, max 4 minutes
+- [ ] Opt in to each award and read its extra requirements
+- [ ] Problem statement and solution description
+- [ ] Impact statement
+- [ ] Hardware shown working
+- [ ] Short explanations of the Databricks, Gemini and Solana usage
 - [ ] Domain eligibility confirmed (if opting in)
 
 ## Pitch notes
 
-- **Opening line:** "It says compostable. In Vancouver, it still goes in the garbage."
-- Show the bin catching a contaminated item live, then the payout changing.
+- **Opening line:** "In 2022, Canada sent a record 26.6 million tonnes of waste to landfill and incineration. Only about a quarter of what we throw out gets recycled. What if recycling right paid you?"
+- Second beat: "It says compostable. In Vancouver, it still goes in the garbage." That's why the bin uses local rules.
+- Live demo: face match, hold up a can, the cans lid opens and the reward appears; then a wrapper goes to waste with no reward.
+- Explain who funds it: haulers pay for clean material, and part of that becomes the users' rewards.
+- Be ready to explain how this differs from deposit-refund programs for drink containers. Today CashCan rewards the same cans, but at the bin, instantly, with no trip to a depot; the plan is to reward more categories and follow local rules.
 - Show real held-out accuracy, including where the model fails.
-- Say plainly: "We found no product doing local-rule plus contamination sorting, but our dataset is small."
-- **Who funds the payouts:** the recycling/hauling company that picks up the bin's contents pays CashCan cash for the collected material. CashCan converts part of that revenue into SOL to fund the treasury wallet, which pays users per reward-eligible item. See `backend/README.md` for the devnet implementation of the payout leg.
-- Be ready to explain how this differs from existing deposit-refund programs for drink containers.
-- Face recognition, honestly: right person 7 of 7 on a real laptop webcam (small sample), 99% on public photos with 3 enrollment photos, 94% with 1; a held-up photo or screen is rejected by the head-turn check, a replayed video is not. Quote the limits with the numbers.
-- Have a one-sentence answer for "why facial recognition?" (for example: it ties each reward to one real person without carrying a card or phone) and for privacy: opt-in, embeddings only, deletable.
+- Face recognition, honestly: 7 of 7 on a real webcam (small sample), 99% on public photos with 3 enrollment photos, 94% with 1. A photo or screen is rejected; a replayed video is not.
+- "Why a face?" It ties each reward to one real person without a card or phone. Privacy: opt-in, templates only, deletable.
 
 ---
 
 ## Known risks and limits
 
-- Small self-collected dataset: this is a prototype, not a solved problem.
-- Classifier accuracy will drop on messy real-world items.
+- Prototype dataset: accuracy will drop on messy real-world items.
 - Payout abuse is possible without strong rate limits and confidence thresholds.
-- Crypto adds regulatory and credibility questions. We use devnet only.
-- The public devnet faucet is unreliable for a live demo: Solana shut off its RPC auto-airdrop, and the web faucet explicitly tells AI agents/scripts not to use its form. We demo against a local `solana-test-validator` instead (unlimited SOL, no rate limit, no network dependency during judging) — see `backend/README.md` for both setups.
-- Facial recognition handles biometric data, which carries privacy and legal obligations (consent, storage, deletion). We have not verified what applies in BC. Keep it opt-in, store embeddings only, and be ready to explain why a face is needed at all.
-- Face matching can be fooled by a photo or screen without liveness detection, and accuracy varies across lighting and faces. Test on our own team and report real results. The head-turn liveness check in `face_api/` stops a photo or a screen showing a still, but not a video of the right person turning the right way, a 3D mask or a deepfake. Most published numbers are on public celebrity photos (LFW), which are easier than a bin webcam; the only real-webcam test so far is 7 lookups with four people.
-- People will enroll with only 1 to 3 photos. A single phone or studio photo recognised about 81% of later webcam frames against about 90% for a frame from the bin's own camera, so where people enroll matters (see `face_api/ENROLLMENT.md`).
-- The face recognition weights we use are for non-commercial research only (see the tech stack table), and the Databricks workspace has two users who are both admins, so both can read the stored face templates.
-- Local rules change. Rules in this project are as of build time and must be re-verified.
+- Crypto brings regulatory and credibility questions. We use devnet only.
+- The public devnet faucet is unreliable for a live demo, so we use a local `solana-test-validator` (see `backend/README.md`).
+- Facial recognition handles biometric data (consent, storage, deletion). We haven't verified what applies in BC. Keep it opt-in, templates only.
+- Liveness stops photos and screens, not a replayed video, a 3D mask or a deepfake. Most published face numbers are on public photos, which are easier than a bin webcam.
+- Enrollment location matters: a phone or studio photo recognised about 81% of later webcam frames, against about 90% for a frame from the bin's camera (`face_api/ENROLLMENT.md`).
+- The face model weights are non-commercial research only, and both Databricks workspace users are admins who can read the stored templates.
+- Local rules change. Rules here are as of build time and must be re-verified.
 
 ## Open questions
 
-- [ ] Definition of the payout formula ("Classifier / 2")
-- [x] Who funds real payouts in a real deployment — the recycling/hauling company's payment for collected material, converted to SOL (see backend/README.md)
-- [ ] Domain: keep cashcan.com (likely ineligible for the GoDaddy Registry award) or also register an eligible TLD such as .co. Check trademark clearance for the name either way
-- [x] Which face recognition library — InsightFace `buffalo_s`, see `face_api/` (research-only licence)
-- [ ] Which camera does the face match. The bin client currently reads one camera; the current idea is a dedicated face camera separate from the item camera. Confirm with whoever owns the hardware, because the anti-abuse list above assumes top and front item cameras
-- [x] Face match threshold: default 45% (right-person scores 58-83% against a highest wrong-person score of 19% in the real test; 40% looks safe for single-photo enrollments but lookalikes and siblings are untested)
-- [ ] Where people enroll: at the bin's own camera (recognised more often) or with a phone photo
-- [ ] Self-updating templates (recognition rose from 81% to 91% on one person's frames): build them, with consent, a cap and a liveness check?
-- [ ] Who builds the bin controller that joins the face session, the classifier and the payout, and what `activity_log.user_id` holds
-- [ ] Link the website sign-up to the face enrollment in `face_api/`
-- [ ] Camera placement and how the two views are combined (top = entry angle, front = side profile)
-- [ ] Which items are reward-eligible and how much each pays
-- [ ] Final list of 12 items and their verified local rules
+- [ ] Payout formula and which items are reward-eligible
+- [x] Who funds payouts: the hauler's payment for collected material, converted to SOL
+- [x] Domain: cashcan.biz (confirm GoDaddy Registry award eligibility; check trademark)
+- [x] Face library: InsightFace `buffalo_s` (research-only licence)
+- [x] Face match threshold: 45%
+- [x] Which camera does the face match: one camera does both face and item (`pi_client --classify`)
+- [x] Link website sign-up to face enrollment
+- [ ] Where people enroll: at the bin (recognised more often) or with a phone photo
+- [ ] Self-updating face templates (81% -> 91% on one person): build them with consent, a cap and liveness?
+- [ ] Who builds the payout worker, and what `activity_log.user_id` holds
+- [ ] Lid hardware
+- [ ] Should organics earn a reward too?
+- [ ] Verified local rules for the items we demo
 
 ---
 
