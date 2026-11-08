@@ -165,3 +165,13 @@ button.db-pill { font-family: var(--font-inter), sans-serif; }
 .db-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
 .db-inline-link { margin-left: 8px; font-size: 13px; font-weight: 600; white-space: nowrap; }
 @media (max-width: 560px) { .db-profile-card dl { grid-template-columns: 1fr; } .db-profile-card dt { border-bottom: 0; padding-bottom: 0; } }
+
+/* Real-data states */
+.db-status-muted { background: #eef0ea; color: var(--db-muted); }
+.db-error { background: #f8e3dc; color: #7a2b14; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.db-skel { cursor: default; }
+.db-skel-bar { display: block; height: 30px; border-radius: 8px; background: linear-gradient(90deg, #f0f1ec, #f7f8f4, #f0f1ec); background-size: 200% 100%; animation: db-skel 1.2s linear infinite; }
+@keyframes db-skel { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .db-skel-bar { animation: none; } }
+.db-tx { padding: 0 20px 14px; }
+.db-wallet .val a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }

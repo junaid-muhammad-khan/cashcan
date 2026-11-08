@@ -11,7 +11,7 @@ const SOLANA_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 // The Profile tab of the signed-in app: same header and footer as the dashboard.
 // This is the one place a wallet address is collected — /enroll just links here if it's missing.
 export default function ProfileView({ name, email, firstName, me, onSaveWallet, welcome }: {
-  name?: string; email?: string; firstName: string; me: Me | null; onSaveWallet?: (wallet: string) => Promise<void>; welcome: boolean;
+  name?: string; email?: string; firstName: string; me: Me | null; onSaveWallet?: (wallet: string) => Promise<unknown>; welcome: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");

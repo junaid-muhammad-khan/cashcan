@@ -1,4 +1,5 @@
 -- Application tables (accounts, bins, interactions) in Databricks. Run once in a SQL warehouse, statement by statement.
+-- After this file, run 002_interactions_payouts.sql (payout columns, city_activity view) and, as the workspace.cashcan owner, 003_retire_activity_log.sql.
 -- Face templates stay in workspace.cashcan_faces (see face_api/app/databricks_store.py); face_templates.user_id = users.user_id here.
 -- NOTE: Delta tables do not enforce PRIMARY KEY or UNIQUE. The code enforces them: users are created with MERGE on auth0_sub,
 -- interactions with MERGE on interaction_id (a retried request inserts nothing the second time).
@@ -27,7 +28,7 @@ CREATE TABLE IF NOT EXISTS workspace.cashcan_app.interactions (
   item_class      STRING,
   confidence      DOUBLE,
   reward_lamports BIGINT NOT NULL,
-  payout_status   STRING NOT NULL,  -- pending | paid | failed | none
+  payout_status   STRING NOT NULL,  -- none | held | pending | sending | paid | failed (since 002)
   tx_signature    STRING,
   created_at      TIMESTAMP NOT NULL
 );

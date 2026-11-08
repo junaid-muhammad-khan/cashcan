@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { CONTAINERS, cashBackCents } from "@/lib/prices";
+import { CONTAINERS } from "@/lib/prices";
 import { Rate, cadToSol, centsToCad, fmtCad, fmtSol, parseAmount, solToCad } from "@/lib/rate";
 
 const MAX = 999;
 
-export default function RewardCalculator() {
+// cashBackCents: what one container pays, from the reward table (every container type is the "cans" class).
+export default function RewardCalculator({ cashBackCents }: { cashBackCents: number }) {
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [rate, setRate] = useState<Rate | null>(null);
   const [rateErr, setRateErr] = useState<string | null>(null);
@@ -39,7 +40,7 @@ export default function RewardCalculator() {
 
   const set = (id: string, n: number) => setCounts((c) => ({ ...c, [id]: Math.max(0, Math.min(MAX, Math.floor(Number.isFinite(n) ? n : 0))) }));
   const items = CONTAINERS.reduce((n, c) => n + (counts[c.id] ?? 0), 0);
-  const cents = CONTAINERS.reduce((n, c) => n + (counts[c.id] ?? 0) * cashBackCents(c), 0);
+  const cents = items * cashBackCents;
   const depositCents = CONTAINERS.reduce((n, c) => n + (counts[c.id] ?? 0) * c.depositCents, 0);
   const cad = centsToCad(cents);
 
@@ -54,7 +55,7 @@ export default function RewardCalculator() {
             const n = counts[c.id] ?? 0;
             return (
               <li key={c.id}>
-                <label htmlFor={`calc-${c.id}`}><b>{c.name}</b><small>{cashBackCents(c)}¢ cash back each</small></label>
+                <label htmlFor={`calc-${c.id}`}><b>{c.name}</b><small>{cashBackCents}¢ cash back each</small></label>
                 <span className="calc-step">
                   <button type="button" aria-label={`One fewer ${c.name}`} onClick={() => set(c.id, n - 1)} disabled={n === 0}>−</button>
                   <input id={`calc-${c.id}`} inputMode="numeric" value={n} onChange={(e) => set(c.id, Number(e.target.value.replace(/\D/g, "")))} />

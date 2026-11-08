@@ -1,3 +1,4 @@
+-- RETIRED: replaced by a view over workspace.cashcan_app.interactions (003_retire_activity_log.sql). Kept for history.
 -- Real activity log table for the Solana payout backend (backend/src/activityLog.ts).
 -- Run once in a SQL warehouse before the first real (non-dry-run) payout.
 -- Schema must match activityLog.ts's INSERT and dashboard/seed_demo.sql's columns exactly.

@@ -2,5 +2,4 @@ node_modules/
 dist/
 .env
 treasury-keypair.json
-payout-cooldowns.json
 .validator-ledger/

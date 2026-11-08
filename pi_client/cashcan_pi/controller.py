@@ -4,27 +4,29 @@
         -> ItemGate       (is an item being presented and held still?)
         -> classifier     (organics / cans / waste, averaged over a few looks)
         -> LidController  (opens THE RIGHT lid, whether or not anyone is identified)
-        -> POST /interactions (only the record; a payout is due only if a verified person is in a live session)
+        -> POST /interactions (the record; the SERVER decides the reward and pays it, the bin only reports what it saw)
 
 Rules
 - The lid opens for every confident item, identified or not: nobody is blocked from sorting. An unsure item goes to the waste lid.
-- Reward: only when a live, verified session exists at the moment of the throw, the bin is not waste, and the class pays (REWARDS).
-  Nobody identified -> the item is still recorded (user_id empty, no payout), so the dashboard counts it.
+- Reward: decided by the face API (face_api/app/rewards.py: 5 cents CAD per can, paid in devnet SOL), only for a live, verified
+  session and a confident classification. The bin sends no amount. Nobody identified -> the item is still recorded (no payout),
+  so the dashboard counts it. The server's answer (reward_cents, payout_status) is shown in the item event and the preview.
 - Records carry an interaction_id chosen here. A failed send waits in a short-lived outbox (TTL) and is retried with the SAME id,
   so the server stores it once. No face data is ever in the outbox.
 """
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Callable
 
 from .classifier import decide
 from .lid import LidController
 
-# Lamports per sorted item (1 SOL = 1e9). PLACEHOLDERS copied from backend/src/rewardTable.ts (cans ~ metal 0.004, organics ~ biological 0.001,
-# waste 0): the real figures are an open team decision. Waste never pays.
-REWARDS = {"cans": 4_000_000, "organics": 1_000_000, "waste": 0}
+
+def server_outcome(res: dict) -> dict:
+    """The parts of the server's answer worth showing: reward (CAD cents), payout status, why there is no reward, tx."""
+    return {k: res.get(k) for k in ("reward_cents", "payout_status", "reason", "tx_signature") if k in res}
 
 
 @dataclass
@@ -42,22 +44,22 @@ class Outbox:
         self.api, self.ttl, self.backoff, self.emit = api, ttl, backoff, on_event
         self.items: list[Pending] = []
 
-    def send(self, payload: dict, now: float) -> bool:
-        """Try now; on a network or server problem keep it for later. A 4xx means the server refuses it for good, so drop it."""
+    def send(self, payload: dict, now: float) -> dict | None:
+        """Try now and return the server's answer; on a network or server problem keep it for later (None).
+        A 4xx means the server refuses it for good, so drop it."""
         import httpx
 
         try:
-            self.api.interaction(payload)
-            return True
+            return self.api.interaction(payload) or {}
         except httpx.HTTPStatusError as e:
             if e.response.status_code < 500:
                 self.emit({"event": "interaction_rejected", "interaction_id": payload["interaction_id"], "status": e.response.status_code})
-                return False
+                return None
         except (httpx.HTTPError, ValueError):
             pass
         self.items.append(Pending(payload, now + self.ttl, now + self.backoff, 1))
         self.emit({"event": "interaction_queued", "interaction_id": payload["interaction_id"]})
-        return False
+        return None
 
     def flush(self, now: float) -> None:
         import httpx
@@ -71,8 +73,9 @@ class Outbox:
                 keep.append(p)
                 continue
             try:
-                self.api.interaction(p.payload)
-                self.emit({"event": "interaction_recorded", "interaction_id": p.payload["interaction_id"], "after_retries": p.tries})
+                res = self.api.interaction(p.payload) or {}
+                self.emit({"event": "interaction_recorded", "interaction_id": p.payload["interaction_id"], "after_retries": p.tries,
+                           **server_outcome(res)})
             except httpx.HTTPStatusError as e:
                 if e.response.status_code >= 500:
                     p.tries, p.next_try = p.tries + 1, now + self.backoff * min(p.tries + 1, 6)
@@ -94,7 +97,6 @@ class BinController:
     bin_id: str = "bin-1"
     min_confidence: float = 0.60
     votes: int = 3
-    rewards: dict = field(default_factory=lambda: dict(REWARDS))
     new_id: Callable[[], str] = lambda: uuid.uuid4().hex
 
     def __post_init__(self):
@@ -133,15 +135,16 @@ class BinController:
         bin_name, conf, reason = decide(votes, self.min_confidence)
         session = self.loop.current_session(now)   # a live, verified person right now?
         self.lid.open(bin_name, now)
-        reward = self.rewards.get(bin_name, 0) if (session and reason == "ok") else 0
         iid = self.new_id()
         item = {"event": "item", "interaction_id": iid, "bin": bin_name, "confidence": round(conf, 3), "reason": reason,
-                "user_id": session.user_id if session else None, "reward_lamports": reward}
+                "user_id": session.user_id if session else None, "payout_status": None, "reward_cents": None}
         self.last_item, self.last_item_at = item, now
         self.on_event(item)
-        payload = {"interaction_id": iid, "item_class": bin_name, "confidence": round(conf, 4), "reward_lamports": reward}
+        payload = {"interaction_id": iid, "item_class": bin_name, "confidence": round(conf, 4)}
         if session:
             payload["session_token"] = session.token   # meaningful only if the server issued it
             payload["user_id"] = session.user_id       # a bin that identifies people itself names them; the bin key vouches for it
-        if self.outbox.send(payload, now):
-            self.on_event({"event": "interaction_recorded", "interaction_id": iid, "after_retries": 0})
+        res = self.outbox.send(payload, now)
+        if res is not None:
+            item.update(server_outcome(res))      # what the server decided: shown in the preview
+            self.on_event({"event": "interaction_recorded", "interaction_id": iid, "after_retries": 0, **server_outcome(res)})

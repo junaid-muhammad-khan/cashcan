@@ -3,7 +3,7 @@
 **Canada sent a record 26.6 million tonnes of waste to disposal in 2022. Plenty of it could have been recycled. CashCan is a smart bin that pays you to recycle right.**
 
 > Hackathon project (24 hours, HackCamp 2026). Theme: solve a problem in this world.
-> **Status: in progress.** Built: the website (live at cashcan.biz), face enrollment and match (`face_api/`), the bin controller that identifies the person, classifies the item and opens the right lid (`pi_client/ --classify`, tested on a laptop webcam), the Solana payout service (`backend/`), and the Databricks dashboard (`dashboard/`, on synthetic demo data). **Not done yet:** the worker that pays out recorded interactions on Solana, the local rule table, contamination detection, and the real bin hardware (lids, camera). Nothing has run on the real bin yet.
+> **Status: in progress.** Built: the website (live at cashcan.biz), face enrollment and match (`face_api/`), the bin controller that identifies the person, classifies the item and opens the right lid (`pi_client/ --classify`, tested on a laptop webcam), the end-to-end payout (the face API decides the reward and the website's `/api/payout` sends devnet SOL, with retries), the user dashboard and the city dashboard on real data (`dashboard/`). **Not done yet:** the local rule table and the real bin hardware (lids, camera). Nothing has run on the real bin yet.
 
 ---
 
@@ -30,7 +30,6 @@ A CashCan bin:
 2. **Identifies the item** (organics / cans / waste) and **opens the right lid**, so the item lands in the right container. The goal is to decide by **local Metro Vancouver rules**, not just by material.
 3. **Pays you cash back in SOL** for reward-eligible items (today: cans, the BC Return-It deposit containers).
 4. **Logs every decision** to Databricks, so cities and haulers can see what goes where and what people get wrong.
-5. *Planned:* catch contamination (for example, a greasy container) and pay a reduced reward, since contaminated items can ruin a batch. The backend already has a 25% contaminated multiplier; the classifier can't detect contamination yet.
 
 **Who pays for the rewards:** the recycling or hauling company that collects the bin pays for the sorted material. CashCan converts part of that revenue into SOL to fund the reward wallet. Cleaner material is worth more, so the incentive pays for itself.
 
@@ -46,8 +45,8 @@ Sign up on cashcan.biz -> enroll face -> add Solana wallet on the profile page
    -> The same camera sees the item held in the item region
    -> Classifier: organics / cans / waste (3-look average; unsure -> waste)
    -> The bin opens that lid
-   -> Reward table decides the reward (verified person + paying class only)
-   -> Interaction recorded (POST /interactions) -> SOL payout -> Databricks -> dashboard
+   -> Interaction recorded (POST /interactions): the server decides the reward (5¢ CAD per can)
+   -> Paid at once in devnet SOL at the live rate -> Databricks -> user dashboard + city dashboard
    -> next item
 ```
 
@@ -58,25 +57,32 @@ website sign-up -> face_api /enroll (consent, 1-3 photos, templates only)
                           face templates <-> Databricks (workspace.cashcan_faces)
 camera -> pi_client --classify ─┬─ face_api /match + liveness -> live session (who)
                                 └─ ItemGate -> ONNX classifier -> LidController (what)
-                                        -> face_api POST /interactions (pending reward)
-                                        -> [payout worker: NOT BUILT] -> backend Solana payout
-                                        -> POST /interactions/{id}/payout (paid + tx signature)
-backend payout -> Databricks activity_log -> dashboard
+                                        -> face_api POST /interactions (X-Bin-Key): reward from face_api/app/rewards.py,
+                                           row in workspace.cashcan_app.interactions: none | held | pending
+                                        -> pending: claimed (-> sending) -> website POST /api/payout (shared secret):
+                                           live SOL/CAD rate -> lamports -> devnet transfer, memo cashcan:<interaction_id>
+                                        -> paid + tx_signature + lamports + rate   (or failed -> retried)
+user saves a wallet (PUT /me)  -> held rewards -> pending -> paid, same path
+Vercel cron every minute       -> face_api /cron/reconcile: retry failed (backoff), resolve stuck "sending" by memo lookup
+website /dashboard             -> face_api GET /me/activity (Auth0)
+city dashboard                 -> Databricks view workspace.cashcan_app.city_activity
 ```
 
 ### Reward table
-The classifier detects the item, then a lookup table decides whether it earns a reward.
-- **Cans** (BC Return-It deposit containers): 0.004 SOL. **Organics and waste:** 0 for now (`backend/src/rewardTable.ts`).
-- Only a verified person gets a reward. Nobody identified: the lid still opens, reward 0.
-- Unsure item (low confidence): goes to waste, reward 0.
-- Contaminated item: 25% of the reward, once contamination detection exists.
-- All amounts are placeholders (devnet SOL has no value). The real figures are a team decision.
+One table, on the server (`face_api/app/rewards.py`, served at `GET /face-api/rewards`; the website's Prices page reads it):
+- **Cans** (BC Return-It deposit containers): **5¢ CAD**, half the 10¢ BC deposit, paid in SOL at the live SOL/CAD rate at the moment the payout
+  is sent. **Organics and waste:** 0 for now.
+- Only a verified person gets a reward. Nobody identified: the lid still opens, reward 0. The bin never sends an amount.
+- Unsure item (confidence below 0.75): reward 0.
+- No wallet yet: the reward is **held** and paid as soon as the person adds a wallet.
+- Paid on Solana **devnet** (test tokens, no cash value).
 
 ### Anti-abuse (judges will ask)
-- Rate limit per user per time window (per-user cooldown in `backend/`).
+- Rate limit per user: one paying drop per 30 s, checked on the server from the interactions table.
 - Minimum classifier confidence before any reward.
 - A reward needs a live verified face session. The head-turn liveness check rejects a held-up photo or screen. It does **not** stop a replayed video, a 3D mask or a deepfake, and we say so openly.
-- Each interaction has a bin-chosen id and is stored once, so retries can't pay twice.
+- Each interaction has a bin-chosen id and is stored once; every payout step is a claim on the expected status, and the transfer carries the
+  interaction id as a memo that is checked before sending, so retries and overlapping workers can't pay twice.
 - The bin must send a bin key to record interactions; one face can't be enrolled to two accounts.
 - Not built yet: rejecting repeated identical items, and a second camera that must agree. The item gate also can't tell a hand from an item.
 
@@ -87,7 +93,7 @@ The classifier detects the item, then a lookup table decides whether it earns a 
 ```
 cashcan/
 ├── README.md        this file: problem, solution, status, plan
-├── backend/         Node/TypeScript Solana payout service + Databricks activity log
+├── backend/         operator CLI for the devnet treasury (payouts run in website/app/api/payout)
 ├── ml/              garbage classifier (3 bins): training, results, model comparison, RKNN conversion scripts
 ├── face_api/        Python face recognition: API + enrollment page, matching, liveness,
 │   │                SQLite and Databricks face stores, tools, measured results
@@ -98,8 +104,8 @@ cashcan/
 │   └── EVAL.md, ENROLLMENT.md, ROBUSTNESS.md, TRAINING.md, DATABRICKS_CHECK.md    measured results
 ├── pi_client/       bin controller: camera -> face match + liveness (who) and item classifier (what)
 │                    -> opens the right lid -> records the interaction (Python/OpenCV; Pi, Radxa or a Mac)
-├── dashboard/       Databricks AI/BI dashboard over activity_log: build, deploy, demo seed data
-├── databricks/      SQL for the app tables (users, bins, interactions), website accounts, activity_log
+├── dashboard/       Databricks AI/BI city dashboard over workspace.cashcan_app.city_activity
+├── databricks/      SQL for the app tables (users, bins, interactions), migrations 002/003, views
 └── website/         Next.js + GSAP site (cashcan.biz): home with the scroll story, sign-up / log-in (Auth0),
                      face enrollment, dashboard, profile + wallet, prices and info pages
 ```
@@ -113,14 +119,13 @@ Each folder has its own README with setup and commands.
 ### Must have (MVP)
 - [x] **Classifier:** 3 physical bins (organics / cans / waste), matching the hardware's 3 openings (see `ml/class_map.yaml`). MobileNetV2 trained on TrashNet, GD and RealWaste, plus our own photos to patch gaps found in live-webcam testing. 92%+ on a held-out test set. Live-tested on a webcam (`ml/scripts/live_predict.py`), not yet on the bin's cameras.
 - [x] **Bin controller:** `pi_client --classify` uses one camera for both the face match and the item, opens the item's lid and records the interaction with a retry outbox. Unit-tested and tried on a laptop webcam with `--show`; lids are simulated until the hardware is chosen.
-- [ ] Payout worker that settles `pending` interactions on Solana and reports back via `POST /interactions/{id}/payout`
+- [x] **Payout path:** the face API decides the reward and pays it at once through the website's `/api/payout` (devnet, memo per interaction), holds rewards until a wallet exists, and a cron retries failures. Runs end to end in **demo mode** (simulated transfer, verified 7/7 against the real Databricks tables and the real route); real devnet transfers need a funded treasury and `PAYOUT_MODE=devnet`.
 - [ ] Local rule lookup table (item -> correct bin + reason)
 - [ ] Real lid hardware and bin camera; tune the item region and thresholds on them
-- [ ] Contamination detection
-- [x] **Reward table + devnet SOL payout:** verified end-to-end, covering reward lookup (keyed to the classifier's 3 classes), contamination multiplier, confidence gate, per-user cooldown and a real signed transfer. `classify-and-pay` runs a photo through the classifier and pays in one step (`backend/README.md`). Reward amounts are placeholders.
+- [x] **Reward table:** one server-side table (`face_api/app/rewards.py`): 5¢ CAD per can (half the BC deposit), converted to SOL at the live rate when paid; confidence gate and per-user cooldown on the server.
 - [x] **Face registration and match:** the website's enroll page and `face_api/` enroll from 1 to 3 photos behind a consent screen (mandatory before using the dashboard; a face already registered to another account is refused) and store only numeric templates, never photos (locally and in Databricks Delta + Vector Search). They also run a head-turn liveness check and offer a delete endpoint. Recognised 99.0% / 97.8% / 93.6% of enrolled people on public photos with 3 / 2 / 1 enrollment photos (0 wrong names), and 7 of 7 on a real laptop webcam with four people. **Not yet tested on the bin hardware.**
-- [x] **Activity log to Databricks:** `backend/src/activityLog.ts` writes each payout decision (paid or rejected) to `workspace.cashcan.activity_log` through the SQL Statement API. It never throws, so a Databricks hiccup can't block a payout. Verified against the live workspace.
-- [x] **Dashboard:** Databricks AI/BI dashboard showing items sorted, contamination rate by item, SOL paid and anti-abuse rejections (`dashboard/README.md`). Published on ~1,400 synthetic demo events (`workspace.cashcan_demo`). Not yet pointed at real bin data.
+- [x] **One activity record:** `workspace.cashcan_app.interactions` holds every drop and its payout. `workspace.cashcan.activity_log` is retired (a view over interactions, `databricks/003_retire_activity_log.sql`).
+- [x] **Dashboards on real data:** the website's `/dashboard` (the user's own drops and rewards) and the Databricks AI/BI city dashboard over `workspace.cashcan_app.city_activity` (`dashboard/README.md`).
 - [ ] Gemini API: plain-language "why this bin" text and auto-labeling of photos
 
 ### Nice to have
@@ -132,14 +137,28 @@ Each folder has its own README with setup and commands.
 
 ---
 
-## What's left to connect
+## What's left
 
-The bin controller is built (`pi_client/README.md`, "Full bin controller"). It records every sorted item to `POST /interactions` with a pending reward. Still missing:
+1. **Liveness challenges across server instances.** Bin sessions are signed tokens now (any instance accepts them, `SESSION_SECRET`), but a
+   head-turn challenge still lives in the memory of the instance that issued it; if the answer reaches another instance the bin has to start over.
+2. **Remaining anti-abuse checks:** reject repeated identical items, and tell a hand from an item.
+3. **Real hardware:** lid actuators (`--lids lids.json` maps each bin to shell commands) and the bin camera, then tune the item region and thresholds on them.
 
-1. **A payout worker** that picks up `pending` interactions, sends the SOL through `backend/`, and reports the result with `POST /interactions/{id}/payout` (paid + tx signature).
-2. **One `user_id` across tables.** The payout's `activity_log` logs the wallet address; the app tables use the account's `user_id`. Map one to the other so the dashboard can show per-user totals.
-3. **Remaining anti-abuse checks:** reject repeated identical items, and tell a hand from an item.
-4. **Real hardware:** lid actuators (`--lids lids.json` maps each bin to shell commands) and the bin camera, then tune the item region and thresholds on them.
+## How to run the demo
+
+1. **Database** (once): run `databricks/002_interactions_payouts.sql` in a SQL warehouse (`cd dashboard && python dbsql.py -f ../databricks/002_interactions_payouts.sql`).
+   The owner of `workspace.cashcan` runs `databricks/003_retire_activity_log.sql`. Add each bin to `workspace.cashcan_app.bins`.
+2. **Payouts: demo or real.** For a demo, skip the treasury: with `PAYOUT_MODE=demo` (or no `TREASURY_SECRET_KEY`) payouts are simulated
+   (status `paid`, placeholder signature `demo_...`, no SOL moves). For real devnet transfers: `cd backend && npm install && npm run init-treasury`,
+   fund the printed address at https://faucet.solana.com (a person has to; the RPC faucet is closed), set `TREASURY_SECRET_KEY`
+   (`npm run cli -- export-secret`) and `PAYOUT_MODE=devnet`.
+3. **Vercel env vars** (project-wide, Production and Preview): `PAYOUT_MODE`, `TREASURY_SECRET_KEY` (real mode only), `SOLANA_RPC_URL=https://api.devnet.solana.com`,
+   `PAYOUT_URL=https://cashcan.biz/api/payout`, `PAYOUT_SECRET`, `CRON_SECRET` and `SESSION_SECRET` (long random strings), `BIN_API_KEYS="bin-1:<key>"`, plus the
+   existing `DATABRICKS_*` and `AUTH0_*`. See `face_api/.env.example` and `website/.env.example`. Redeploy.
+4. **Check the money path:** `python scripts/e2e_devnet.py deployed --base-url https://cashcan.biz --bin-key <key> --session-token <live bin session>
+   --auth0-token <test user's access token>` (or `local` mode against `npm run dev`; see the script's header).
+5. **At the bin:** `pi_client --classify` with `CASHCAN_BIN_KEY`; drop a can; the bin shows the server's reward and status, the user's dashboard and
+   the city dashboard show the drop.
 
 ---
 
@@ -152,7 +171,7 @@ The bin controller is built (`pi_client/README.md`, "Full bin controller"). It r
 | Edge device | Radxa ROCK 5C Lite (RK3582 with NPU); earlier plan was a Raspberry Pi. `pi_client/` runs on either. |
 | Backend | Node/TypeScript payout (`backend/`) + Python FastAPI face service (`face_api/`) |
 | Payout | Solana devnet via `@solana/web3.js`. The demo uses a local `solana-test-validator` for reliability. |
-| Data | Databricks Free Edition: `workspace.cashcan.activity_log` (live), `workspace.cashcan_faces` (Delta + Vector Search, about 250 ms per lookup), and an AI/BI dashboard (`dashboard/`) |
+| Data | Databricks Free Edition: `workspace.cashcan_app` (accounts, bins, interactions + payouts), `workspace.cashcan_faces` (Delta + Vector Search, about 250 ms per lookup), and an AI/BI dashboard (`dashboard/`) |
 | Website | Next.js 15 + GSAP (`website/`), Auth0 log-in, face enrollment through `face_api/`. Live at cashcan.biz. |
 | Gemini API | "Why this bin" explanations (English / Cantonese / Mandarin) and photo auto-labeling. The local model stays the main classifier so the demo never depends on venue wifi. |
 | Domain | cashcan.biz |
@@ -255,7 +274,6 @@ python -m tools.face_demo selftest --outsider
 - [x] Link website sign-up to face enrollment
 - [ ] Where people enroll: at the bin (recognised more often) or with a phone photo
 - [ ] Self-updating face templates (81% -> 91% on one person): build them with consent, a cap and liveness?
-- [ ] Who builds the payout worker, and what `activity_log.user_id` holds
 - [ ] Lid hardware
 - [ ] Should organics earn a reward too?
 - [ ] Verified local rules for the items we demo

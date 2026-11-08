@@ -104,7 +104,9 @@ class FakeApi:
         if self.fail == 401:
             raise httpx.HTTPStatusError("x", request=httpx.Request("POST", "http://x"), response=httpx.Response(401))
         self.sent.append(payload)
-        return {"duplicate": False}
+        paying = payload["item_class"] == "cans" and "session_token" in payload
+        return {"duplicate": False, "reward_cents": 5 if paying else 0, "payout_status": "paid" if paying else "none",
+                "reason": None if paying else "not_recognised"}
 
 
 def make(session, probs, api=None):
@@ -123,21 +125,24 @@ def test_verified_person_throws_a_can_right_lid_opens_and_a_reward_is_due():
     c, api, events, drv = make(SESSION, CANS)
     c.step(EMPTY, 1.0)
     assert drv.log == [("cans", True)]
-    assert api.sent == [{"interaction_id": "id-0", "item_class": "cans", "confidence": 0.92, "reward_lamports": 4_000_000, "session_token": "tok123", "user_id": "user-1"}]
+    assert api.sent == [{"interaction_id": "id-0", "item_class": "cans", "confidence": 0.92, "session_token": "tok123", "user_id": "user-1"}]   # no amount
     assert any(e["event"] == "item" and e["user_id"] == "user-1" for e in events)
+    rec = next(e for e in events if e["event"] == "interaction_recorded")
+    assert rec["reward_cents"] == 5 and rec["payout_status"] == "paid" and c.last_item["payout_status"] == "paid"
 
 
 def test_nobody_identified_lid_still_opens_but_no_session_and_no_reward():
     c, api, events, drv = make(None, CANS)
     c.step(EMPTY, 1.0)
     assert drv.log == [("cans", True)]
-    assert api.sent[0]["reward_lamports"] == 0 and "session_token" not in api.sent[0]
+    assert "reward_lamports" not in api.sent[0] and "session_token" not in api.sent[0]
+    assert c.last_item["payout_status"] == "none" and c.last_item["reward_cents"] == 0
 
 
 def test_waste_never_pays_and_unsure_items_go_to_waste():
     c, api, _, drv = make(SESSION, {"cans": 0.4, "organics": 0.35, "waste": 0.25})
     c.step(EMPTY, 1.0)
-    assert drv.log == [("waste", True)] and api.sent[0]["reward_lamports"] == 0
+    assert drv.log == [("waste", True)] and api.sent[0]["item_class"] == "waste" and "reward_lamports" not in api.sent[0]
 
 
 def test_lid_closes_after_the_hold_time_and_never_two_open():
@@ -185,10 +190,12 @@ def test_preview_overlay_draws_every_state_without_error():
     frame = np.full((480, 640, 3), 90, np.uint8)
     roi = (0.15, 0.4, 0.85, 1.0)
     idle = {"user_id": None, "gate": "empty", "collecting_looks": False, "open_lid": None, "last_item": None}
-    item = {"bin": "cans", "confidence": 0.93, "reason": "ok", "user_id": "abcdef123456", "reward_lamports": 4_000_000}
+    item = {"bin": "cans", "confidence": 0.93, "reason": "ok", "user_id": "abcdef123456", "payout_status": "paid", "reward_cents": 5}
     for st, ind in ((idle, "idle"), (idle, "challenge"), ({**idle, "collecting_looks": True}, "scanning"),
                     ({**idle, "user_id": "abcdef123456", "gate": "present", "open_lid": "cans", "last_item": item}, "matched"),
-                    ({**idle, "last_item": {**item, "bin": "waste", "reason": "low_confidence", "user_id": None, "reward_lamports": 0}}, "denied")):
+                    ({**idle, "last_item": {**item, "bin": "waste", "reason": "low_confidence", "user_id": None, "payout_status": "none", "reward_cents": 0}}, "denied"),
+                    ({**idle, "last_item": {**item, "payout_status": "held"}}, "matched"),
+                    ({**idle, "last_item": {**item, "payout_status": None, "reward_cents": None}}, "matched")):
         out = draw(frame, st, ind, "hint text", roi)
         assert out.shape == frame.shape and (out != frame).any()
     assert (frame == 90).all()   # the input frame is not modified

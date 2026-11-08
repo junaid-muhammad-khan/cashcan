@@ -43,7 +43,7 @@ export interface OtherPrice {
 
 // Things the bin sorts that are not deposit containers.
 export const OTHER: OtherPrice[] = [
-  { id: "organics", name: "Food scraps", bin: "Organics", cents: null, note: "Sorted for you into the right bin. A price has not been set yet." },
+  { id: "organics", name: "Food scraps", bin: "Organics", cents: 0, note: "Sorted for you into the right bin. No reward for now." },
   { id: "waste", name: "Everything else", bin: "Waste", cents: 0, note: "Goes to Waste. It is sorted and counted, but does not earn a reward." },
 ];
 

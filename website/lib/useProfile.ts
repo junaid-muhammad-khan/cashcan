@@ -2,7 +2,7 @@
 
 import { useAuth0 } from "@auth0/auth0-react";
 import { useCallback, useEffect, useState } from "react";
-import { getMe, saveWallet, type Me } from "./faceApi";
+import { getMe, saveWallet, type HeldRelease, type Me } from "./faceApi";
 
 const AUDIENCE = process.env.NEXT_PUBLIC_AUTH0_AUDIENCE;
 const need = (v: string | undefined, what: string): string => { if (!v) throw new Error(what); return v; };
@@ -46,14 +46,21 @@ export function useProfile() {
   const setWallet = useCallback(async (wallet: string) => {
     const audience = need(AUDIENCE, "The face service is not configured.");
     const token = need(await getAccessTokenSilently({ authorizationParams: { audience } }), "Could not get a login token for the face service.");
-    const updated = await saveWallet(token, wallet);
+    const { held_queued, held_paid, held_error, ...updated } = await saveWallet(token, wallet);
     setState((s) => {
       if (s.status !== "ready") return s;
       const me = { ...s.me, ...updated };
       writeCache(me);
       return { status: "ready", me };
     });
+    return { held_queued, held_paid, held_error } as HeldRelease;
   }, [getAccessTokenSilently]);
 
-  return { state, reload, setWallet };
+  /** An access token for the face API, for other signed-in calls (e.g. /me/activity). */
+  const getToken = useCallback(async () => {
+    const audience = need(AUDIENCE, "The face service is not configured.");
+    return need(await getAccessTokenSilently({ authorizationParams: { audience } }), "Could not get a login token for the face service.");
+  }, [getAccessTokenSilently]);
+
+  return { state, reload, setWallet, getToken };
 }

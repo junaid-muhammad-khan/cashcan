@@ -62,10 +62,13 @@ training) averages 3 looks into organics / cans / waste, and `LidController` ope
 | Waste item | waste | reward 0 (waste never pays) |
 
 Records carry a bin-chosen `interaction_id`; if the server is unreachable they wait in a short-lived outbox (10 min TTL, no face data) and retry with the same id, so
-the server stores each once. Rewards are **placeholders** in `controller.REWARDS` (from backend/src/rewardTable.ts); the real figures are an open team decision.
+the server stores each once and pays it at most once. The bin sends **no reward amount**: the face API decides it (`face_api/app/rewards.py`: 5¢ CAD per
+can, paid in devnet SOL at the live rate; organics and waste 0) and pays it within the request. Its answer (`reward_cents`, `payout_status` none / held /
+pending / sending / paid / failed, `reason`) is in the `interaction_recorded` event and on the `--show` preview. The server also applies its own confidence
+floor (`MIN_CONFIDENCE`, default 0.75) and a per-user cooldown, so a bin `--min-confidence` below 0.75 still sorts but does not pay.
 `lids.json` maps each bin to shell commands, e.g. `{"cans": {"open": "servo 5 90", "close": "servo 5 0"}}`; the lid hardware is not decided yet.
 
-Not built / not verified: the real lid hardware, a payout worker that settles `pending` interactions on Solana, tuning the item region and thresholds on the real camera
+Not built / not verified: the real lid hardware, tuning the item region and thresholds on the real camera
 and light, and accuracy of the classifier on a bin camera (its 94% is on held-out RealWaste photos). The item gate cannot tell a hand from an item; held-still foreground is
 what counts, and the classifier's confidence threshold is the second line of defence.
 

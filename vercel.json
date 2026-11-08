@@ -23,5 +23,11 @@
         "service": "website"
       }
     }
+  ],
+  "crons": [
+    {
+      "path": "/face-api/cron/reconcile",
+      "schedule": "17 10 * * *"
+    }
   ]
 }

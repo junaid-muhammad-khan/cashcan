@@ -1,173 +1,53 @@
+// Operator tools for the devnet treasury. Payouts themselves are NOT made here any more: the face API decides the reward
+// (face_api/app/rewards.py) and the website's Node route sends it (website/app/api/payout, website/lib/solana/).
 import "dotenv/config";
 import { Command } from "commander";
 import { LAMPORTS_PER_SOL } from "@solana/web3.js";
-import { getConnection, loadOrCreateTreasury, airdropIfLow } from "./treasury.js";
-import { computeRewardSol } from "./rewardTable.js";
-import { payUser, PayoutRejected } from "./payout.js";
-import { logActivity } from "./activityLog.js";
-import { classifyImage } from "./classify.js";
+import { KEYPAIR_PATH, getConnection, loadTreasury, secretBase58 } from "./treasury.js";
 
 const program = new Command();
-const minConfidence = Number(process.env.MIN_CONFIDENCE ?? "0.75");
-const cooldownSeconds = Number(process.env.PAYOUT_COOLDOWN_SECONDS ?? "30");
 
 program
   .command("init-treasury")
-  .description("Generate (if needed) the treasury wallet and fund it from the devnet faucet")
+  .description("Create the treasury key (if there is none) and show its address and devnet balance")
   .action(async () => {
-    const connection = getConnection();
-    const treasury = loadOrCreateTreasury();
-    console.log(`Treasury pubkey: ${treasury.publicKey.toBase58()}`);
-
-    let balance: number;
-    try {
-      balance = await airdropIfLow(connection, treasury);
-    } catch (err) {
-      console.log("Automated faucet request failed (Solana's RPC faucet is closed).");
-      console.log(`Fund this wallet manually at https://faucet.solana.com using the pubkey above.`);
-      balance = await connection.getBalance(treasury.publicKey);
-    }
-    console.log(`Balance: ${balance / LAMPORTS_PER_SOL} SOL`);
+    const t = loadTreasury(true);
+    const balance = await getConnection().getBalance(t.publicKey);
+    console.log(`Treasury: ${t.publicKey.toBase58()}`);
+    console.log(`Balance:  ${balance / LAMPORTS_PER_SOL} SOL (devnet)`);
+    if (!process.env.TREASURY_SECRET_KEY) console.log(`Key file: ${KEYPAIR_PATH} (gitignored, never commit it)`);
+    console.log("Fund it with devnet SOL at https://faucet.solana.com (a person has to do this; the RPC faucet is closed).");
+    console.log("Then put the key in Vercel: `npm run cli -- export-secret` prints the value for TREASURY_SECRET_KEY.");
   });
 
 program
   .command("balance")
-  .description("Print the treasury wallet's current devnet balance")
+  .description("Print the treasury's devnet balance")
   .action(async () => {
-    const connection = getConnection();
-    const treasury = loadOrCreateTreasury();
-    const balance = await connection.getBalance(treasury.publicKey);
-    console.log(`Treasury pubkey: ${treasury.publicKey.toBase58()}`);
-    console.log(`Balance: ${balance / LAMPORTS_PER_SOL} SOL`);
+    const t = loadTreasury();
+    const balance = await getConnection().getBalance(t.publicKey);
+    console.log(`Treasury: ${t.publicKey.toBase58()}\nBalance:  ${balance / LAMPORTS_PER_SOL} SOL (devnet)`);
   });
 
 program
-  .command("payout")
-  .description("Simulate a reward payout for one classified item")
-  .requiredOption("--user <pubkey>", "recipient's Solana wallet address")
-  .requiredOption("--item <class>", "item class, e.g. cardboard, glass, metal")
-  .option("--contaminated", "mark the item as contaminated", false)
-  .option("--confidence <0-1>", "classifier confidence", "1.0")
-  .option("--dry-run", "build and validate the payout but never hit the network", false)
-  .action(async (opts) => {
-    const connection = getConnection();
-    const treasury = loadOrCreateTreasury();
-
-    const contaminated = Boolean(opts.contaminated);
-    const confidence = Number(opts.confidence);
-    const rewardSol = computeRewardSol(
-      {
-        itemClass: opts.item,
-        contaminated,
-        confidence,
-      },
-      minConfidence,
-    );
-
-    // No local rule-lookup table exists yet (see main README "Open questions"),
-    // so bin_decision just echoes the classified item for now.
-    const activityBase = {
-      userId: opts.user,
-      itemLabel: opts.item,
-      binDecision: opts.item,
-      contaminated,
-      classifierConfidence: confidence,
-    };
-
-    try {
-      const result = await payUser(
-        connection,
-        treasury,
-        opts.user,
-        rewardSol,
-        cooldownSeconds,
-        Boolean(opts.dryRun),
-      );
-      if (opts.dryRun) {
-        console.log(result);
-        return;
-      }
-      console.log(`Paid ${rewardSol} SOL to ${opts.user}`);
-      console.log(`Signature: ${result}`);
-      const cluster = process.env.SOLANA_CLUSTER ?? "devnet";
-      if (cluster === "localnet") {
-        console.log("Running on a local validator — not visible on the public Explorer.");
-        console.log(`Verify with: solana confirm ${result} --url http://127.0.0.1:8899`);
-      } else {
-        console.log(`Explorer: https://explorer.solana.com/tx/${result}?cluster=${cluster}`);
-      }
-      await logActivity({ ...activityBase, rewardEligible: true, payoutSol: rewardSol, payoutTxSig: result });
-    } catch (err) {
-      if (err instanceof PayoutRejected) {
-        console.log(`No payout: ${err.message}`);
-        if (!opts.dryRun) {
-          await logActivity({ ...activityBase, rewardEligible: false, payoutSol: 0 });
-        }
-        return;
-      }
-      throw err;
-    }
-  });
+  .command("export-secret")
+  .description("Print the treasury secret key in base58, for the TREASURY_SECRET_KEY environment variable (keep it private)")
+  .action(() => { process.stdout.write(secretBase58(loadTreasury()) + "\n"); });
 
 program
-  .command("classify-and-pay")
-  .description("Classify a photo (ml/scripts/predict.py), decide if it's SOL-eligible, and pay if so")
-  .requiredOption("--user <pubkey>", "recipient's Solana wallet address")
-  .requiredOption("--image <path>", "path to a photo of the item")
-  .option("--contaminated", "mark the item as contaminated", false)
-  .option("--dry-run", "build and validate the payout but never hit the network", false)
+  .command("test-payout")
+  .description("Ask the website's /api/payout to pay one test interaction (PAYOUT_URL + PAYOUT_SECRET)")
+  .requiredOption("--to <wallet>", "recipient's devnet wallet")
+  .option("--cents <n>", "reward in CAD cents", "5")
+  .option("--id <interaction_id>", "interaction id (memo cashcan:<id>); reuse it to see the idempotent answer", `cli-${Date.now()}`)
   .action(async (opts) => {
-    const prediction = await classifyImage(opts.image);
-    console.log(
-      `Classified as: ${prediction.bin} (${(prediction.confidence * 100).toFixed(1)}% confidence)`,
-    );
-
-    const connection = getConnection();
-    const treasury = loadOrCreateTreasury();
-    const contaminated = Boolean(opts.contaminated);
-    const rewardSol = computeRewardSol(
-      { itemClass: prediction.bin, contaminated, confidence: prediction.confidence },
-      minConfidence,
-    );
-
-    if (rewardSol <= 0) {
-      console.log(`Not eligible to exchange for SOL: "${prediction.bin}" has no reward, or confidence is below the ${minConfidence} threshold.`);
-    }
-
-    const activityBase = {
-      userId: opts.user,
-      itemLabel: prediction.bin,
-      binDecision: prediction.bin,
-      contaminated,
-      classifierConfidence: prediction.confidence,
-    };
-
-    try {
-      const result = await payUser(
-        connection,
-        treasury,
-        opts.user,
-        rewardSol,
-        cooldownSeconds,
-        Boolean(opts.dryRun),
-      );
-      if (opts.dryRun) {
-        console.log(result);
-        return;
-      }
-      console.log(`Paid ${rewardSol} SOL to ${opts.user}`);
-      console.log(`Signature: ${result}`);
-      await logActivity({ ...activityBase, rewardEligible: true, payoutSol: rewardSol, payoutTxSig: result });
-    } catch (err) {
-      if (err instanceof PayoutRejected) {
-        console.log(`No payout: ${err.message}`);
-        if (!opts.dryRun) {
-          await logActivity({ ...activityBase, rewardEligible: false, payoutSol: 0 });
-        }
-        return;
-      }
-      throw err;
-    }
+    const url = process.env.PAYOUT_URL, secret = process.env.PAYOUT_SECRET;
+    if (!url || !secret) throw new Error("Set PAYOUT_URL and PAYOUT_SECRET.");
+    const res = await fetch(url, { method: "POST", headers: { Authorization: `Bearer ${secret}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ interaction_id: opts.id, to: opts.to, reward_cents: Number(opts.cents) }) });
+    const body = await res.json();
+    console.log(res.status, body);
+    if (body.signature) console.log(`Explorer: https://explorer.solana.com/tx/${body.signature}?cluster=devnet`);
   });
 
 program.parseAsync(process.argv);
