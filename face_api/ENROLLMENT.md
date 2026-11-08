@@ -46,3 +46,22 @@ an unambiguous-match rule, and a way to see and undo what was added. The risk is
 
 ## Caveats
 Section 2 and 4 use one person's frames (26) and are indicative, not statistics. Section 1 uses press photos. Lookalikes, siblings and spoofing were not tested.
+
+## 5. Real webcam test with the owner and friends (2026-11-08)
+Run on a real MacBook webcam with `python -m tools.databricks_sync search --webcam` (Databricks Vector Search, the frames averaged after a warm-up),
+against the 4 people in Databricks: the owner (31 templates, enrolled from a studio photo plus webcam frames) and three friends (5 templates each, from
+one phone photo each). Who was at the camera is as reported by the tester.
+
+| Who at the camera | Top match | Score | Best wrong person |
+|---|---|---|---|
+| owner, 3 tries | junaid | 83%, 76%, 77% | not shown (all other people under 4-15% in earlier checks) |
+| friend | person-1 | 70% | person-2, 15% |
+| friend | person-3 | 73% | junaid, 4% |
+| friend | person-2 | 58% | junaid, 13% |
+| friend | person-2 | 65% | junaid, 19% |
+
+7 of 7 searches returned the right person on top. Lowest right-person score 58%; highest wrong-person score 19%, so the 45% default line sits inside a 39-point gap.
+The friends were enrolled from a single phone photo each and still scored 58-73%.
+
+**Limits:** 7 searches, 4 people, one camera, one session, and the identities rest on the tester's report. It supports keeping the 45% default; it does not measure
+lookalikes or siblings, spoofing, or far or dim conditions for the friends. The wrong-person scores come from only the other enrolled people (3 or 4 templates sets), not from a crowd.

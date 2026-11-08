@@ -152,7 +152,8 @@ put the right person first 5/5; push, pull (exact round trip) and delete worked;
 Users will take 1 photo, or 3 at most. `/enroll` and the web page accept 1-3 photos (the page takes 3 quick pictures). On LFW, recognition at the 45% line is
 93.6% with 1 photo, 97.8% with 2 and 99.0% with 3, with no wrong names. What is saved matters more than how many: one ordinary frontal frame from the **bin's own camera**
 recognised 90% of a person's later webcam frames, against 81% for a studio or phone photo, and extra copies or variants of one photo add nothing. Details, the
-threshold table and the self-updating-template idea (not built) are in [`ENROLLMENT.md`](ENROLLMENT.md).
+threshold table and the self-updating-template idea (not built) are in [`ENROLLMENT.md`](ENROLLMENT.md). A real webcam test with the owner and three friends
+(each enrolled from one phone photo) returned the right person 7 of 7 times: right-person scores 58-83%, highest wrong-person score 19%.
 
 ## Measured accuracy (LFW, latest re-run 2026-11-08 with the two-tier gates)
 Full tables in [`EVAL.md`](EVAL.md); regenerate with `python -m tools.eval_lfw --data <dir>` (see its docstring).
