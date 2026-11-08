@@ -135,8 +135,11 @@ def main(argv=None) -> int:
                     break
                 if a.classify and key in (ord("r"), ord("o"), ord("w")):
                     label = {"r": "cans", "o": "organics", "w": "waste"}[chr(key)]
-                    if runner.teach(label, now) is None:
-                        print("cashcan_pi: nothing to teach yet: hold the item still in the box until the bin has looked at it, then press the key", file=sys.stderr)
+                    done = runner.teach(label, now)
+                    if done is None:
+                        print("cashcan_pi: nothing to teach: put the item inside the amber box first", file=sys.stderr)
+                    else:
+                        print(f"cashcan_pi: taught '{label}' ({done['examples']} example(s) of it now)", file=sys.stderr)
                 elif a.classify and key == ord("u"):
                     runner.forget_last_teaching()
             time.sleep(0.02 if a.show else 0.05)

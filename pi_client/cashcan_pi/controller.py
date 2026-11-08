@@ -105,6 +105,7 @@ class BinController:
         self._votes: list[dict] | None = None
         self._first_crop = None
         self._crop = None
+        self._last_frame = None
         self._committed: dict | None = None   # the decision currently in force for the item in the box: bin, confidence, reason
         self._recent: list[dict] = []         # the last few looks, averaged so one odd frame does not flip the decision
         self._next_reeval = 0.0
@@ -120,9 +121,11 @@ class BinController:
                 "open_lid": self.lid.open_bin,
                 "last_item": self.last_item if now - self.last_item_at < 15 else None,
                 "identity": self.loop.info() if hasattr(self.loop, "info") else {},
+                "gate_why": getattr(self.gate, "why", ""),
                 "can_teach": hasattr(self.classifier, "teach"), "taught": len(getattr(self.classifier, "labels", []))}
 
     def step(self, frame, now: float) -> None:
+        self._last_frame = frame
         self.loop.step(frame, now)          # identity: keeps the session fresh
         self.lid.tick(now)
         self.outbox.flush(now)
@@ -183,13 +186,22 @@ class BinController:
                 self.on_event({"event": "interaction_recorded", "interaction_id": iid, "after_retries": 0, **server_outcome(res)})
 
     def teach(self, label: str, now: float) -> dict | None:
-        """The person says what the item in the box really is. The bin remembers it and judges the item again straight away."""
-        if not hasattr(self.classifier, "teach") or self._crop is None:
+        """The person says what the item in the box right now really is. The bin remembers it and judges it again straight away; if the bin had not
+        noticed the item yet, this makes it look at it now (so teaching works even when the automatic trigger did not fire)."""
+        if not hasattr(self.classifier, "teach"):
             return None
-        n = self.classifier.teach(label, self._crop)
+        frame = getattr(self, "_last_frame", None)
+        crop = getattr(self.gate, "item_crop", self.gate.crop)(frame) if frame is not None else self._crop
+        if crop is None:
+            return None
+        self._crop = crop
+        n = self.classifier.teach(label, crop)
         self.on_event({"event": "taught", "label": label, "examples": n})
         if self._committed is not None:
             self._reeval(now, fresh=True)
+        else:
+            self._votes = [self.classifier.probs(crop)]
+            self._decide(now)
         return {"label": label, "examples": n}
 
     def forget_last_teaching(self) -> str | None:

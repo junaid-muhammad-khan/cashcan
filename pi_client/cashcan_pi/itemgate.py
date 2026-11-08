@@ -14,11 +14,12 @@ import numpy as np
 
 class ItemGate:
     def __init__(self, roi=(0.15, 0.40, 0.85, 1.0), diff: int = 28, min_item: float = 0.012, clear_item: float = 0.006,
-                 still: float = 3.5, settle: float = 0.6, clear_for: float = 1.0, max_present: float = 30.0,
-                 learn: float = 0.03, warmup: float = 1.0, max_fg: float = 0.65):
+                 still: float = 6.0, settle: float = 0.5, clear_for: float = 1.0, max_present: float = 30.0,
+                 learn: float = 0.03, warmup: float = 1.0, max_fg: float = 0.80):
         self.roi, self.diff, self.min_item, self.clear_item = roi, diff, min_item, clear_item   # as fractions of the box: the biggest changed blob that counts as an item / as gone
         self.still, self.settle, self.clear_for, self.max_present = still, settle, clear_for, max_present
         self.learn, self.warmup, self.max_fg = learn, warmup, max_fg   # max_fg: more of the box than this changed = a person stepping in, not an item
+        self.stats = {"fg": 0.0, "big": 0.0, "motion": 0.0}   # latest numbers, for the 'why' line in the preview
         self._mask: np.ndarray | None = None   # which small-resolution pixels differ from the empty view, from the latest step
         self._bg: np.ndarray | None = None
         self._prev: np.ndarray | None = None
@@ -67,6 +68,22 @@ class ItemGate:
         return cv2.GaussianBlur(cv2.resize(self.crop(frame), (96, 72)), (5, 5), 0).astype(np.float32)
 
     @property
+    def why(self) -> str:
+        """In plain words, what the gate is waiting for (shown in the preview window)."""
+        st = self.stats
+        if self._bg is None or self._start is None:
+            return "learning the empty view"
+        if self._state == "present":
+            return "item in the box"
+        if st["big"] < self.min_item:
+            return f"nothing new in the box (change {st['big'] * 100:.1f}%, needs {self.min_item * 100:.1f}%)"
+        if st["fg"] > self.max_fg:
+            return "most of the box changed: looks like a person, not an item"
+        if st["motion"] > self.still:
+            return "item is moving: hold it still"
+        return "settling..."
+
+    @property
     def state(self) -> str:
         return self._state
 
@@ -85,6 +102,7 @@ class ItemGate:
         big = float(stats[1:, cv2.CC_STAT_AREA].max()) / self._mask.size if n > 1 else 0.0   # the biggest changed blob: a can or bottle is a small blob
         motion = float(np.abs(g - self._prev).mean())
         self._prev = g
+        self.stats = {"fg": fg, "big": big, "motion": motion}
 
         if self._state == "empty":
             if big >= self.min_item and fg <= self.max_fg and motion <= self.still:

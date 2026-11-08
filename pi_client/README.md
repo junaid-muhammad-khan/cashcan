@@ -118,3 +118,7 @@ judging the whole box got 23% of cans and bottles right; the tight crop got abou
 - **Teach it (`--classify`, window must be focused):** when the bin gets an item wrong, hold the item still so it is in the box and press **R** (it is recycle: cans, bottles), **O** (organics) or **W** (waste). The bin remembers it at once, judges the item again, and remembers it after a restart
   (`~/.cashcan/taught.npz`; photos kept in `~/.cashcan/taught_photos/<bin>/`). **U** undoes the last teaching. Teaching compares the model's own picture features with what you taught and only overrides the model when an item looks close to a taught one;
   measured on simulated webcam scenes, items shown again went from 78% to 100% right, other cans improved by 15 points, and waste was unaffected. A few examples of each thing (3 to 5, from different angles) work best. Teaching needs the FP32 model (the default); passing `--model` uses that file as is, without teaching.
+
+**Teach keys work on whatever is in the amber box right now**, even if the bin never noticed the item by itself: press R, O or W with the item in the box and the bin learns it, judges it and opens the lid.
+The line above the help text in the window, `item check: ...`, says in plain words what the bin is waiting for: `nothing new in the box (change 0.4%, needs 1.2%)`, `item is moving: hold it still`,
+`most of the box changed: looks like a person, not an item` (move back, or move the box with `--item-roi x1,y1,x2,y2`), `settling...` or `item in the box`.

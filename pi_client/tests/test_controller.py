@@ -384,3 +384,35 @@ def test_teaching_in_the_window_fixes_the_decision_straight_away():
     assert c.last_item["bin"] == "cans" and drv.log[-1] == ("cans", True)
     assert api.sent[-1]["item_class"] == "cans" and c.status(1.3)["can_teach"] and c.status(1.3)["taught"] == 1
     assert c.forget_last_teaching() == "cans"
+
+
+class NeverFires(StateGate):
+    """A gate that never triggers on its own (the real-world case where nothing was noticed)."""
+
+    def __init__(self):
+        super().__init__()
+        self._fire = False
+        self.why = "nothing new in the box"
+
+
+def test_teaching_works_even_when_the_bin_never_noticed_the_item():
+    api, events, drv, gate = FakeApi(), [], SimulatedLid(out=open("/dev/null", "w")), NeverFires()
+    clf = ScriptedClassifier({"cans": 0.05, "organics": 0.05, "waste": 0.9})
+    c = BinController(FakeLoop(SESSION), gate, clf, LidController(drv, hold=30), Outbox(api, on_event=events.append), events.append, votes=1)
+    for t in (1.0, 2.0, 3.0):
+        c.step(EMPTY, t)
+    assert c.last_item is None and drv.log == []                                   # nothing was ever noticed
+    assert c.teach("cans", 3.2) == {"label": "cans", "examples": 1}                # R pressed with the can in the box
+    assert c.last_item["bin"] == "cans" and drv.log == [("cans", True)] and api.sent[-1]["item_class"] == "cans"
+    assert c.status(3.3)["gate_why"].startswith("nothing new")
+
+
+def test_gate_says_in_words_why_it_is_not_firing():
+    g = ItemGate(warmup=0.5, settle=0.5)
+    assert g.why == "learning the empty view"
+    for t in range(12):
+        g.step(EMPTY, t / 10)
+    assert g.why.startswith("nothing new in the box")
+    body = np.full((480, 640, 3), (40, 40, 160), np.uint8)
+    g.step(body, 1.3)
+    assert "person" in g.why
