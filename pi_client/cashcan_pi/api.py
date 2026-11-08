@@ -34,3 +34,10 @@ class FaceApi:
         r = self._http.post("/interactions", json=payload)
         r.raise_for_status()
         return r.json()
+
+    def warm(self) -> bool:
+        """Wake the server and load its face models (a cold start can take ~20 s). Call once at start-up, off the main thread."""
+        try:
+            return self._http.get("/warm", timeout=90).status_code == 200
+        except httpx.HTTPError:
+            return False

@@ -110,7 +110,8 @@ class BinController:
                 "gate": getattr(self.gate, "state", "?"),
                 "collecting_looks": self._votes is not None,
                 "open_lid": self.lid.open_bin,
-                "last_item": self.last_item if now - self.last_item_at < 15 else None}
+                "last_item": self.last_item if now - self.last_item_at < 15 else None,
+                "identity": self.loop.info() if hasattr(self.loop, "info") else {}}
 
     def step(self, frame, now: float) -> None:
         self.loop.step(frame, now)          # identity: keeps the session fresh

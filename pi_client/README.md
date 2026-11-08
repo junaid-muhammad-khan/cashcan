@@ -82,3 +82,7 @@ still in it), the last decision (bin, confidence, reward, who gets it) and the t
 - Sit in front of the camera first: it matches the face you enrolled on the website. Then hold a can, a banana peel or a wrapper still inside the box.
 - Without a bin key the lids and decisions still work; the records are refused by the server (an `interaction_rejected` event) and nothing is paid.
 - `--camera 1` if macOS picks your iPhone as camera 0. Allow camera access for the terminal when macOS asks.
+
+Lag and "it does not see my face": server calls (0.5-4 s each, longer on a cold start) run on their own thread now, so the window stays smooth. The line above the lids shows
+`local face check` (does the cheap on-device detector see a face) and `server:` (its last answer, e.g. `below_threshold 31%`, `ambiguous`, `matched 76%`). If the local check says
+`no face`, run with `--no-face-precheck` to send every frame. At start-up the bin calls `/warm` so the server is awake before the first match.

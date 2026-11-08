@@ -48,6 +48,8 @@ class BinLoop:
         self._next_recheck = 0.0
         self._denials = 0
         self._last_error_emit = -1e9
+        self.face_seen: bool | None = None   # did the cheap local detector see a face in the last frame it checked
+        self.last_reply: dict | None = None  # the server's last /match answer (for debugging)
 
     def current_session(self, now: float) -> Session | None:
         if self._session and now > self._session.expires_at:
@@ -79,6 +81,7 @@ class BinLoop:
         if self._session and now < self._next_recheck:
             return
         probe = not self.detector.has_face(frame)
+        self.face_seen = not probe
         if probe:
             # The cheap detector is frontal-only and can miss a real face (tilt, glasses, odd light).
             # Fail open: send a probe frame now and then so a missed face costs a delay, not service.
@@ -148,6 +151,7 @@ class BinLoop:
         self.emit({"event": "denied", "reason": f"liveness_{reason}"})
 
     def _handle(self, res: dict, now: float, probe: bool = False) -> None:
+        self.last_reply = res
         if res.get("matched"):
             self._denials = 0
             user = res["user_id"]

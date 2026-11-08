@@ -48,6 +48,13 @@ def draw(frame: np.ndarray, status: dict, indicator_state: str, indicator_msg: s
     else:
         _text(out, "show an item and hold it still in the box", (12, 84), GREY, 0.6)
 
+    ident = status.get("identity") or {}
+    seen = ident.get("face_seen")
+    rep = ident.get("last_reply") or {}
+    srv = (f"matched {rep.get('score', 0) * 100:.0f}%" if rep.get("matched") else
+           f"{rep.get('reason', '-')}" + (f" {rep['score'] * 100:.0f}%" if rep.get("score") is not None else "")) if rep else "no answer yet"
+    _text(out, f"local face check: {'face' if seen else 'no face' if seen is False else '-'}  |  server: {srv}", (12, h - 58), (200, 200, 200), 0.45)
+
     bw = w // 3
     for i, name in enumerate(LIDS):
         lit = status["open_lid"] == name

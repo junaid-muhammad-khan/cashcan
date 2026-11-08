@@ -200,3 +200,45 @@ def test_controller_status_snapshot():
     st = c.status(2.0)
     assert st["user_id"] == "user-1" and st["open_lid"] == "cans" and st["last_item"]["bin"] == "cans" and st["collecting_looks"] is False
     assert c.status(100.0)["last_item"] is None   # stale decisions fade from the display
+
+
+def test_background_identity_never_blocks_the_camera_loop():
+    import threading, time
+    from cashcan_pi.threaded import BackgroundIdentity
+
+    class SlowLoop:
+        face_seen, _session = True, None
+        last_reply = {"matched": False, "reason": "below_threshold", "score": 0.3}
+
+        def __init__(self):
+            self.frames, self.emit = [], lambda e: None
+
+        def step(self, frame, now):
+            time.sleep(0.5)               # a slow server answer
+            self.frames.append(frame)
+
+    slow = SlowLoop()
+    bg = BackgroundIdentity(slow)
+    t = time.monotonic()
+    for i in range(50):                   # the camera loop keeps going while the server is slow
+        bg.step(i, time.monotonic())
+    assert time.monotonic() - t < 0.2
+    time.sleep(1.3)
+    bg.stop()
+    assert 1 <= len(slow.frames) <= 3 and slow.frames[-1] == 49      # stale frames were dropped; the newest one was used
+    assert bg.info()["last_reply"]["reason"] == "below_threshold" and bg.current_session(0.0) is None
+
+
+def test_loop_remembers_face_seen_and_last_reply():
+    from cashcan_pi.indicator import ConsoleIndicator
+    from cashcan_pi.loop import BinLoop
+
+    class D:
+        def has_face(self, f): return True
+
+    class A:
+        def match(self, jpeg, token=None): return {"matched": False, "reason": "below_threshold", "score": 0.31}
+
+    lp = BinLoop(A(), D(), ConsoleIndicator(out=open("/dev/null", "w")))
+    lp.step(EMPTY, 1.0)
+    assert lp.face_seen is True and lp.last_reply["reason"] == "below_threshold"

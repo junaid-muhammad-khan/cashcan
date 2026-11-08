@@ -36,6 +36,7 @@ def main(argv=None) -> int:
     ap.add_argument("--height", type=int, default=480)
     ap.add_argument("--send-interval", type=float, default=0.7)
     ap.add_argument("--recheck-interval", type=float, default=5.0)
+    ap.add_argument("--no-face-precheck", action="store_true", help="send every frame to the server instead of only when the local Haar check sees a face")
     ap.add_argument("--led-pins", metavar="GREEN,RED,AMBER", help="BCM pins; needs gpiozero (on the Pi)")
     g = ap.add_argument_group("object classifier + lids (turns the identity loop into the full bin controller)")
     g.add_argument("--classify", action="store_true", help="also classify the item on the same camera and open the right lid")
@@ -53,9 +54,18 @@ def main(argv=None) -> int:
         g, r, y = (int(p) for p in a.led_pins.split(","))
         ind = GpioIndicator(g, r, y)
     emit = lambda e: print(json.dumps(e), flush=True)
+    from .detector import AlwaysDetector
+    from .threaded import BackgroundIdentity
+
     api = FaceApi(a.server, bin_key=a.bin_key)
-    loop = BinLoop(api, make_detector(warn=lambda m: print(m, file=sys.stderr)), ind, emit,
+    import threading
+
+    threading.Thread(target=lambda: print("cashcan_pi: server warm" if api.warm() else "cashcan_pi: server did not answer /warm", file=sys.stderr),
+                     daemon=True).start()   # wake the face server now so the first match is not the slow one
+    detector = AlwaysDetector() if a.no_face_precheck else make_detector(warn=lambda m: print(m, file=sys.stderr))
+    loop = BinLoop(api, detector, ind, emit,
                    send_interval=a.send_interval, recheck_interval=a.recheck_interval)
+    loop = BackgroundIdentity(loop)   # server calls run on their own thread: the camera and the window never wait on them
     runner, roi = loop, (0.15, 0.40, 0.85, 1.0)
     if a.classify:
         from .classifier import OnnxClassifier
@@ -97,7 +107,8 @@ def main(argv=None) -> int:
                     st = runner.status(now)
                 else:
                     sess = loop.current_session(now)
-                    st = {"user_id": sess.user_id if sess else None, "gate": "-", "collecting_looks": False, "open_lid": None, "last_item": None}
+                    st = {"user_id": sess.user_id if sess else None, "gate": "-", "collecting_looks": False, "open_lid": None,
+                          "last_item": None, "identity": loop.info()}
                 try:
                     cv2.imshow("cashcan bin test (q to quit)", draw(frame, st, ind.state, ind.message, roi))
                 except cv2.error:
@@ -110,6 +121,7 @@ def main(argv=None) -> int:
         return 0
     finally:
         cam.release()
+        loop.stop()
 
 
 if __name__ == "__main__":
