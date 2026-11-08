@@ -27,7 +27,7 @@
   "crons": [
     {
       "path": "/face-api/cron/reconcile",
-      "schedule": "* * * * *"
+      "schedule": "17 10 * * *"
     }
   ]
 }
