@@ -10,6 +10,9 @@ GET    /rewards           the reward table (cents per item class), read-only
 GET/PUT /me, GET /me/activity   signed-in profile and the user's drops (Auth0)
 POST   /interactions      one sorted item from a bin (X-Bin-Key); the server decides the reward and pays it
 GET    /cron/reconcile    retries failed payouts and resolves stuck ones (Vercel cron, CRON_SECRET)
+GET    /game/leaderboard  the kids' sorting game: best scores (nicknames only; public)
+POST   /game/scores       save a finished game (Auth0); the server works the score out itself
+PUT    /game/nickname     the name shown on the game leaderboard (Auth0)
 """
 from __future__ import annotations
 
@@ -80,13 +83,22 @@ def make_payouts(accounts):
     return Payouts(Ledger(accounts.db))
 
 
+def make_game(accounts):
+    """Game scores over the same Databricks connection as the accounts, else None."""
+    if accounts is None:
+        return None
+    from .game import GameScores
+
+    return GameScores(accounts.db)
+
+
 def make_verifier():
     return TokenVerifier(config.AUTH0_DOMAIN, config.AUTH0_AUDIENCE) if config.AUTH0_DOMAIN and config.AUTH0_AUDIENCE else None
 
 
 def create_app(engine: FaceEngine | None = None, store: FaceStore | None = None,
                sessions: SessionManager | None = None, liveness: LivenessManager | None = None,
-               accounts=None, verifier=None, payouts=None) -> FastAPI:
+               accounts=None, verifier=None, payouts=None, game=None) -> FastAPI:
     app = FastAPI(title="CashCan face API")
 
     @app.middleware("http")
@@ -102,11 +114,17 @@ def create_app(engine: FaceEngine | None = None, store: FaceStore | None = None,
              "sessions": sessions or SessionManager(), "liveness": liveness or LivenessManager(),
              "accounts": accounts or make_accounts(), "verifier": verifier or make_verifier()}
     state["payouts"] = payouts or make_payouts(state["accounts"])
+    state["game"] = game or make_game(state["accounts"])
 
     def need_payouts():
         if state["payouts"] is None:
             raise HTTPException(503, "Interactions are not configured (needs the Databricks store).")
         return state["payouts"]
+
+    def need_game():
+        if state["game"] is None:
+            raise HTTPException(503, "The game leaderboard is not configured (needs the Databricks store).")
+        return state["game"]
 
     def need_accounts():
         if state["accounts"] is None:
@@ -335,6 +353,53 @@ def create_app(engine: FaceEngine | None = None, store: FaceStore | None = None,
     @app.get("/rewards")
     def reward_table():
         return rewards.table()
+
+    # ---- kids' sorting game ------------------------------------------------------------------
+    @app.get("/game/leaderboard")
+    def game_leaderboard(period: str = "week", limit: int = 10, authorization: str | None = Header(None)):
+        from .game import PERIODS
+
+        if period not in PERIODS:
+            raise HTTPException(400, f"period must be one of {', '.join(PERIODS)}.")
+        me = None
+        if authorization:  # optional: only used to mark the caller's own row
+            try:
+                me = current_user(bearer(authorization))["user_id"]
+            except HTTPException:
+                me = None
+        g = need_game()
+        board = g.leaderboard(period, max(1, min(limit, 50)), me)
+        mine = None
+        if me:
+            best = g.best(me, period)
+            mine = {"best": best, "rank": g.rank_of(best, period) if best else None}
+        return {"period": period, "leaderboard": board, "me": mine}
+
+    @app.post("/game/scores")
+    def game_score(body: dict = Body(...), authorization: str | None = Header(None)):
+        from .game import TooFast, check_result
+
+        u = current_user(bearer(authorization))
+        try:
+            result = check_result(body)
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from e
+        try:
+            return need_game().save(u["user_id"], result)
+        except TooFast as e:
+            raise HTTPException(429, str(e)) from e
+
+    @app.put("/game/nickname")
+    def game_nickname(body: dict = Body(...), authorization: str | None = Header(None)):
+        from .game import clean_nickname
+
+        u = current_user(bearer(authorization))
+        try:
+            name = clean_nickname(str(body.get("nickname", "")))
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from e
+        need_accounts().update_profile(u["user_id"], None, name, None)
+        return {"nickname": name}
 
     @app.get("/leaderboard")
     def leaderboard(limit: int = 20):

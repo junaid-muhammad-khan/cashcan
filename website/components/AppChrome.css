@@ -13,3 +13,7 @@
 .app-pill.is-current { background: var(--app-ink); border-color: var(--app-ink); color: #fff; }
 /* On the home page the header sits inside .hero, which has 24px side padding: let the bar run edge to edge like on the other pages. */
 .hero > .app-top { margin-left: -24px; margin-right: -24px; }
+
+/* "Play game" tab: a little green so kids spot it */
+.app-pill-play:not(.is-current) { border-color: #9bd9b6; color: #0e5a33; background: #eef7f1; }
+.app-pill-play:not(.is-current):hover { border-color: #2bb673; }

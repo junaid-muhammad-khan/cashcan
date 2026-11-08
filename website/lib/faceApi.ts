@@ -13,6 +13,7 @@ export interface Me {
   user_id: string;
   sol_wallet: string | null;
   face_enrolled: boolean;
+  pseudonym?: string | null;   // the public nickname (game leaderboard)
 }
 
 export class FaceApiError extends Error {

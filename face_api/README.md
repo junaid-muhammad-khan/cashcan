@@ -225,7 +225,7 @@ per request (run `python -m tools.databricks_sync status`). On Vercel, set the t
 
 ## Accounts, bins, interactions and payouts (Databricks + Auth0)
 Tables: `../databricks/app_schema.sql`, then `../databricks/002_interactions_payouts.sql` (schema `workspace.cashcan_app`: `users`, `bins`,
-`interactions`, views `leaderboard` and `city_activity`). Delta does not enforce unique keys, so the code does: users are created with `MERGE` on
+`interactions`, `game_scores` (created on first use; `../databricks/004_game_scores.sql`), views `leaderboard` and `city_activity`). Delta does not enforce unique keys, so the code does: users are created with `MERGE` on
 `auth0_sub`, interactions with `MERGE` on `interaction_id`, and every payout status change is a `MERGE ... WHEN MATCHED AND payout_status = '<expected>'`
 (`app/ledger.py`), so two workers can never both pay a row.
 
@@ -233,6 +233,9 @@ Tables: `../databricks/app_schema.sql`, then `../databricks/002_interactions_pay
 |---|---|---|
 | `GET/PUT /me` | Auth0 access token | profile (created on first login); pseudonym and Solana wallet. Saving a wallet pays the user's **held** rewards and returns `held_queued` / `held_paid` |
 | `GET /me/activity?range=today\|week\|30d&tz=` | Auth0 access token | the user's drops: totals (items, paid SOL, paid CAD at each row's stored rate, held, pending), counts by bin, a time series and the 10 most recent drops |
+| `GET /game/leaderboard?period=week\|all&limit=` | none (optional Auth0 token marks your own row) | Sort It! leaderboard: each player's best game, nicknames only, plus your own best and rank |
+| `POST /game/scores` | Auth0 access token | save a finished game. The browser sends what happened (`correct`, `wrong`, `spilled`, `best_streak`, `duration_ms`, `game_id`); the server checks it is possible and works out the score (`correct x 10 + best_streak x 5`) itself. Idempotent on `game_id`; one score per 15 s per player |
+| `PUT /game/nickname` | Auth0 access token | the leaderboard name (2-16 letters/numbers, no contact details), stored as the profile `pseudonym` |
 | `POST /enroll` | Auth0 access token | with Auth0 on, user and wallet come from the token and profile, never the form |
 | `GET /rewards` | none | the reward table (`app/rewards.py`): cents per item class |
 | `POST /interactions` | `X-Bin-Key` | one sorted item; the server decides the reward and pays it (below); `interaction_id` makes retries safe |

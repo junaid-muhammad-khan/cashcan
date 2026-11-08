@@ -9,7 +9,7 @@ import "./AppChrome.css";
 // `.db` styles from app/dashboard/dashboard.css, so the page must be wrapped in <div className="db"> and import that CSS.
 const S = { stroke: "#fff", fill: "none", strokeLinecap: "round" as const, strokeLinejoin: "round" as const, "aria-hidden": true };
 
-export function AppHeader({ current }: { current: "home" | "dashboard" | "profile" }) {
+export function AppHeader({ current }: { current: "home" | "dashboard" | "play" | "profile" }) {
   const { logout } = useAuth0();
   const cur = (k: string) => (k === current ? ({ "aria-current": "page" } as const) : {});
   return (
@@ -25,6 +25,7 @@ export function AppHeader({ current }: { current: "home" | "dashboard" | "profil
       <nav aria-label="Account" className="app-links">
         <Link href="/" className={`app-pill${current === "home" ? " is-current" : ""}`} {...cur("home")}>Home</Link>
         <Link href="/dashboard" className={`app-pill${current === "dashboard" ? " is-current" : ""}`} {...cur("dashboard")}>Dashboard</Link>
+        <Link href="/play" className={`app-pill app-pill-play${current === "play" ? " is-current" : ""}`} {...cur("play")}>Play game</Link>
         <Link href="/prices" className="app-pill">Prices</Link>
         <Link href="/account" className={`app-pill${current === "profile" ? " is-current" : ""}`} {...cur("profile")}>Profile</Link>
         <button type="button" className="app-pill" onClick={() => logout({ logoutParams: { returnTo: window.location.origin } })}>Log out</button>
