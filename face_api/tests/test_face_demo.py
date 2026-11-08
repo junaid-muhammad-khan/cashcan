@@ -18,7 +18,7 @@ def write(tmp_path, folder, name, pid, **kw):
 def args(tmp_path, **kw):
     base = dict(db=str(tmp_path / "d.db"), name="me", images=None, camera="0", count=5, interval=1.0,
                 no_window=True, threshold=config.MATCH_THRESHOLD, margin=config.AMBIGUITY_MARGIN,
-                mine=None, others=None, add=False)
+                mine=None, others=None, add=False, guided=False, lead=4.0)
     return Namespace(**{**base, **kw})
 
 

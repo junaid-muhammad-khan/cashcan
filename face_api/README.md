@@ -85,10 +85,15 @@ python -m tools.face_demo delete --name junaid
 **Make the scores higher (add webcam templates).** Templates from a single studio photo match live webcam frames at only about
 50-65% (measured on a real MacBook webcam: median 55%, max 66%, against the 45% line), while variants of the same photo match at 99%.
 Add real webcam frames to the **same person**:
-`python -m tools.face_demo enroll --name junaid --add` (follow the prompts: straight, left, right, chin up), then
+`python -m tools.face_demo enroll --name junaid --add --guided` (8 short steps: straight, left, right, chin up, **close, far, dim light,
+side light**, so your templates cover the distances and lighting you will really stand in; plain `--add` without `--guided` only varies head pose), then
 `python -m tools.databricks_sync push --name junaid --replace`. Do not enroll the same person under a second name: two similar
 names are rejected as "ambiguous" (verified: a 0.90 match is refused when the same person exists under two names).
 `--replace` swaps the person's templates in Databricks and keeps a real wallet that is already stored there.
+
+**Steadier decisions (on by default in live mode):** the main face is judged on the average of its last 5 good frames (`--smooth 5`;
+`--smooth 1` turns it off). One bad frame (blink, motion, a light flicker) no longer flips the answer, and the average is cleared the moment the
+face disappears or a different-looking face steps in, so nobody can borrow another person's average. The label shows `(avg of N)`.
 
 **If nothing seems to happen:** the terminal now prints each stage (model loading, camera opened, frames arriving) and ends with
 `Stopped: <reason>`. The video window can open behind other windows; if you cannot find it, press Ctrl+C and run

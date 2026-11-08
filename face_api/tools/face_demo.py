@@ -1,7 +1,7 @@
 """Try the face recognition on your own laptop (macOS or Linux): save your face, then test it.
 
   python -m tools.face_demo enroll   --name junaid                 # webcam, 5 frames
-  python -m tools.face_demo enroll   --name junaid --add           # add webcam frames to the same person (raises scores)
+  python -m tools.face_demo enroll   --name junaid --add --guided  # add webcam frames covering distance and light (raises scores)
   python -m tools.face_demo enroll   --name junaid --images ~/me/*.jpg
   python -m tools.face_demo identify --image photo1.jpg group.png  # who is in these pictures?
   python -m tools.face_demo identify --webcam                      # live; press q to quit
@@ -18,7 +18,7 @@ from __future__ import annotations
 import argparse
 import sys
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 import numpy as np
@@ -26,6 +26,7 @@ import numpy as np
 from app import config
 from app.face_engine import FaceEngine, FaceResult, QualityError, check_quality, decode_image, pick_face
 from app.matching import match
+from app.smoothing import EmbeddingSmoother
 from app.store import FaceStore
 
 PLACEHOLDER_WALLET = "DEMO-NO-WALLET"  # the API requires a wallet; the demo has none
@@ -47,12 +48,15 @@ class FaceReport:
     sharpness: float = 0.0
     turn: float | None = None
     threshold: float = config.MATCH_THRESHOLD  # the threshold actually used for this decision
+    embedding: np.ndarray | None = field(default=None, repr=False)
+    n_avg: int = 1               # how many frames the score is averaged over (1 = a single frame)
 
     @property
     def label(self) -> str:
         if not self.usable:
             return f"skipped: {explain_gate(self)}"
-        return f"{self.name} {pct(self.score)}" if self.matched else f"unknown ({self.reason}, best {pct(self.score)})"
+        avg = f" (avg of {self.n_avg})" if self.n_avg > 1 else ""
+        return f"{self.name} {pct(self.score)}{avg}" if self.matched else f"unknown ({self.reason}, best {pct(self.score)}){avg}"
 
 
 def pct(cosine: float) -> str:
@@ -101,13 +105,30 @@ def report_for(face: FaceResult, owners, gallery, threshold, margin) -> FaceRepo
         return FaceReport(face.box, False, str(e), **m)
     r = match(face.embedding, owners, gallery, threshold=threshold, margin=margin)
     return FaceReport(face.box, True, "", r.matched, r.user_id, r.score, r.reason,
-                      ranking(face.embedding, owners, gallery)[:3] if len(owners) else [], **m)
+                      ranking(face.embedding, owners, gallery)[:3] if len(owners) else [], embedding=face.embedding, **m)
 
 
 def identify_frame(engine: FaceEngine, store: FaceStore, img: np.ndarray,
                    threshold: float, margin: float) -> list[FaceReport]:
     owners, gallery = store.all_embeddings()
     return [report_for(f, owners, gallery, threshold, margin) for f in engine.analyse(img)]
+
+
+def apply_smoothing(reports: list["FaceReport"], smoother: EmbeddingSmoother, store: FaceStore,
+                    threshold: float, margin: float) -> list["FaceReport"]:
+    """Replace the main (largest usable) face's single-frame result by the average of its last few frames."""
+    usable = [r for r in reports if r.usable and r.embedding is not None]
+    if not usable:
+        return reports
+    main = max(usable, key=lambda r: (r.box[2] - r.box[0]) * (r.box[3] - r.box[1]))
+    mean, n = smoother.add(main.embedding)
+    if n < 2:
+        return reports
+    owners, gal = store.all_embeddings()
+    m = match(mean, owners, gal, threshold=threshold, margin=margin)
+    smoothed = replace(main, matched=m.matched, name=m.user_id, score=m.score, reason=m.reason, n_avg=n,
+                       ranking=ranking(mean, owners, gal)[:3] if len(owners) else [])
+    return [smoothed if r is main else r for r in reports]
 
 
 def annotate(img: np.ndarray, reports: list[FaceReport], debug: bool = False) -> np.ndarray:
@@ -169,12 +190,14 @@ def cmd_enroll(a, engine, store) -> int:
                 embs.append(largest_usable(engine, decode_image(p.read_bytes())).embedding)
             except QualityError as e:
                 print(f"  skip {p.name}: {e}")
+    elif a.guided:
+        embs = capture_guided(a, engine)
     else:
         embs = capture_from_camera(a, engine)
     if len(embs) < config.MIN_ENROLL_FRAMES:
         print(f"Only {len(embs)} usable frame(s); need {config.MIN_ENROLL_FRAMES}. Nothing saved.", file=sys.stderr)
         return 1
-    embs = embs[: config.MAX_ENROLL_FRAMES]
+    embs = embs[: (GUIDED_TOTAL if a.guided else config.MAX_ENROLL_FRAMES)]
     if a.add:
         try:
             total = store.add_embeddings(name, embs)
@@ -192,6 +215,95 @@ PROMPTS = ["Look straight at the camera", "Turn slightly left", "Turn slightly r
            "Lift your chin a little", "Look straight again", "Tilt your head slightly", "Smile", "Neutral face"]
 
 
+# Guided enrollment: cover the conditions you will really stand in (distance, light), not only head poses.
+GUIDED_STEPS = [
+    ("Look straight at the camera, about an arm's length away", 2),
+    ("Turn your head slightly left", 1),
+    ("Turn your head slightly right", 1),
+    ("Lift your chin a little", 1),
+    ("Lean in close so your face fills most of the picture", 2),
+    ("Sit back about 1.5 metres from the camera", 2),
+    ("Make the room dimmer, or turn so the light is behind you", 2),
+    ("Light from one side only (a window or a lamp)", 2),
+]
+GUIDED_TOTAL = sum(n for _, n in GUIDED_STEPS)
+
+
+class GuidedPlan:
+    """Steps through GUIDED_STEPS: show each instruction for `lead` seconds so the person can get into position, then collect
+    that step's good frames; give up on a step after `timeout` seconds so one impossible step cannot block the rest."""
+
+    def __init__(self, steps=GUIDED_STEPS, lead: float = 4.0, timeout: float = 12.0, clock=time.monotonic):
+        self.steps, self.lead, self.timeout, self._clock = steps, lead, timeout, clock
+        self.index, self.got, self._started = 0, 0, clock()
+
+    @property
+    def done(self) -> bool:
+        return self.index >= len(self.steps)
+
+    @property
+    def instruction(self) -> str:
+        return self.steps[self.index][0] if not self.done else ""
+
+    def collecting(self) -> bool:
+        """True once the person has had `lead` seconds to get into position."""
+        self._maybe_skip()
+        return not self.done and self._clock() - self._started >= self.lead
+
+    def countdown(self) -> int:
+        return max(0, int(self.lead - (self._clock() - self._started) + 0.999))
+
+    def got_frame(self) -> None:
+        self.got += 1
+        if self.got >= self.steps[self.index][1]:
+            self._advance()
+
+    def _maybe_skip(self) -> None:
+        if not self.done and self._clock() - self._started > self.lead + self.timeout:
+            self._advance()
+
+    def _advance(self) -> None:
+        self.index, self.got, self._started = self.index + 1, 0, self._clock()
+
+    def status(self) -> str:
+        if self.done:
+            return "done"
+        head = f"Step {self.index + 1}/{len(self.steps)}: {self.instruction}"
+        return head + (f"  (starting in {self.countdown()}s)" if not self.collecting() else f"  (capturing {self.got}/{self.steps[self.index][1]})")
+
+
+def capture_guided(a, engine) -> list[np.ndarray]:
+    import cv2
+
+    cam, got, last, plan, shown = open_camera(a.camera), [], 0.0, GuidedPlan(lead=a.lead), -1
+    print(f"Guided enrollment: {len(GUIDED_STEPS)} short steps, about {GUIDED_TOTAL} frames. Move as each instruction says. Press q to stop.", flush=True)
+    while not plan.done:
+        frame = grab(cam, a.camera.isdigit())
+        if frame is None:
+            break
+        if plan.index != shown:
+            shown = plan.index
+            print(f"  {plan.status().split('  (')[0]}", flush=True)
+        msg = plan.status()
+        if plan.collecting():
+            try:
+                face = largest_usable(engine, frame)
+                if time.time() - last >= a.interval:
+                    got.append(face.embedding)
+                    last = time.time()
+                    plan.got_frame()
+            except QualityError as e:
+                msg += f"  - {e}"
+        view = frame.copy()
+        cv2.putText(view, msg[:90], (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 200, 0), 2)
+        if show("guided enroll (q = stop)", view, a.no_window):
+            break
+    cam.release()
+    if not a.no_window:
+        cv2.destroyAllWindows()
+    return got
+
+
 def open_camera(src: str):
     import cv2
 
@@ -200,6 +312,23 @@ def open_camera(src: str):
         raise SystemExit(f"Cannot open camera '{src}'. On macOS allow camera access for your terminal "
                          "(System Settings > Privacy & Security > Camera); try --camera 1 if 0 is your phone.")
     return cam
+
+
+def grab(cam, is_device: bool, timeout: float = 6.0):
+    """Next frame. A camera that is slow to start is retried for `timeout` seconds (the first reads often fail on a Mac);
+    a video file used as a test camera loops. None means give up."""
+    import cv2
+
+    t0 = time.time()
+    while time.time() - t0 < timeout:
+        ok, frame = cam.read()
+        if ok:
+            return frame
+        if is_device:
+            time.sleep(0.05)
+        else:
+            cam.set(cv2.CAP_PROP_POS_FRAMES, 0)
+    return None
 
 
 def show(window: str, frame, no_window: bool) -> bool:
@@ -229,8 +358,8 @@ def capture_from_camera(a, engine) -> list[np.ndarray]:
     print(f"Capturing {a.count} frames. Follow the on-screen prompts. Press q to stop.")
     deadline = time.time() + 60
     while len(got) < a.count and time.time() < deadline:
-        ok, frame = cam.read()
-        if not ok:
+        frame = grab(cam, a.camera.isdigit())
+        if frame is None:
             break
         msg = PROMPTS[len(got) % len(PROMPTS)]
         try:
@@ -283,6 +412,7 @@ def live(a, engine, store) -> int:
     cam, n, reports, t0 = open_camera(a.camera), 0, [], time.time()
     is_device = a.camera.isdigit()
     last_line, last_print_t, got_frame, failures, why = "", 0.0, False, 0, "stopped"
+    smoother = EmbeddingSmoother(size=a.smooth)
     print(f"Camera {a.camera} opened. Waiting for frames (the first ones can take a few seconds on a Mac)...", flush=True)
     try:
         while True:
@@ -306,6 +436,7 @@ def live(a, engine, store) -> int:
             n += 1
             if n % a.every == 0:
                 reports = identify_frame(engine, store, frame, a.threshold, a.margin)
+                reports = apply_smoothing(reports, smoother, store, a.threshold, a.margin) if a.smooth > 1 else reports
                 line = " | ".join(describe(r) if a.debug else r.label for r in reports) or "no face detected"
                 now = time.time()
                 # print in every mode, at most about twice a second, so the terminal never looks stuck
@@ -414,6 +545,8 @@ def main(argv=None) -> int:
     e = sub.add_parser("enroll"); e.add_argument("--name", required=True)
     e.add_argument("--images", nargs="+"); e.add_argument("--count", type=int, default=5)
     e.add_argument("--camera", default="0"); e.add_argument("--interval", type=float, default=1.0)
+    e.add_argument("--guided", action="store_true", help="step-by-step prompts that also vary distance and lighting (best for robust scores)")
+    e.add_argument("--lead", type=float, default=4.0, help="seconds to get into position at each guided step")
     e.add_argument("--add", action="store_true", help="add templates to a person who is already saved (best way to improve scores)")
     e.add_argument("--no-window", action="store_true"); e.set_defaults(fn=cmd_enroll)
 
@@ -421,6 +554,7 @@ def main(argv=None) -> int:
     i.add_argument("--camera", default="0"); i.add_argument("--every", type=int, default=2)
     i.add_argument("--annotate", metavar="DIR"); i.add_argument("--no-window", action="store_true")
     i.add_argument("--max-seconds", type=float, default=0)
+    i.add_argument("--smooth", type=int, default=5, help="average the main face over its last N good frames (1 = off); steadier than one frame")
     i.add_argument("--debug", action="store_true", help="show every measurement (face size, detector, sharpness, score)")
     i.set_defaults(fn=cmd_identify)
 
