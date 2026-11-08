@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useAuth0 } from "@auth0/auth0-react";
-import { Logo } from "./icons";
+import { LogoMark } from "./icons";
 
 export default function SiteNav() {
   const { isAuthenticated, isLoading, logout } = useAuth0();
@@ -10,7 +10,7 @@ export default function SiteNav() {
   return (
     <nav className="nav container" aria-label="Main">
       <Link href="/" className="logo">
-        <Logo />
+        <LogoMark />
         <span>cashcan</span>
       </Link>
       <div className="nav-links">
