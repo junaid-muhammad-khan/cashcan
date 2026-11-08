@@ -34,7 +34,9 @@ SESSION_TTL_SECONDS = int(os.environ.get("SESSION_TTL_SECONDS", "60"))
 SESSION_SECRET = os.environ.get("SESSION_SECRET", "")
 
 # Liveness (random head-turn challenge, issued only after a face is recognised)
-REQUIRE_LIVENESS = os.environ.get("CASHCAN_LIVENESS", "on").lower() not in ("off", "0", "false")
+# OFF by default: the head turn is for ENROLLMENT (it is how the saved face vectors are made). At the bin a recognised face is verified from the match alone
+# (highest similarity against the stored vectors). Set CASHCAN_LIVENESS=on to ask for a head turn at the bin again (protects against a still photo, not against a video).
+REQUIRE_LIVENESS = os.environ.get("CASHCAN_LIVENESS", "off").lower() in ("on", "1", "true")
 LIVENESS_TTL_SECONDS = float(os.environ.get("LIVENESS_TTL_SECONDS", "10"))  # time allowed to complete a challenge
 LIVENESS_CENTER_MAX = 0.12   # |turn ratio| at or below this counts as facing the camera
 LIVENESS_TURN_MIN = 0.25     # ratio needed in the asked direction (~30 degrees of head turn)

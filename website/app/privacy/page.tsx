@@ -20,7 +20,7 @@ export default function PrivacyPage() {
           <li><b>What we never keep.</b> The photos themselves. They are used once to make the template and then discarded. A stranger at a bin is not identified and no face data is kept for them.</li>
           <li><b>What we log.</b> Match results (a similarity score and whether it matched) and the items you sort, so the dashboard can show your activity. The logs contain no face data.</li>
           <li><b>One face, one account.</b> A face that is already registered cannot be enrolled on a second account.</li>
-          <li><b>Liveness.</b> The bin asks you to turn your head so a still photo on a screen cannot collect your rewards. It does not stop a recorded video of you, a 3D mask or a deepfake, and we do not claim it does.</li>
+          <li><b>Setup versus the bin.</b> You turn your head once when you set up face match, which is how your face template is made. At the bin, a recognised face is verified from the match alone, with no head turn. That means a photo or video of you held up to the bin could also be recognised: there is no liveness check at the bin today, and we do not claim there is.</li>
           <li><b>Where it lives.</b> Face templates and activity are stored in Databricks. Login is handled by Auth0.</li>
           <li><b>Deleting your data.</b> Self-service deletion is not built yet. Ask the CashCan team and we will delete your face template and account.</li>
         </ul>

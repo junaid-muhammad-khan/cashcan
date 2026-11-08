@@ -95,7 +95,7 @@ export default function Home() {
                     <Person size={90} color="#E6EEE9" strokeWidth={1.4} />
                     <div className="scan-line" />
                   </div>
-                  <div className="tag-light">Matched · liveness passed</div>
+                  <div className="tag-light">Matched · face recognised</div>
                 </div>
                 <div className="scene">
                   <div className="cams">
@@ -162,7 +162,7 @@ export default function Home() {
             <div data-slide-left>
               <div className="eyebrow">Why a face?</div>
               <h2>It ties each reward to one real person, without a card or a phone.</h2>
-              <p className="section-lede">Face match is opt-in. The bin checks liveness so a photo on a screen can&apos;t collect your rewards.</p>
+              <p className="section-lede">Face match is opt-in. You turn your head once when you set it up; after that the bin simply recognises your face.</p>
             </div>
             <ul className="priv-list">
               {PRIVACY.map(([title, body]) => (

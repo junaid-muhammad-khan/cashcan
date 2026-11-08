@@ -99,3 +99,7 @@ cached on disk so a restart or a dropped network still works) and identifies peo
 server's own code from `../face_api`, so the rules are identical. A full identification measured **~17 ms** (median) instead of seconds, and the last 3 good frames are averaged
 (with a reset if a different person steps in). Records to `POST /interactions` then name the user (`user_id`), which the server accepts only from a bin with a valid key.
 **Trust:** the bin holds everyone's face templates and vouches for who it saw, so protect its key and its disk. The classifier defaults to the INT8 model (see `../ml/QUANTIZATION.md`).
+
+**Head turn: enrollment only (default).** You turn your head once when you set up face match on the website; that is how the saved face vectors are made. At the bin a recognised face
+is verified from the match alone: the live frame is compared with every stored vector and the highest similarity decides (threshold 45%, and the best person must lead the runner-up by 5 points).
+Add `--liveness` to ask for one random head turn at the bin as well; that stops a still photo held up to the camera, but not a video. Without it, a photo or video of a person could also be recognised.
