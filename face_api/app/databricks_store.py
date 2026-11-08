@@ -95,9 +95,12 @@ class DatabricksFaces:
             raise DatabricksError(f"'{user_id}' already exists in Databricks; delete it first to re-enroll.")
         self.sql(f"INSERT INTO {self.schema}.users VALUES (:u, :w, current_timestamp(), current_timestamp(), 'active')",
                  {"u": user_id, "w": wallet})
-        for emb in embeddings:
-            self.sql(f"INSERT INTO {self.schema}.face_templates VALUES (:t, :u, {_array_literal(emb)}, :m, current_timestamp())",
-                     {"t": uuid.uuid4().hex, "u": user_id, "m": MODEL_VERSION})
+        if embeddings:  # all templates in ONE statement (each round trip to Databricks costs ~1 s)
+            params, rows = {"u": user_id, "m": MODEL_VERSION}, []
+            for i, emb in enumerate(embeddings):
+                params[f"t{i}"] = uuid.uuid4().hex
+                rows.append(f"(:t{i}, :u, {_array_literal(emb)}, :m, current_timestamp())")
+            self.sql(f"INSERT INTO {self.schema}.face_templates VALUES " + ",".join(rows), params)
         self.writes_done = True
         if sync:
             self.sync_index()

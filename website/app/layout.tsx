@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter, Space_Grotesk } from "next/font/google";
+import WarmFaceApi from "@/components/WarmFaceApi";
 import Auth0ProviderWithNavigate from "@/components/Auth0ProviderWithNavigate";
 import "./globals.css";
 
@@ -16,7 +17,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={`${inter.variable} ${spaceGrotesk.variable}`}>
       <body>
-        <Auth0ProviderWithNavigate>{children}</Auth0ProviderWithNavigate>
+        <Auth0ProviderWithNavigate>
+          <WarmFaceApi />
+          {children}
+        </Auth0ProviderWithNavigate>
       </body>
     </html>
   );

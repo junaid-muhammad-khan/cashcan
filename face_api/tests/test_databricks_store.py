@@ -24,7 +24,7 @@ class Fake:
             elif "INSERT INTO" in stmt and ".users" in stmt:
                 self.users[params["u"]] = params["w"]
             elif "INSERT INTO" in stmt and "face_templates" in stmt:
-                self.rows.append(params["u"])
+                self.rows += [params["u"]] * sum(1 for k in params if k[0] == "t" and k[1:].isdigit())  # one row per template
             elif "DELETE FROM" in stmt and "face_templates" in stmt:
                 self.rows = [u for u in self.rows if u != params["u"]]
             elif "DELETE FROM" in stmt and ".users" in stmt:

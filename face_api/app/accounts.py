@@ -7,6 +7,7 @@ only move forward (pending -> paid / failed), so it cannot be applied twice.
 from __future__ import annotations
 
 import re
+import time
 import uuid
 
 from .databricks_store import DatabricksFaces
@@ -17,20 +18,45 @@ USER_COLS = "user_id, auth0_sub, username, pseudonym, sol_wallet"
 PAYOUT_FINAL = ("paid", "failed")
 
 
+PROFILE_TTL_SECONDS = 20.0  # a profile is reused this long per server instance; any write forgets it
+
+
 class Accounts:
-    def __init__(self, db: DatabricksFaces, schema: str = APP_SCHEMA):
-        self.db, self.t = db, schema
+    def __init__(self, db: DatabricksFaces, schema: str = APP_SCHEMA, clock=time.monotonic):
+        self.db, self.t, self._clock = db, schema, clock
+        self._cache: dict[str, tuple[float, dict]] = {}
 
     @staticmethod
     def _user(r: list) -> dict:
-        return dict(zip(("user_id", "auth0_sub", "username", "pseudonym", "sol_wallet"), r))
+        user = dict(zip(("user_id", "auth0_sub", "username", "pseudonym", "sol_wallet"), r[:5]))
+        user["face_enrolled"] = len(r) > 5 and str(r[5]).lower() == "true"
+        return user
+
+    def forget(self, user_id: str | None = None) -> None:
+        """Drop cached profiles (everyone, or one user) after something changed."""
+        for sub in [k for k, (_, u) in self._cache.items() if user_id is None or u["user_id"] == user_id]:
+            del self._cache[sub]
 
     def user_by_sub(self, sub: str) -> dict | None:
-        rows = self.db.sql(f"SELECT {USER_COLS} FROM {self.t}.users WHERE auth0_sub = :s LIMIT 1", {"s": sub})
-        return self._user(rows[0]) if rows else None
+        """The profile incl. face_enrolled, in ONE query, cached briefly (every Databricks round trip costs ~1 s)."""
+        hit = self._cache.get(sub)
+        if hit and self._clock() - hit[0] < PROFILE_TTL_SECONDS:
+            return hit[1]
+        rows = self.db.sql(
+            f"SELECT u.user_id, u.auth0_sub, u.username, u.pseudonym, u.sol_wallet, "
+            f"EXISTS (SELECT 1 FROM {self.db.schema}.users f WHERE f.user_id = u.user_id) AS face_enrolled "
+            f"FROM {self.t}.users u WHERE u.auth0_sub = :s LIMIT 1", {"s": sub})
+        if not rows:
+            return None
+        self._cache[sub] = (self._clock(), self._user(rows[0]))
+        return self._cache[sub][1]
 
     def get_or_create_user(self, sub: str) -> dict:
-        """First login creates the row. MERGE on auth0_sub, so two simultaneous first requests still make one user."""
+        """Known user: one cached query. First login creates the row with MERGE on auth0_sub, so two simultaneous
+        first requests still make one user."""
+        user = self.user_by_sub(sub)
+        if user:
+            return user
         self.db.sql(
             f"MERGE INTO {self.t}.users t USING (SELECT :s AS auth0_sub, :id AS user_id) s ON t.auth0_sub = s.auth0_sub "
             f"WHEN NOT MATCHED THEN INSERT (user_id, auth0_sub, created_at) VALUES (s.user_id, s.auth0_sub, current_timestamp())",
@@ -43,6 +69,7 @@ class Accounts:
         for col, val in (("username", username), ("pseudonym", pseudonym), ("sol_wallet", wallet)):
             if val is not None:
                 self.db.sql(f"UPDATE {self.t}.users SET {col} = :v WHERE user_id = :u", {"v": val.strip(), "u": user_id})
+        self.forget(user_id)
 
     def record_interaction(self, interaction_id: str, user_id: str | None, session_id: str | None, bin_id: str,
                            item_class: str, confidence: float | None, reward_lamports: int) -> bool:

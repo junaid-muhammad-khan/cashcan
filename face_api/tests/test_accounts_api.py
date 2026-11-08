@@ -30,15 +30,17 @@ def token(sub="auth0|abc", aud=AUD, iss=f"https://{DOMAIN}/", exp=3600):
 class FakeDB:
     """Records SQL and plays a tiny in-memory users/interactions table."""
 
+    schema = "workspace.cashcan_faces"
+
     def __init__(self):
         self.users, self.inter, self.calls = {}, {}, []
 
     def sql(self, stmt, params=None):
         p = params or {}
         self.calls.append((stmt, p))
-        if "FROM workspace.cashcan_app.users WHERE auth0_sub" in stmt:
+        if "FROM workspace.cashcan_app.users u WHERE u.auth0_sub" in stmt:
             u = self.users.get(p["s"])
-            return [[u["user_id"], p["s"], u.get("username"), u.get("pseudonym"), u.get("sol_wallet")]] if u else []
+            return [[u["user_id"], p["s"], u.get("username"), u.get("pseudonym"), u.get("sol_wallet"), "false"]] if u else []
         if stmt.startswith("MERGE INTO workspace.cashcan_app.users"):
             self.users.setdefault(p["s"], {"user_id": p["id"]})
             return []
@@ -175,3 +177,19 @@ def test_delete_only_your_own_face(env):
     assert c.delete(f"/users/{uid}").status_code == 401                              # no token
     assert c.delete(f"/users/{uid}", headers=auth(sub="auth0|someone-else")).status_code == 403
     assert c.delete(f"/users/{uid}", headers=auth()).json() == {"deleted": True}
+
+
+def test_returning_user_costs_one_cached_query_and_writes_forget_it(env):
+    c, db, _ = env
+    c.get("/me", headers=auth())                     # first login: lookup + create + lookup
+    n = len(db.calls)
+    c.get("/me", headers=auth()); c.get("/me", headers=auth())
+    assert len(db.calls) == n                        # served from the 20 s cache: zero queries
+    c.put("/me", json={"pseudonym": "Ace"}, headers=auth())
+    assert c.get("/me", headers=auth()).json()["pseudonym"] == "Ace"   # not the stale cached profile
+    assert len(db.calls) > n                         # the write forgot the cache, so it re-read
+
+
+def test_warm_loads_the_engine(env):
+    c, _, _ = env
+    assert c.get("/warm").json() == {"warm": True}

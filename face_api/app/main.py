@@ -102,6 +102,12 @@ def create_app(engine: FaceEngine | None = None, store: FaceStore | None = None,
     def health():
         return {"ok": True}
 
+    @app.get("/warm")
+    def warm():
+        """Starts the function and loads the face models, so the first real request after idle is not slow."""
+        get_engine()
+        return {"warm": True}
+
     @app.post("/enroll")
     async def enroll(user_id: str = Form(""), wallet: str = Form(""), consent: bool = Form(False),
                      frames: list[UploadFile] = File(...), poses: str = Form(""),
@@ -145,6 +151,8 @@ def create_app(engine: FaceEngine | None = None, store: FaceStore | None = None,
             raise HTTPException(422, {"message": "Not enough usable frames.", "problems": problems})
 
         state["store"].add_user(user_id, wallet, embeddings)
+        if state["accounts"] is not None:
+            state["accounts"].forget(user_id)
         return {"enrolled": True, "user_id": user_id, "frames_used": len(embeddings), "problems": problems}
 
     @app.post("/pose")
@@ -223,13 +231,14 @@ def create_app(engine: FaceEngine | None = None, store: FaceStore | None = None,
         if not state["store"].delete_user(user_id):
             raise HTTPException(404, "No such user.")
         state["sessions"].close_user(user_id)
+        if state["accounts"] is not None:
+            state["accounts"].forget(user_id)
         return {"deleted": True}
 
     # ---- accounts (Auth0 login) -------------------------------------------------------------
     @app.get("/me")
     def me(authorization: str | None = Header(None)):
-        u = current_user(bearer(authorization))
-        return {**u, "face_enrolled": state["store"].user_exists(u["user_id"])}
+        return current_user(bearer(authorization))  # includes face_enrolled; one cached query
 
     @app.put("/me")
     def update_me(body: dict = Body(...), authorization: str | None = Header(None)):

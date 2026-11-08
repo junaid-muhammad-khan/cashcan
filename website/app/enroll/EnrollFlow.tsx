@@ -146,6 +146,7 @@ export default function EnrollFlow() {
       return;
     }
     if (runId.current !== id) return;
+    try { sessionStorage.removeItem("cashcan.profile.v1"); } catch { /* ignore */ }  // force a fresh profile (face_enrolled is now true)
     setStep("test");
     setTest({ busy: true });
     await new Promise((r) => setTimeout(r, 900));
