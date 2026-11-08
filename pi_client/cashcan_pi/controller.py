@@ -100,6 +100,17 @@ class BinController:
     def __post_init__(self):
         self._votes: list[dict] | None = None
         self._first_crop = None
+        self.last_item: dict | None = None   # most recent decision, for the preview window
+        self.last_item_at = 0.0
+
+    def status(self, now: float) -> dict:
+        """What the bin is doing right now, for the preview window and for debugging."""
+        session = self.loop.current_session(now)
+        return {"user_id": session.user_id if session else None,
+                "gate": getattr(self.gate, "state", "?"),
+                "collecting_looks": self._votes is not None,
+                "open_lid": self.lid.open_bin,
+                "last_item": self.last_item if now - self.last_item_at < 15 else None}
 
     def step(self, frame, now: float) -> None:
         self.loop.step(frame, now)          # identity: keeps the session fresh
@@ -123,8 +134,10 @@ class BinController:
         self.lid.open(bin_name, now)
         reward = self.rewards.get(bin_name, 0) if (session and reason == "ok") else 0
         iid = self.new_id()
-        self.on_event({"event": "item", "interaction_id": iid, "bin": bin_name, "confidence": round(conf, 3), "reason": reason,
-                       "user_id": session.user_id if session else None, "reward_lamports": reward})
+        item = {"event": "item", "interaction_id": iid, "bin": bin_name, "confidence": round(conf, 3), "reason": reason,
+                "user_id": session.user_id if session else None, "reward_lamports": reward}
+        self.last_item, self.last_item_at = item, now
+        self.on_event(item)
         payload = {"interaction_id": iid, "item_class": bin_name, "confidence": round(conf, 4), "reward_lamports": reward}
         if session:
             payload["session_token"] = session.token

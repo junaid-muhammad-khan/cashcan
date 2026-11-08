@@ -9,8 +9,10 @@ STATES = ("idle", "scanning", "challenge", "matched", "denied", "error")
 class ConsoleIndicator:
     def __init__(self, out=sys.stderr):
         self._out, self._last = out, None
+        self.state, self.message = "idle", ""   # latest state, read by the preview window
 
     def set(self, state: str, message: str = "") -> None:
+        self.state, self.message = state, message
         key = (state, message)
         if key != self._last:
             self._last = key

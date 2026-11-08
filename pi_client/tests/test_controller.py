@@ -178,3 +178,25 @@ def test_command_lid_runs_the_configured_command_per_bin():
     d = CommandLid({"cans": {"open": "servo --pin 5 --angle 90", "close": "servo --pin 5 --angle 0"}}, runner=ran.append)
     d.set_open("cans", True); d.set_open("cans", False); d.set_open("organics", True)   # organics has no command: ignored
     assert ran == [["servo", "--pin", "5", "--angle", "90"], ["servo", "--pin", "5", "--angle", "0"]]
+
+
+def test_preview_overlay_draws_every_state_without_error():
+    from cashcan_pi.preview import draw
+    frame = np.full((480, 640, 3), 90, np.uint8)
+    roi = (0.15, 0.4, 0.85, 1.0)
+    idle = {"user_id": None, "gate": "empty", "collecting_looks": False, "open_lid": None, "last_item": None}
+    item = {"bin": "cans", "confidence": 0.93, "reason": "ok", "user_id": "abcdef123456", "reward_lamports": 4_000_000}
+    for st, ind in ((idle, "idle"), (idle, "challenge"), ({**idle, "collecting_looks": True}, "scanning"),
+                    ({**idle, "user_id": "abcdef123456", "gate": "present", "open_lid": "cans", "last_item": item}, "matched"),
+                    ({**idle, "last_item": {**item, "bin": "waste", "reason": "low_confidence", "user_id": None, "reward_lamports": 0}}, "denied")):
+        out = draw(frame, st, ind, "hint text", roi)
+        assert out.shape == frame.shape and (out != frame).any()
+    assert (frame == 90).all()   # the input frame is not modified
+
+
+def test_controller_status_snapshot():
+    c, _, _, _ = make(SESSION, CANS)
+    c.step(EMPTY, 1.0)
+    st = c.status(2.0)
+    assert st["user_id"] == "user-1" and st["open_lid"] == "cans" and st["last_item"]["bin"] == "cans" and st["collecting_looks"] is False
+    assert c.status(100.0)["last_item"] is None   # stale decisions fade from the display

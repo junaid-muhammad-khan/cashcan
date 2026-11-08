@@ -68,3 +68,17 @@ the server stores each once. Rewards are **placeholders** in `controller.REWARDS
 Not built / not verified: the real lid hardware, a payout worker that settles `pending` interactions on Solana, tuning the item region and thresholds on the real camera
 and light, and accuracy of the classifier on a bin camera (its 94% is on held-out RealWaste photos). The item gate cannot tell a hand from an item; held-still foreground is
 what counts, and the classifier's confidence threshold is the second line of defence.
+
+## Try the whole bin on a Mac with the webcam (`--show`)
+```bash
+git pull && cd pi_client
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+pip uninstall -y opencv-python-headless && pip install "opencv-python<5"      # the window needs the GUI build; <5 keeps the face pre-check
+python -m cashcan_pi --camera 0 --classify --show --server https://www.cashcan.biz/face-api --bin-key "$CASHCAN_BIN_KEY"
+```
+A window shows your camera with: who is verified (top left; it asks you to turn your head after it recognises you), the item region (amber when something is held
+still in it), the last decision (bin, confidence, reward, who gets it) and the three lids with the open one lit. `q` quits. Events print to the terminal as JSON lines.
+- Sit in front of the camera first: it matches the face you enrolled on the website. Then hold a can, a banana peel or a wrapper still inside the box.
+- Without a bin key the lids and decisions still work; the records are refused by the server (an `interaction_rejected` event) and nothing is paid.
+- `--camera 1` if macOS picks your iPhone as camera 0. Allow camera access for the terminal when macOS asks.

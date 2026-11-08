@@ -44,6 +44,7 @@ def main(argv=None) -> int:
     g.add_argument("--item-roi", default="0.15,0.40,0.85,1.0", help="x1,y1,x2,y2 as fractions of the frame: where items are held or dropped")
     g.add_argument("--min-confidence", type=float, default=0.60, help="below this the item goes to the waste lid and earns nothing")
     g.add_argument("--lid-seconds", type=float, default=6.0)
+    g.add_argument("--show", action="store_true", help="open a preview window with the bin's decisions drawn on the camera frame (q to quit)")
     g.add_argument("--lids", metavar="FILE.json", help='{"cans": {"open": "cmd", "close": "cmd"}, ...}; omit to simulate lids on stderr')
     a = ap.parse_args(argv)
 
@@ -55,7 +56,7 @@ def main(argv=None) -> int:
     api = FaceApi(a.server, bin_key=a.bin_key)
     loop = BinLoop(api, make_detector(warn=lambda m: print(m, file=sys.stderr)), ind, emit,
                    send_interval=a.send_interval, recheck_interval=a.recheck_interval)
-    runner = loop
+    runner, roi = loop, (0.15, 0.40, 0.85, 1.0)
     if a.classify:
         from .classifier import OnnxClassifier
         from .controller import BinController, Outbox
@@ -87,8 +88,24 @@ def main(argv=None) -> int:
                     cam, fails = open_camera(a.camera, a.width, a.height), 0
                 continue
             fails = 0
-            runner.step(frame, time.monotonic())
-            time.sleep(0.05)
+            now = time.monotonic()
+            runner.step(frame, now)
+            if a.show:
+                from .preview import draw
+
+                if a.classify:
+                    st = runner.status(now)
+                else:
+                    sess = loop.current_session(now)
+                    st = {"user_id": sess.user_id if sess else None, "gate": "-", "collecting_looks": False, "open_lid": None, "last_item": None}
+                try:
+                    cv2.imshow("cashcan bin test (q to quit)", draw(frame, st, ind.state, ind.message, roi))
+                except cv2.error:
+                    print("cashcan_pi: --show needs a GUI build of OpenCV: pip uninstall -y opencv-python-headless && pip install 'opencv-python<5'", file=sys.stderr)
+                    return 2
+                if cv2.waitKey(1) & 0xFF == ord("q"):
+                    break
+            time.sleep(0.02 if a.show else 0.05)
     except KeyboardInterrupt:
         return 0
     finally:
