@@ -29,8 +29,9 @@ without JavaScript, and everything that moves is skipped when the visitor has re
 ## Auth (prototype)
 - `app/api/auth/{signup,login,logout}` route handlers.
 - Passwords hashed with scrypt (random salt per user); sessions are HMAC-signed, httpOnly, SameSite=Lax cookies (7 days).
-- Users are stored in `.data/users.json` (gitignored). That only works on a single server with a persistent
-  disk, so it won't survive serverless deploys such as Vercel. Swap `lib/users.ts` for a real database (e.g. Postgres/Supabase) before production.
+- Users live in Databricks (`workspace.cashcan_web.users`, created by `../databricks/website_users.sql`) whenever `DATABRICKS_HOST`,
+  `DATABRICKS_TOKEN` and `DATABRICKS_WAREHOUSE_ID` are set (use these on Vercel). Without them, local dev falls back to `.data/users.json`
+  (gitignored; not usable on serverless hosts). Code: `lib/users.ts` picks the store; `lib/users-databricks.ts` talks to the SQL Statement API.
 - Password reset: only a SHA-256 of the token is stored; tokens are single-use and expire after 30 minutes.
   **No email provider is connected yet**: the reset link is printed to the server log
   (`[cashcan] password reset link for …`). Hook `app/api/auth/forgot/route.ts` up to an email service
