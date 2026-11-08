@@ -20,7 +20,7 @@ for local dev, `https://cashcan.biz` in production) or login/logout will fail wi
 ## Pages
 | Route | What it is |
 |---|---|
-| `/` | Home page with scroll-triggered reveals, untilting hero mockup, floating cards, live drop feed, drifting gradient background, count-up numbers, pinned five-step "how it works" story, and a dashboard preview that expands on scroll |
+| `/` | Home page with scroll-triggered reveals, an illustrative hero mockup (explicitly labelled as example, not live, data), drifting gradient background, count-up numbers, and a pinned five-step "how it works" story |
 | `/signup` | Two-panel signup design; the right panel (`components/AuthPanel.tsx`) has "Continue with Google" / "Continue with email", both redirecting to Auth0 Universal Login with `screen_hint: signup` |
 | `/login` | Two-panel login design, same `AuthPanel`; `?next=/path` returns you where you were after login |
 | `/account` | Signed-in only (client-side redirect to `/login` if not); shows name, email and a log-out button |
@@ -44,13 +44,18 @@ without JavaScript, and everything that moves is skipped when the visitor has re
   without look-identical wins, so it was replaced with this simpler redirect-based panel.
 - Credentials, password reset, and signup are entirely handled by Auth0's own hosted pages and APIs — this
   app's own code never sees a password.
-- Not carried over from the old custom auth: the wallet-address and face-opt-in fields that used to live in
-  the account store have no replacement yet. `/account` shows them as static placeholders ("Not linked yet" /
-  "Not enrolled"). Reintroducing them means a small profile store keyed by the Auth0 `sub` claim (e.g. verify
-  the ID token server-side with `jose` + Auth0's JWKS endpoint in an API route — Databricks, set up in
-  `../databricks/website_users.sql` for the previous password-based accounts, would work for this too), plus
-  linking that to the face-enrollment flow in `face_api/`.
+- `/account` still shows wallet address and face-match enrollment as static placeholders ("Not linked yet" /
+  "Not enrolled") — **this website doesn't call it yet, but a real backend for it now exists**:
+  `face_api/app/accounts.py` has a working Databricks-backed `users`/`interactions`/`leaderboard` schema
+  (`databricks/app_schema.sql`), with `GET /me` (profile + wallet, Auth0-token-verified) and `GET /leaderboard`
+  endpoints already deployed (`face_api`, routed under `/face-api/*` per `vercel.json`). Wiring `/account` up to
+  `GET /me` — and possibly a real leaderboard somewhere on the site — is the next real step here, not a
+  from-scratch build.
 
-## Sample data
-The hero's live feed and the dashboard preview use sample values and are labelled "sample data" / "Demo data" in the UI.
-The real dashboard is the Databricks one in `../dashboard/`.
+## Sample / illustrative content
+What's left that isn't real: the hero's "Example drops" mock panel is static illustrative content, explicitly
+labelled as such in the UI (not live, not historical). The "How an item flows through CashCan" section's example
+numbers (confidence score, cooldown timer, etc.) are a labelled walkthrough of the decision logic, not a claim
+of actual usage history. There is no bin activity / analytics dashboard on this site (it was removed — it showed
+fabricated multi-day charts with no real data behind them); real per-drop activity now lands in the Databricks
+schema above via `face_api`, not anything rendered by this website.

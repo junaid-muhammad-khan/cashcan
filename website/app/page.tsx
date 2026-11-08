@@ -19,10 +19,6 @@ const GATES = [
   ["Liveness check", "passed"],
 ];
 
-// Sample shape for the dashboard preview (cans, organics, waste per day) — labelled "Demo data".
-const BARS = [[30,6,22],[38,7,30],[36,8,32],[40,7,33],[35,6,31],[44,9,38],[37,7,29],[39,8,33],[41,8,34],[42,7,35],[33,6,28],[34,7,30],[45,9,38],[40,8,36]];
-const CONTAM: [string, number][] = [["Paper", 34], ["Cardboard", 30], ["Plastic", 30], ["Clothes", 22], ["Metal", 14]];
-
 const PRIVACY = [
   ["Opt-in only", "Nobody is enrolled without a consent screen."],
   ["Embeddings, not photos", "The bin stores a numeric face template. Raw images are never kept."],
@@ -43,11 +39,10 @@ export default function Home() {
 
         <div className="hero-grid container">
           <div>
-            <div className="pill" data-intro><span className="live-dot" />Prototype · HackCamp 2026 · Solana devnet</div>
             <h1 data-intro>It says compostable.<br /><em>In Vancouver, it still goes in the garbage.</em></h1>
             <p className="lede" data-intro>
-              CashCan is a smart bin that knows your city&apos;s sorting rules, spots contaminated items with two cameras,
-              and pays you a little SOL every time you sort right.
+              CashCan tells you the truth about what&apos;s recyclable in your city, catches contamination
+              before it ruins the batch, and pays you real SOL the moment you get it right.
             </p>
             <div className="cta-row" data-intro>
               <Link href="/signup" className="btn btn-primary">Create free account</Link>
@@ -62,7 +57,7 @@ export default function Home() {
 
           <div className="mock-wrap">
             <div className="mock">
-              <div className="mock-bar"><i /><i /><i /><small>cashcan · bin #04</small><b>● Live</b></div>
+              <div className="mock-bar"><i /><i /><i /><small>cashcan · bin #04</small><b>Preview</b></div>
               <LiveFeed />
             </div>
             <div className="float float-payout">
@@ -93,8 +88,7 @@ export default function Home() {
             <span>Raspberry Pi + 2 cameras</span><span className="sep" aria-hidden="true">/</span>
             <span>MobileNetV2 classifier</span><span className="sep" aria-hidden="true">/</span>
             <span>Solana devnet payouts</span><span className="sep" aria-hidden="true">/</span>
-            <span>Databricks activity log</span><span className="sep" aria-hidden="true">/</span>
-            <span>Gemini explanations</span>
+            <span>Databricks activity log</span>
           </div>
         </section>
 
@@ -205,51 +199,6 @@ export default function Home() {
                 <p>{label}</p>
               </div>
             ))}
-          </div>
-        </section>
-
-        {/* ===== DASHBOARD ===== */}
-        <section className="section" id="dashboard" style={{ paddingTop: 40 }}>
-          <div className="container">
-            <div style={{ textAlign: "center", maxWidth: 760, margin: "0 auto" }} data-reveal>
-              <div className="eyebrow">For cities and haulers</div>
-              <h2>See exactly what people get wrong.</h2>
-              <p className="section-lede">
-                Every drop is logged to a Databricks table and rolled up into a live dashboard: volume by bin,
-                contamination by item, and which anti-abuse gate stopped a payout.
-              </p>
-            </div>
-            <div className="dash">
-              <div className="dash-head"><b>CashCan — Bin Activity</b><span className="badge-amber">Demo data</span></div>
-              <div className="dash-grid">
-                <div className="panel">
-                  <h3>Items per day, by bin</h3>
-                  <div className="bars" role="img" aria-label="Stacked bar chart of items per day over 14 days, mostly cans, then waste, then organics">
-                    {BARS.map(([c, o, w], i) => (
-                      <div className="bar-col" key={i}>
-                        <i style={{ height: w * 2.2, background: "#7A8794" }} />
-                        <i style={{ height: o * 2.2, background: "#E3B23C" }} />
-                        <i style={{ height: c * 2.2, background: "#2BB673" }} />
-                      </div>
-                    ))}
-                  </div>
-                  <div className="legend">
-                    <span><i style={{ background: "#2BB673" }} />Cans</span>
-                    <span><i style={{ background: "#E3B23C" }} />Organics</span>
-                    <span><i style={{ background: "#7A8794" }} />Waste</span>
-                  </div>
-                </div>
-                <div className="panel">
-                  <h3>Contamination by item</h3>
-                  {CONTAM.map(([label, pct]) => (
-                    <div className="hbar" key={label}>
-                      <div><span>{label}</span><b>{pct}%</b></div>
-                      <div className="track"><i style={{ width: `${pct * 2.5}%` }} /></div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
           </div>
         </section>
 

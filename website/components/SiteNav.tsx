@@ -16,7 +16,6 @@ export default function SiteNav() {
       <div className="nav-links">
         <a href="/#how">How it works</a>
         <a href="/#rules">Local rules</a>
-        <a href="/#dashboard">Dashboard</a>
         <a href="/#privacy">Privacy</a>
       </div>
       <div className="nav-actions">
