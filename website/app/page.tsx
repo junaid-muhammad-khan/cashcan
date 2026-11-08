@@ -3,7 +3,6 @@ import HomeMotion from "@/components/HomeMotion";
 import LiveFeed from "@/components/LiveFeed";
 import SiteNav from "@/components/SiteNav";
 import { Check, Coin, Drop, Person, Pin } from "@/components/icons";
-import { getCurrentUser } from "@/lib/auth";
 
 const STEPS = [
   { title: "Step up, get recognised", body: "An opt-in face match identifies you at the bin and links the drop to your Solana wallet. Only face embeddings are stored, never photos." },
@@ -30,9 +29,7 @@ const PRIVACY = [
   ["Delete on request", "Remove your face data and account at any time."],
 ];
 
-export default async function Home() {
-  const user = await getCurrentUser();
-
+export default function Home() {
   return (
     <HomeMotion>
       {/* ===== HERO ===== */}
@@ -42,7 +39,7 @@ export default async function Home() {
         <div aria-hidden="true" className="blob" style={{ width: 380, height: 380, background: "#B9D7F0", left: "40%", top: 520 }} />
         <div aria-hidden="true" className="dots" />
 
-        <SiteNav signedInName={user?.name} />
+        <SiteNav />
 
         <div className="hero-grid container">
           <div>

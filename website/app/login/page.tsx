@@ -1,22 +1,37 @@
-import type { Metadata } from "next";
-import { redirect } from "next/navigation";
-import { Suspense } from "react";
+"use client";
+
+import { useAuth0 } from "@auth0/auth0-react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect } from "react";
+import AuthPanel from "@/components/AuthPanel";
 import AuthShell from "@/components/AuthShell";
-import { getCurrentUser } from "@/lib/auth";
-import LoginForm from "./LoginForm";
 
-export const metadata: Metadata = { title: "Log in — CashCan" };
+export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginPageInner />
+    </Suspense>
+  );
+}
 
-export default async function LoginPage() {
-  if (await getCurrentUser()) redirect("/account");
+function LoginPageInner() {
+  const { isLoading, isAuthenticated } = useAuth0();
+  const router = useRouter();
+  const next = useSearchParams().get("next");
+  const returnTo = next && next.startsWith("/") && !next.startsWith("//") ? next : "/account";
+
+  useEffect(() => {
+    if (!isLoading && isAuthenticated) router.replace(returnTo);
+  }, [isLoading, isAuthenticated, router, returnTo]);
+
+  if (isLoading || isAuthenticated) return null;
+
   return (
     <AuthShell
       heading="Sort it right. Get paid for it."
       body="Your rewards, drop history and wallet live in your CashCan account."
     >
-      <Suspense>
-        <LoginForm />
-      </Suspense>
+      <AuthPanel mode="login" returnTo={returnTo} />
     </AuthShell>
   );
 }
