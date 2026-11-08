@@ -82,9 +82,9 @@ export default function DashboardView({ firstName, walletAddress, welcome }: { f
       <header className="db-top">
         <Link href="/" className="db-logo">
           <span className="db-logo-mark">
-            <svg {...S} width={18} height={18} viewBox="0 0 24 24" strokeWidth={1.8} stroke="#fff">
-              <path d="M7 19H4.8a1.8 1.8 0 01-1.6-2.7L5 13" /><path d="M11 19h8.2a1.8 1.8 0 001.6-2.7l-1.2-2" /><path d="M14 16l-3 3 3 3" />
-              <path d="M8.3 5.6l1.1-1.9a1.8 1.8 0 013.1 0l3.4 5.9" /><path d="M14.7 9.8l1.2-.9.9 3.6" /><path d="M3.6 11.3L5 13l2-1.3" />
+            {/* Same bin mark as the browser-tab icon (app/icon.svg) */}
+            <svg {...S} width={22} height={22} viewBox="0 0 32 32" strokeWidth={2.6} stroke="#fff">
+              <path d="M7 9h18l-2 18H9z" /><path d="M5 9h22" /><path d="M12 9V6h8v3" /><path d="M13 15c1.5-1.5 4.5-1.5 6 0M16 14v8" />
             </svg>
           </span>
           <span>cashcan</span>

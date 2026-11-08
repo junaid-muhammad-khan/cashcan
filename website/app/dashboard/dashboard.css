@@ -10,7 +10,7 @@
 
 .db-top { background: #fff; border-bottom: 1px solid var(--db-line); padding: 16px 28px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .db-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; font-weight: 700; font-size: 22px; letter-spacing: -0.03em; }
-.db-logo-mark { width: 32px; height: 32px; border-radius: 9px; background: var(--db-forest); display: flex; align-items: center; justify-content: center; }
+.db-logo-mark { width: 32px; height: 32px; border-radius: 8px; background: #157a46; display: flex; align-items: center; justify-content: center; }
 .db-top-links { display: flex; gap: 8px; }
 .db-pill { display: inline-flex; align-items: center; gap: 10px; min-height: 36px; padding: 0 14px; border-radius: 10px; border: 1px solid #deddd5; background: #fff; color: var(--db-ink); font: 600 13px var(--font-inter), sans-serif; text-decoration: none; cursor: pointer; }
 .db-pill:hover { border-color: #b9bbae; }
