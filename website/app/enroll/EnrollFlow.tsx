@@ -6,7 +6,7 @@ import { useAuth0 } from "@auth0/auth0-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import AuthShell from "@/components/AuthShell";
 import { Check, LogoMark } from "@/components/icons";
-import { checkPose, enroll, FaceApiError, getMe, matchFrame, userIdFromSub, type Me } from "@/lib/faceApi";
+import { checkPose, enroll, FaceApiError, getMe, matchFrame, userIdFromSub, type MatchResult, type Me } from "@/lib/faceApi";
 import { useCamera } from "./useCamera";
 
 type Step = "loading" | "already" | "consent" | "camera" | "scan" | "saving" | "duplicate" | "test" | "done";
@@ -81,6 +81,51 @@ export default function EnrollFlow() {
     await cam.start();
   }
 
+  // A REAL check, not a replay of what was just saved: the person turns back to the camera, then three fresh pictures taken over about a
+  // second are matched against the saved face, the way a bin does it. At least two must match this account (and nobody else).
+  const verify = useCallback(async (id: number) => {
+    setStep("test");
+    setTest({ busy: true });
+    setLiveHint("Now look straight at the camera for a quick check.");
+    let streak = 0;
+    const t0 = Date.now();
+    while (Date.now() - t0 < 20000 && streak < 2) {            // wait until they are facing the camera again (the last photo was a turned head)
+      if (runId.current !== id) return;
+      const f = await cam.capture();
+      if (f) {
+        try {
+          const r = await checkPose(f);
+          if (r.found && r.pose === "front") { streak++; setLiveHint("Hold still…"); }
+          else { streak = 0; setLiveHint(r.hint || "Now look straight at the camera for a quick check."); }
+        } catch { /* try again */ }
+      }
+      await sleep(POLL_MS);
+    }
+    const results: MatchResult[] = [];
+    for (let i = 0; i < 3; i++) {
+      if (runId.current !== id) return;
+      await sleep(i === 0 ? 400 : 350);
+      const f = await cam.capture();
+      try { if (f) results.push(await matchFrame(f)); } catch (e) { results.push({ matched: false, message: (e as Error).message }); }
+    }
+    if (runId.current !== id) return;
+    const mine = (r: MatchResult) => !!r.matched && (!me?.user_id || r.user_id === me.user_id);
+    const wrong = results.filter((r) => r.matched && me?.user_id && r.user_id !== me.user_id).length;
+    const ok = results.filter(mine).length >= 2 && wrong === 0;
+    // The numbers stay in the log, not on screen; 0.45 is the match threshold (face_api MATCH_THRESHOLD).
+    console.info("[cashcan] face verification", { ok, frames: results.map((r) => ({ matched: mine(r), similarity: r.score ?? null, reason: r.reason ?? null })), threshold: 0.45 });
+    setLiveHint("");
+    setTest({
+      busy: false, ok,
+      message: ok ? undefined : "We couldn't match fresh pictures of you to your saved face. Look straight at the camera in good light and verify again.",
+    });
+  }, [cam, me]);
+
+  async function verifyAgain() {
+    const id = ++runId.current;
+    await verify(id);
+  }
+
   // Send the photos. replace=true deletes the old account that holds this same face (the person chose that in the "duplicate" step).
   const save = useCallback(async (frames: Blob[], replace: boolean, id: number) => {
     try {
@@ -99,23 +144,8 @@ export default function EnrollFlow() {
     if (runId.current !== id) return;
     setDupFrames(null);
     try { sessionStorage.removeItem("cashcan.profile.v1"); } catch { /* ignore */ }  // force a fresh profile (face_enrolled is now true)
-    setStep("test");
-    setTest({ busy: true });
-    await new Promise((r) => setTimeout(r, 900));
-    const f = await cam.capture();
-    try {
-      const res = f ? await matchFrame(f) : null;
-      const isMe = !!res?.matched && (!me?.user_id || res.user_id === me.user_id);
-      // The numbers stay in the log, not on screen: similarity from the face API, 45% is the match threshold (face_api MATCH_THRESHOLD).
-      console.info("[cashcan] face test", { matched: isMe, similarity: res?.score ?? null, threshold: 0.45, reason: res?.reason ?? null });
-      setTest({
-        busy: false, ok: isMe, score: res?.score != null ? Math.round(res.score * 100) : undefined,
-        message: isMe ? undefined : res?.message ?? "The test frame didn't match yet. Better light usually fixes it.",
-      });
-    } catch (e) {
-      setTest({ busy: false, ok: false, message: (e as Error).message });
-    }
-  }, [cam, me, router, token, user, wallet]);
+    await verify(id);
+  }, [cam, me, router, token, user, verify, wallet]);
 
   async function replaceOldAccount() {
     if (!dupFrames) return;
@@ -281,14 +311,14 @@ export default function EnrollFlow() {
         <div className="en-fade">
           <h1 className="en-title">
             {step === "camera" ? "Check your camera" : step === "scan" ? (captured >= POSES.length ? "Got it" : pose.cue)
-              : step === "saving" ? "Saving your templates…" : test.busy ? "Checking it works…" : test.ok ? "It recognises you" : "Not quite yet"}
+              : step === "saving" ? "Saving your templates…" : test.busy ? "Checking it works…" : test.ok ? "It recognises you" : "We couldn't verify you yet"}
           </h1>
           <p className="sub">
             {step === "camera" ? "Fit your face inside the oval, in even light, about an arm's length away. Glasses are fine; hats and masks are not."
               : step === "scan" ? "Hold each position. We take the picture automatically."
               : step === "saving" ? "Turning your pictures into templates. The pictures themselves are not kept."
-              : test.busy ? "Look at the camera for one more picture."
-              : test.ok ? "We matched a fresh picture against your new templates, the same way a bin will."
+              : test.busy ? (liveHint || "Look straight at the camera for a quick check.")
+              : test.ok ? "We matched fresh pictures of you against your saved face, the same way a bin will."
               : test.message}
           </p>
 
@@ -315,6 +345,7 @@ export default function EnrollFlow() {
                   style={{ transform: pose.cls === "nudge-l" ? "rotate(180deg)" : pose.cls ? "none" : "rotate(90deg)" }}><path d="M5 12h14M13 6l6 6-6 6" /></svg>
               </span>{liveHint || (pose.label === "Straight" ? "Look straight ahead" : pose.cue)}</div>
             )}
+            {step === "test" && test.busy && liveHint && <div className="en-cue">{liveHint}</div>}
             <span className="en-count" aria-live="polite">{captured} of {POSES.length}</span>
           </div>
 
@@ -341,7 +372,8 @@ export default function EnrollFlow() {
             {step === "scan" && <button type="button" className="btn btn-ghost" onClick={restart}>Start over</button>}
             {step === "test" && !test.busy && (
               <>
-                <button type="button" className="btn btn-primary" onClick={finish}>{test.ok ? "Finish setup" : "Finish anyway"}</button>
+                <button type="button" className={`btn ${test.ok ? "btn-primary" : "btn-ghost"}`} onClick={finish}>{test.ok ? "Finish setup" : "Finish anyway"}</button>
+                {!test.ok && <button type="button" className="btn btn-primary" onClick={verifyAgain}>Verify again</button>}
                 <button type="button" className="btn btn-ghost" onClick={restart}>Scan again</button>
               </>
             )}
