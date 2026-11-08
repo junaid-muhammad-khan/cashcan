@@ -4,9 +4,37 @@ import { AppFooter, AppHeader } from "@/components/AppChrome";
 import { useEffect, useRef, useState } from "react";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
-import { DETECTIONS, OUTCOMES, RANGE_ORDER, RANGES, type Detection, type Outcome, type RangeKey } from "./data";
+import { CATEGORIES, DETECTIONS, HISTOGRAMS, OUTCOMES, RANGE_ORDER, RANGES, REWARD_PER_CONTAINER_SOL, type Category, type Detection, type RangeKey } from "./data";
 
 gsap.registerPlugin(useGSAP);
+
+// Live SOL -> CAD rate from CoinGecko's public API (CORS-enabled), refreshed every minute.
+function useSolCad() {
+  const [rate, setRate] = useState<number | null>(null);
+  const [updated, setUpdated] = useState<Date | null>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    async function load() {
+      try {
+        const r = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=cad", { cache: "no-store" });
+        if (!r.ok) throw new Error(String(r.status));
+        const cad = (await r.json())?.solana?.cad;
+        if (typeof cad !== "number") throw new Error("no rate");
+        if (alive) { setRate(cad); setUpdated(new Date()); setFailed(false); }
+      } catch {
+        if (alive) setFailed(true); // keep showing the last good rate, if any
+      }
+    }
+    load();
+    const id = setInterval(load, 60_000);
+    return () => { alive = false; clearInterval(id); };
+  }, []);
+  return { rate, updated, failed };
+}
+
+const cad = new Intl.NumberFormat("en-CA", { style: "currency", currency: "CAD" });
+const timeFmt = new Intl.DateTimeFormat("en-CA", { hour: "numeric", minute: "2-digit" });
 
 const S = { stroke: "currentColor", fill: "none", strokeLinecap: "round" as const, strokeLinejoin: "round" as const, "aria-hidden": true };
 
@@ -42,18 +70,32 @@ export default function DashboardView({ firstName, walletAddress, onSaveWallet, 
   const menuRef = useRef<HTMLDivElement>(null);
   const [range, setRange] = useState<RangeKey>("week");
   const [menuOpen, setMenuOpen] = useState(false);
-  const [filter, setFilter] = useState<Outcome | null>(null);
   const [open, setOpen] = useState<number | null>(null);
+  const [hidden, setHidden] = useState<Set<Category>>(new Set());
+  const { rate, updated, failed } = useSolCad();
 
   const R = RANGES[range];
   const pct = Math.round((100 * R.confirmed) / R.total);
+  const H = HISTOGRAMS[range];
+  const totals: Record<Category, number> = { cans: 0, organics: 0, waste: 0 };
+  for (const b of H.buckets) for (const c of CATEGORIES) totals[c.key] += b[c.key];
+  const shown = CATEGORIES.filter((c) => !hidden.has(c.key));
+  const bucketTotal = (b: (typeof H.buckets)[number]) => shown.reduce((s, c) => s + b[c.key], 0);
   // Six even axis steps, using the smallest "nice" step that leaves ~10% headroom above the tallest bar.
-  const rough = (Math.max(R.confirmed, R.flagged, R.review) * 1.1) / 6;
-  const step = [1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500].find((s) => s >= rough) ?? 1000;
+  const rough = (Math.max(1, ...H.buckets.map(bucketTotal)) * 1.1) / 6;
+  const step = [1, 2, 4, 5, 8, 10, 15, 20, 25, 50, 100, 200, 250, 500].find((s) => s >= rough) ?? 1000;
   const max = step * 6;
   const ticks = Array.from({ length: 7 }, (_, i) => Math.round((i * max) / 6));
-  const values: Record<Outcome, number> = { confirmed: R.confirmed, flagged: R.flagged, review: R.review };
-  const detections = DETECTIONS.filter((d) => !filter || d.kind === filter);
+  const labelEvery = H.buckets.length > 14 ? 5 : H.buckets.length > 8 ? 2 : 1;
+  const toggle = (k: Category) => setHidden((h) => {
+    const n = new Set(h);
+    if (n.has(k)) n.delete(k); else if (n.size < CATEGORIES.length - 1) n.add(k); // keep at least one visible
+    return n;
+  });
+
+  const containers = totals.cans;
+  const sol = containers * REWARD_PER_CONTAINER_SOL;
+  const detections = DETECTIONS;
 
   // Close the range menu on outside click / Escape.
   useEffect(() => {
@@ -74,21 +116,19 @@ export default function DashboardView({ firstName, walletAddress, onSaveWallet, 
     return () => mm.revert();
   }, { scope: root });
 
-  // Bars grow whenever the range changes.
+  // Bars grow and the SOL total counts up whenever the range changes.
   useGSAP(() => {
     const mm = gsap.matchMedia();
     mm.add("(prefers-reduced-motion: no-preference)", () => {
-      gsap.from(".db-bar", { scaleY: 0, duration: 0.8, ease: "power3.out", stagger: 0.08, transformOrigin: "50% 100%" });
+      gsap.from(".db-hcol", { scaleY: 0, duration: 0.7, ease: "power3.out", stagger: 0.025, transformOrigin: "50% 100%" });
+      const el = root.current?.querySelector<HTMLElement>(".db-sol-num");
+      if (el) {
+        const o = { v: 0 };
+        gsap.to(o, { v: sol, duration: 1.1, ease: "power2.out", onUpdate: () => { el.textContent = o.v.toFixed(3); } });
+      }
     });
     return () => mm.revert();
   }, { scope: root, dependencies: [range] });
-
-  const kpis = [
-    { label: "Items detected", value: R.total, sub: `Across ${R.days}`, icon: null },
-    { label: "Confirmed sorts", value: R.confirmed, sub: `${pct}% of detections`, icon: "check" },
-    { label: "Wrong-bin saves", value: R.flagged, sub: "Steered to the right container", icon: "warn" },
-    { label: "Awaiting review", value: R.review, sub: "Local rules or item unclear", icon: "clip" },
-  ] as const;
 
   return (
     <div className="db" ref={root}>
@@ -117,7 +157,7 @@ export default function DashboardView({ firstName, walletAddress, onSaveWallet, 
                 <div className="db-menu" role="menu">
                   {RANGE_ORDER.map((k) => (
                     <button key={k} type="button" role="menuitemradio" aria-checked={range === k} className="db-menu-item"
-                      onClick={() => { setRange(k); setFilter(null); setOpen(null); setMenuOpen(false); }}>
+                      onClick={() => { setRange(k); setOpen(null); setMenuOpen(false); }}>
                       {RANGES[k].label}
                     </button>
                   ))}
@@ -135,11 +175,6 @@ export default function DashboardView({ firstName, walletAddress, onSaveWallet, 
                   <div className="db-meta">Today, 7 November · Kitchen station</div>
                   <div className="db-recent-actions">
                     <a href="#activity" className="db-link">View all activity <Arrow /></a>
-                    {filter && (
-                      <button type="button" className="db-chip" onClick={() => setFilter(null)}>
-                        {OUTCOMES.find((o) => o.key === filter)!.label} · Clear
-                      </button>
-                    )}
                   </div>
                 </div>
                 <ul className="db-det-list">
@@ -165,19 +200,38 @@ export default function DashboardView({ firstName, walletAddress, onSaveWallet, 
                 {detections.length === 0 && <p className="db-empty">No recent detections in this group.</p>}
                 <div className="db-recent-foot">
                   <p>Sample routes illustrate the flow, not official acceptance rules. Confirm with your local collection program.</p>
-                  <p className="strong">Rewards not evaluated · eligibility and rates pending configuration.</p>
+                  <p className="strong">Only cans &amp; containers earn SOL for now. Reward rates are placeholders.</p>
                 </div>
               </section>
+            </div>
 
+            {/* ===== right ===== */}
+            <div className="db-col db-right">
               <section id="redeem" className="db-rewards db-rise" aria-labelledby="rw-h">
-                <div className="db-rewards-head">
-                  <h2 id="rw-h">Your rewards</h2>
-                  <svg {...S} width={18} height={18} viewBox="0 0 24 24" strokeWidth={1.8} stroke="#DDE8B0"><rect x="3" y="8" width="18" height="4" rx="1" /><path d="M5 12v9h14v-9M12 8v13" /><path d="M12 8c-1.5-3-5-3.5-5-1s5 1 5 1c1.5-3 5-3.5 5-1s-5 1-5 1" /></svg>
+                <div className="db-rewards-main">
+                  <div className="db-rewards-head">
+                    <h2 id="rw-h">Your rewards</h2>
+                    <span className="db-badge">{R.label} · Demo data</span>
+                  </div>
+                  <div className="db-sol" aria-label={`${sol.toFixed(3)} SOL earned`}>
+                    <span className="db-sol-num">{sol.toFixed(3)}</span>
+                    <span className="db-sol-unit">SOL</span>
+                  </div>
+                  <div className="db-cad">
+                    {rate !== null ? <>≈ <b>{cad.format(sol * rate)}</b> CAD</> : failed ? "CAD value unavailable right now" : "Loading CAD value…"}
+                  </div>
+                  <div className="db-rate">
+                    <span className={`db-live${rate !== null && !failed ? "" : " off"}`} aria-hidden="true" />
+                    {rate !== null
+                      ? <>Live rate · 1 SOL = {cad.format(rate)}{updated && <> · updated {timeFmt.format(updated)}</>}{failed && " · couldn't refresh"}</>
+                      : failed ? "Live rate unavailable" : "Fetching live rate…"}
+                    <span className="db-rate-src">via CoinGecko</span>
+                  </div>
+                  <p className="db-body">
+                    From <b>{containers}</b> reward-eligible containers · {REWARD_PER_CONTAINER_SOL} SOL each. Paid on Solana devnet, which has no cash value yet.
+                  </p>
                 </div>
-                <span className="db-badge">Pending configuration</span>
-                <div className="db-dash" aria-hidden="true" />
-                <p className="db-muted">No crypto rewards issued</p>
-                <p className="db-body">Small crypto rewards are planned for eligible detected items. Eligibility and payout rates haven&apos;t been configured yet.</p>
+                <div className="db-rewards-side">
                 <div className="db-wallet">
                   <span>
                     <svg {...S} width={15} height={15} viewBox="0 0 24 24" strokeWidth={1.8}><rect x="3" y="6" width="18" height="14" rx="2" /><path d="M3 10h18M16 15h2" /></svg>
@@ -202,24 +256,8 @@ export default function DashboardView({ firstName, walletAddress, onSaveWallet, 
                     <svg {...S} width={14} height={14} viewBox="0 0 24 24" strokeWidth={2.2}><path d="M5 12h14M13 6l6 6-6 6" /></svg>
                   </button>
                 )}
-                <p className="db-small">Keep sorting and tracking. A wallet isn&apos;t needed for activity history.</p>
-              </section>
-            </div>
-
-            {/* ===== right ===== */}
-            <div className="db-col db-right">
-              <section className="db-kpis" aria-label="This period at a glance">
-                {kpis.map((k) => (
-                  <div key={k.label} className="db-card db-kpi db-rise">
-                    <div className="db-kpi-head">
-                      <span>{k.label}</span>
-                      {k.icon === "check" && <svg {...S} width={16} height={16} viewBox="0 0 24 24" strokeWidth={1.8}><circle cx="12" cy="12" r="9" /><path d="M8.5 12l2.5 2.5 4.5-5" /></svg>}
-                      {k.icon === "warn" && <svg {...S} width={16} height={16} viewBox="0 0 24 24" strokeWidth={1.8} stroke="#B5832F"><path d="M12 3l9.5 17h-19z" /><path d="M12 10v4M12 17.5v.5" /></svg>}
-                      {k.icon === "clip" && <svg {...S} width={16} height={16} viewBox="0 0 24 24" strokeWidth={1.8}><rect x="5" y="4" width="14" height="17" rx="2" /><path d="M9 4V3h6v1M9 10h6M9 14h6" /></svg>}
-                    </div>
-                    <div className="db-kpi-val"><strong>{k.value}</strong><span>{k.sub}</span></div>
-                  </div>
-                ))}
+                <p className="db-small">Rewards go to this wallet. A wallet isn&apos;t needed for activity history.</p>
+                </div>
               </section>
 
               <section className="db-card db-learn db-rise" aria-labelledby="learn-h">
@@ -232,14 +270,25 @@ export default function DashboardView({ firstName, walletAddress, onSaveWallet, 
                 </div>
 
                 <div className="db-learn-grid">
-                  <div className="db-pct">
-                    <strong>{pct}%</strong>
-                    <p>of detected items have a confirmed sorting outcome.</p>
-                    <small>Outcome tracking, not classifier accuracy.</small>
+                  <div className="db-legend" role="group" aria-label="Bins: click to show or hide">
+                    {CATEGORIES.map((c) => {
+                      const on = !hidden.has(c.key);
+                      return (
+                        <button key={c.key} type="button" className={`db-leg${on ? "" : " off"}`} aria-pressed={on} onClick={() => toggle(c.key)}>
+                          <span className="db-leg-sw" style={{ background: c.color }} />
+                          <span className="db-leg-txt">
+                            <small>{c.label}</small>
+                            <strong>{totals[c.key]}</strong>
+                            <em>{Math.round((100 * totals[c.key]) / R.total)}% of items</em>
+                          </span>
+                        </button>
+                      );
+                    })}
+                    <small className="db-leg-note">{pct}% of items had a confirmed sorting outcome. Click a bin to show or hide it.</small>
                   </div>
 
                   <div>
-                    <div className="db-chart-title">Sorting outcomes</div>
+                    <div className="db-chart-title">Items sorted {H.unit}, by bin</div>
                     <div className="db-axis-label">Items</div>
                     <div className="db-chart">
                       {ticks.map((t, i) => (
@@ -247,28 +296,24 @@ export default function DashboardView({ firstName, walletAddress, onSaveWallet, 
                           <span>{t}</span><i />
                         </div>
                       ))}
-                      <div className="db-bars" role="group" aria-label={`Sorting outcomes: ${R.confirmed} confirmed, ${R.flagged} redirected, ${R.review} to review`}>
-                        {OUTCOMES.map((o) => {
-                          const v = values[o.key];
-                          const on = !filter || filter === o.key;
+                      <div className="db-hist" role="img"
+                        aria-label={`Histogram of items sorted ${H.unit}: ${shown.map((c) => `${totals[c.key]} ${c.label.toLowerCase()}`).join(", ")}`}
+                        style={{ gridTemplateColumns: `repeat(${H.buckets.length}, minmax(0, 1fr))` }}>
+                        {H.buckets.map((b) => {
+                          const n = bucketTotal(b);
                           return (
-                            <div key={o.key} className="db-bar-col" style={{ opacity: on ? 1 : 0.35 }}>
-                              <span className="db-bar-val">{v}</span>
-                              <button
-                                type="button"
-                                className="db-bar"
-                                aria-pressed={filter === o.key}
-                                aria-label={`${o.label}: ${v} items. Show these in recent detections`}
-                                onClick={() => { setFilter(filter === o.key ? null : o.key); setOpen(null); }}
-                                style={{ height: `${(v / max) * 100}%`, background: o.color }}
-                              />
+                            <div key={b.label} className="db-hcol" style={{ height: `${(n / max) * 100}%` }}
+                              title={`${b.label}: ${n} items (${shown.map((c) => `${b[c.key]} ${c.label.toLowerCase()}`).join(", ")})`}>
+                              {shown.map((c) => (
+                                <i key={c.key} style={{ flexGrow: b[c.key], background: c.color }} />
+                              ))}
                             </div>
                           );
                         })}
                       </div>
                     </div>
-                    <div className="db-bar-labels">
-                      {OUTCOMES.map((o) => <span key={o.key} style={{ opacity: !filter || filter === o.key ? 1 : 0.35 }}>{o.label}</span>)}
+                    <div className="db-hist-labels" style={{ gridTemplateColumns: `repeat(${H.buckets.length}, minmax(0, 1fr))` }}>
+                      {H.buckets.map((b, i) => <span key={b.label}>{i % labelEvery === 0 ? b.label : ""}</span>)}
                     </div>
                     <p className="db-foot">{R.total} items total · {R.long} · Demo data</p>
                   </div>

@@ -16,15 +16,24 @@ export default function DashboardPage() {
   );
 }
 
+// Local dev only: /dashboard?preview=1 shows the dashboard with demo props, skipping login and the face check.
+// NODE_ENV is "production" in every deployed build, so this never works on the live site.
+const DEV_PREVIEW = process.env.NODE_ENV === "development";
+
 function DashboardPageInner() {
   const { isLoading, isAuthenticated, user, loginWithRedirect } = useAuth0();
-  const welcome = useSearchParams().get("welcome") === "1";
+  const params = useSearchParams();
+  const welcome = params.get("welcome") === "1";
+  const preview = DEV_PREVIEW && params.get("preview") === "1";
 
   useEffect(() => {
+    if (preview) return;
     if (!isLoading && !isAuthenticated) {
       loginWithRedirect({ appState: { returnTo: "/dashboard" } });
     }
-  }, [isLoading, isAuthenticated, loginWithRedirect]);
+  }, [preview, isLoading, isAuthenticated, loginWithRedirect]);
+
+  if (preview) return <DashboardView firstName="Preview" walletAddress={null} welcome={false} />;
 
   if (isLoading || !isAuthenticated || !user) return null;
 
