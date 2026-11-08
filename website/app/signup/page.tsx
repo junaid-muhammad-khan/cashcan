@@ -33,7 +33,7 @@ export default function SignupPage() {
   const router = useRouter();
 
   useEffect(() => {
-    if (!isLoading && isAuthenticated) router.replace("/account");
+    if (!isLoading && isAuthenticated) router.replace("/dashboard");
   }, [isLoading, isAuthenticated, router]);
 
   if (isLoading || isAuthenticated) return null;
@@ -44,7 +44,7 @@ export default function SignupPage() {
       body="Three steps and the next CashCan bin knows where to send your rewards."
       aside={<Journey />}
     >
-      <AuthPanel mode="signup" returnTo="/account?welcome=1" />
+      <AuthPanel mode="signup" returnTo="/enroll" />
     </AuthShell>
   );
 }

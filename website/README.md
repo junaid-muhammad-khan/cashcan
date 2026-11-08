@@ -23,7 +23,9 @@ for local dev, `https://cashcan.biz` in production) or login/logout will fail wi
 | `/` | Home page with scroll-triggered reveals, an illustrative hero mockup (explicitly labelled as example, not live, data), drifting gradient background, count-up numbers, and a pinned five-step "how it works" story |
 | `/signup` | Two-panel signup design; the right panel (`components/AuthPanel.tsx`) has "Continue with Google" / "Continue with email", both redirecting to Auth0 Universal Login with `screen_hint: signup` |
 | `/login` | Two-panel login design, same `AuthPanel`; `?next=/path` returns you where you were after login |
-| `/account` | Signed-in only (client-side redirect to `/login` if not); shows name, email and a log-out button |
+| `/enroll` | Face match setup, where sign-up lands. Consent (+ Solana wallet if the profile has none, saved with `PUT /me`), live webcam with an oval guide, three auto-captured angles (straight, left, right), `POST /enroll` to the face API, then a one-frame `POST /match` test showing the similarity score. Handles camera blocked/missing, unclear frames (per-angle tips from the API's quality checks) and already-enrolled (409). Skippable |
+| `/dashboard` | Signed-in only (client-side redirect to Auth0 if not); where login and signup land. Recent detections (click to expand), rewards card (pending configuration), four summary cards and the sorting-outcomes chart. The date-range menu updates every number; clicking a bar filters the detections. **All figures are demo data** (`app/dashboard/data.ts`) until drops are linked to accounts |
+| `/account` | Signed-in only (client-side redirect to `/login` if not); shows name, email, a link back to the dashboard and a log-out button ("Profile" in the dashboard header) |
 
 All motion is in `components/HomeMotion.tsx` and `components/AuthShell.tsx`. Content is visible
 without JavaScript, and everything that moves is skipped when the visitor has reduced motion on.
@@ -52,10 +54,24 @@ without JavaScript, and everything that moves is skipped when the visitor has re
   `GET /me` — and possibly a real leaderboard somewhere on the site — is the next real step here, not a
   from-scratch build.
 
+## Face match setup (`/enroll`)
+- Talks to the face API in `../face_api` through `/face-api/*` (`lib/faceApi.ts`). Vercel routes that path to the
+  face service (`../vercel.json`); for local dev, start the API (`uvicorn app.main:app_factory --factory --port 8000`
+  in `face_api/`) and set `FACE_API_ORIGIN=http://localhost:8000` so `next.config.mjs` proxies it.
+- Identity: with `NEXT_PUBLIC_AUTH0_AUDIENCE` set (same value as the face API's `AUTH0_AUDIENCE`), the page sends an
+  Auth0 access token and the API takes the user and wallet from the account. Without it, the API must run without
+  Auth0 and the page sends a user id derived from the Auth0 `sub` plus the wallet typed on the page.
+- The API stores 512-number embeddings only; the page never uploads anything but the three JPEG frames and one test frame.
+- Not verified end to end in production: whether Vercel's `/face-api` rewrite strips the prefix before it reaches FastAPI
+  (if it doesn't, the API's routes need a `/face-api` root path), and the Auth0 API/audience setup.
+- Tested locally against the real face API (SQLite store, Auth0 off) with a fake webcam: enroll, match test,
+  re-enroll refused (409) and a no-face scan (per-angle tips) all behave as described.
+
 ## Sample / illustrative content
-What's left that isn't real: the hero's "Example drops" mock panel is static illustrative content, explicitly
-labelled as such in the UI (not live, not historical). The "How an item flows through CashCan" section's example
-numbers (confidence score, cooldown timer, etc.) are a labelled walkthrough of the decision logic, not a claim
-of actual usage history. There is no bin activity / analytics dashboard on this site (it was removed — it showed
-fabricated multi-day charts with no real data behind them); real per-drop activity now lands in the Databricks
-schema above via `face_api`, not anything rendered by this website.
+The homepage's old "Bin Activity" section (fabricated 14-day charts, no real data behind them) has been removed
+entirely — it's been replaced by the real `/dashboard` page above, which is honest about still running on demo
+figures (`app/dashboard/data.ts`) until real drops are linked to accounts, rather than a marketing section
+pretending to be live. The hero's "Example drops" mock panel is static illustrative content, explicitly labelled
+as such in the UI (not live, not historical). The "How an item flows through CashCan" section's example numbers
+(confidence score, cooldown timer, etc.) are a labelled walkthrough of the decision logic, not a claim of actual
+usage history. Real per-drop activity lands in the Databricks schema from the Auth0 section above via `face_api`.

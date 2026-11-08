@@ -42,18 +42,21 @@ function AccountPageInner() {
             <dt>Name</dt><dd>{user.name}</dd>
             <dt>Email</dt><dd>{user.email}</dd>
             <dt>Wallet</dt><dd>Not linked yet</dd>
-            <dt>Face match</dt><dd>Not enrolled</dd>
+            <dt>Face match</dt><dd><a href="/enroll">Set up face match</a></dd>
           </dl>
         </section>
 
-        <button
-          type="button"
-          className="btn btn-ghost"
-          style={{ marginTop: 28 }}
-          onClick={() => logout({ logoutParams: { returnTo: window.location.origin } })}
-        >
-          Log out
-        </button>
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 28 }}>
+          <a href="/dashboard" className="btn btn-primary">Back to dashboard</a>
+          <a href="/enroll" className="btn btn-ghost">Set up face match</a>
+          <button
+            type="button"
+            className="btn btn-ghost"
+            onClick={() => logout({ logoutParams: { returnTo: window.location.origin } })}
+          >
+            Log out
+          </button>
+        </div>
       </main>
     </div>
   );

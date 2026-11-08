@@ -21,7 +21,7 @@ export default function SiteNav() {
       <div className="nav-actions">
         {isLoading ? null : isAuthenticated ? (
           <>
-            <Link href="/account" className="btn btn-dark">Your account</Link>
+            <Link href="/dashboard" className="btn btn-dark">Dashboard</Link>
             <button
               type="button"
               className="text-link"

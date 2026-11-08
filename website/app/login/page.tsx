@@ -18,7 +18,7 @@ function LoginPageInner() {
   const { isLoading, isAuthenticated } = useAuth0();
   const router = useRouter();
   const next = useSearchParams().get("next");
-  const returnTo = next && next.startsWith("/") && !next.startsWith("//") ? next : "/account";
+  const returnTo = next && next.startsWith("/") && !next.startsWith("//") ? next : "/dashboard";
 
   useEffect(() => {
     if (!isLoading && isAuthenticated) router.replace(returnTo);

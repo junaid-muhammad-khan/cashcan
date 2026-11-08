@@ -4,7 +4,8 @@ Source of the scroll-animated home page designed in Claude's design canvas:
 https://claude.ai/artifact/TkYWfdG7fJxha1xG49K4ga (private until shared from its Share menu).
 
 - `Main.dc.html` — the page (Design Component format: HTML markup plus a small logic class)
-- `Login.dc.html`, `Signup.dc.html` — the log-in and sign-up screens
+- `Login.dc.html`, `Signup.dc.html`, `Dashboard.dc.html` — log-in, sign-up and signed-in dashboard screens
+- `Enroll.dc.html` — face match setup after sign-up
 - `canvas.json` — the canvas index
 
 What it includes: scroll-triggered reveals, hero mockup that untilts on scroll, floating
