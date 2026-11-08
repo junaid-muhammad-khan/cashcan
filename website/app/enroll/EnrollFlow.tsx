@@ -228,29 +228,16 @@ export default function EnrollFlow() {
             ))}
           </div>
 
-          {needsWallet ? (
-            <>
-              <div className="alert" role="alert" style={{ marginTop: 20 }}>
-                Add a Solana wallet in your profile first — that&apos;s where CashCan sends your SOL rewards.
-              </div>
-              <div className="cta-row" style={{ marginTop: 16 }}>
-                <Link href="/account" className="btn btn-primary">Add wallet in profile</Link>
-              </div>
-            </>
-          ) : (
-            <>
-              <label className="check check-card" style={{ marginTop: 16, borderColor: errs.consent ? "var(--danger)" : undefined }}>
-                <input type="checkbox" checked={consent} onChange={(e) => { setConsent(e.target.checked); setErrs((x) => ({ ...x, consent: undefined })); }} />
-                <span>I agree to let CashCan create a face template from my camera to recognize me at bins, and I can delete it any time.</span>
-              </label>
-              {errs.consent && <p className="en-err" role="alert">{errs.consent}</p>}
-              {error && <div className="alert" role="alert" style={{ marginTop: 16 }}>{error}</div>}
+          <label className="check check-card" style={{ marginTop: 16, borderColor: errs.consent ? "var(--danger)" : undefined }}>
+            <input type="checkbox" checked={consent} onChange={(e) => { setConsent(e.target.checked); setErrs((x) => ({ ...x, consent: undefined })); }} />
+            <span>I agree to let CashCan create a face template from my camera to recognize me at bins, and I can delete it any time.</span>
+          </label>
+          {errs.consent && <p className="en-err" role="alert">{errs.consent}</p>}
+          {error && <div className="alert" role="alert" style={{ marginTop: 16 }}>{error}</div>}
 
-              <div className="cta-row" style={{ marginTop: 24 }}>
-                <button type="button" className="btn btn-primary" onClick={onConsentContinue}>Continue</button>
-              </div>
-            </>
-          )}
+          <div className="cta-row" style={{ marginTop: 24 }}>
+            <button type="button" className="btn btn-primary" onClick={onConsentContinue}>Continue</button>
+          </div>
         </div>
       )}
 
@@ -340,8 +327,17 @@ export default function EnrollFlow() {
             <li><Check />Rewards go to {wallet ? `${wallet.slice(0, 4)}…${wallet.slice(-4)}` : "your wallet"}</li>
             <li><Check />Delete or redo it any time</li>
           </ul>
+          {needsWallet && (
+            <div className="alert" role="alert" style={{ marginTop: 16 }}>
+              Add a Solana wallet in your profile first. That&apos;s where CashCan sends your SOL rewards.
+            </div>
+          )}
           <div className="cta-row" style={{ marginTop: 24 }}>
-            <Link href="/dashboard?welcome=1" className="btn btn-primary">Go to your dashboard</Link>
+            {needsWallet ? (
+              <Link href="/account" className="btn btn-primary">Add wallet in profile</Link>
+            ) : (
+              <Link href="/dashboard?welcome=1" className="btn btn-primary">Go to your dashboard</Link>
+            )}
           </div>
         </div>
       )}
