@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CashCan – Register your face</title>
+<style>
+  :root {
+    --bg: #f6f7f4; --card: #ffffff; --text: #1b2420; --muted: #5d6a63; --line: #dfe4de;
+    --accent: #1f7a4d; --accent-text: #ffffff; --danger: #b3261e; --danger-bg: #fdecea; --ok-bg: #e6f4ec;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #101512; --card: #18201b; --text: #e8eee9; --muted: #9aaa9f; --line: #2a362f;
+      --accent: #4cc38a; --accent-text: #08130d; --danger: #ff8a80; --danger-bg: #3a1c1a; --ok-bg: #16301f;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 520px; margin: 0 auto; padding: 24px 16px 48px; }
+  header { margin-bottom: 16px; }
+  h1 { font-size: 1.5rem; margin: 0 0 4px; }
+  h2 { font-size: 1.15rem; margin: 0 0 8px; }
+  h2:focus { outline: none; }
+  p { margin: 0 0 12px; }
+  .sub { color: var(--muted); margin: 0; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 20px; }
+  .steps { display: flex; gap: 6px; list-style: none; padding: 0; margin: 0 0 16px; }
+  .steps li { flex: 1; height: 4px; border-radius: 2px; background: var(--line); }
+  .steps li.done, .steps li.current { background: var(--accent); }
+  .steps li.current { opacity: .55; }
+  ul.facts { padding-left: 20px; margin: 0 0 16px; }
+  ul.facts li { margin-bottom: 6px; }
+  label { display: block; font-weight: 600; margin-bottom: 4px; }
+  .hint { color: var(--muted); font-size: .875rem; margin: 4px 0 0; }
+  input[type=text] { width: 100%; padding: 10px 12px; font: inherit; color: var(--text); background: var(--bg);
+                     border: 1px solid var(--line); border-radius: 8px; }
+  input[type=text][aria-invalid=true] { border-color: var(--danger); }
+  .field { margin-bottom: 16px; }
+  .check { display: flex; gap: 10px; align-items: flex-start; font-weight: 400; margin: 16px 0; }
+  .check input { margin-top: 5px; width: 18px; height: 18px; flex: none; }
+  button { font: inherit; font-weight: 600; padding: 12px 16px; border-radius: 8px; border: 1px solid var(--line);
+           background: var(--card); color: var(--text); cursor: pointer; min-height: 44px; }
+  button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+  button.danger { color: var(--danger); border-color: var(--danger); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  button:focus-visible, input:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .row > * { flex: 1 1 140px; }
+  .or { text-align: center; color: var(--muted); margin: 12px 0; font-size: .875rem; }
+  .video-wrap { position: relative; aspect-ratio: 4 / 3; background: #000; border-radius: 10px; overflow: hidden; margin-bottom: 12px; }
+  video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); display: block; }
+  .oval { position: absolute; inset: 10% 25%; border: 3px dashed rgba(255,255,255,.7); border-radius: 50%; pointer-events: none; }
+  .prompt { position: absolute; left: 0; right: 0; bottom: 8px; text-align: center; color: #fff; font-weight: 600;
+            text-shadow: 0 1px 4px rgba(0,0,0,.8); }
+  .dots { display: flex; gap: 8px; justify-content: center; margin-bottom: 12px; }
+  .dots span { width: 12px; height: 12px; border-radius: 50%; background: var(--line); }
+  .dots span.on { background: var(--accent); }
+  .msg { padding: 10px 12px; border-radius: 8px; margin: 12px 0; }
+  .msg.err { background: var(--danger-bg); color: var(--danger); }
+  .msg.ok { background: var(--ok-bg); }
+  .msg ul { margin: 6px 0 0; padding-left: 18px; }
+  code { word-break: break-all; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>CashCan</h1>
+    <p class="sub">Register your face so rewards go to the right wallet.</p>
+  </header>
+
+  <ol class="steps" aria-label="Progress" id="steps"><li></li><li></li><li></li><li></li></ol>
+
+  <!-- 1. Consent -->
+  <section class="card" id="step-consent" aria-labelledby="h-consent">
+    <h2 id="h-consent">Before we start</h2>
+    <ul class="facts">
+      <li><strong>What we keep:</strong> a numeric face template (not a photo), your wallet address and the name you pick.</li>
+      <li><strong>Photos:</strong> the camera pictures are used once to make the template and are never saved.</li>
+      <li><strong>Why:</strong> the bin recognises you so your reward is paid to your wallet.</li>
+      <li><strong>Your control:</strong> you can delete your face data at any time from this page.</li>
+      <li><strong>Demo:</strong> payouts are Solana devnet test tokens with no real value.</li>
+    </ul>
+    <label class="check" for="consent">
+      <input type="checkbox" id="consent">
+      <span>I agree to CashCan storing my face template and wallet address for this purpose.</span>
+    </label>
+    <button class="primary" id="consent-next" disabled>Agree and continue</button>
+  </section>
+
+  <!-- 2. Handle + wallet -->
+  <section class="card" id="step-wallet" aria-labelledby="h-wallet" hidden>
+    <h2 id="h-wallet">Your name and wallet</h2>
+    <div class="field">
+      <label for="handle">Pick a name</label>
+      <input type="text" id="handle" autocomplete="off" maxlength="64" aria-describedby="handle-hint handle-err">
+      <p class="hint" id="handle-hint">Letters, numbers, dots, dashes and underscores.</p>
+      <p class="hint" id="handle-err" style="color:var(--danger)" role="alert"></p>
+    </div>
+    <div class="field">
+      <label for="wallet">Solana wallet address</label>
+      <div class="row" style="margin-bottom:8px">
+        <button type="button" id="phantom">Connect Phantom</button>
+      </div>
+      <div class="or">or paste an address</div>
+      <input type="text" id="wallet" autocomplete="off" spellcheck="false" aria-describedby="wallet-err">
+      <p class="hint" id="wallet-err" style="color:var(--danger)" role="alert"></p>
+    </div>
+    <div class="row">
+      <button type="button" data-back="consent">Back</button>
+      <button type="button" class="primary" id="wallet-next">Continue to camera</button>
+    </div>
+  </section>
+
+  <!-- 3. Camera -->
+  <section class="card" id="step-camera" aria-labelledby="h-camera" hidden>
+    <h2 id="h-camera">Scan your face</h2>
+    <p class="sub" style="margin-bottom:12px">Good light on your face, no hat or sunglasses. We take 3 quick pictures.</p>
+    <div class="video-wrap">
+      <video id="video" autoplay playsinline muted></video>
+      <div class="oval"></div>
+      <div class="prompt" id="prompt" aria-live="polite"></div>
+    </div>
+    <div class="dots" id="dots" aria-hidden="true"></div>
+    <div class="msg err" id="cam-err" role="alert" hidden></div>
+    <div class="row">
+      <button type="button" data-back="wallet" id="cam-back">Back</button>
+      <button type="button" id="cam-start">Turn on camera</button>
+      <button type="button" class="primary" id="cam-go" hidden>Start scan</button>
+    </div>
+  </section>
+
+  <!-- 4. Done -->
+  <section class="card" id="step-done" aria-labelledby="h-done" hidden>
+    <h2 id="h-done">You're registered</h2>
+    <div class="msg ok" id="done-msg"></div>
+    <p class="sub" style="margin-bottom:16px">Step up to the bin and look at the front camera.</p>
+    <div class="msg err" id="del-err" role="alert" hidden></div>
+    <button type="button" class="danger" id="delete">Delete my face data</button>
+  </section>
+
+  <section class="card" id="step-deleted" hidden>
+    <h2>Your data is deleted</h2>
+    <p class="sub" style="margin-bottom:16px">Your face template and wallet were removed.</p>
+    <button type="button" class="primary" id="restart">Register again</button>
+  </section>
+</main>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const ORDER = ["consent", "wallet", "camera", "done"];
+  const FRAMES = 3;
+  const PROMPTS = ["Look straight at the camera", "Turn slightly left", "Turn slightly right"];
+  const HANDLE_RE = /^[A-Za-z0-9_.-]{1,64}$/;
+  const WALLET_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+  let stream = null, handle = "", wallet = "";
+
+  function show(name, focus = true) {
+    for (const s of [...ORDER, "deleted"]) $("step-" + s).hidden = s !== name;
+    const i = ORDER.indexOf(name);
+    [...$("steps").children].forEach((li, k) => {
+      li.className = i < 0 ? "done" : k < i ? "done" : k === i ? "current" : "";
+    });
+    if (name !== "camera") stopCamera();
+    const heading = document.querySelector("#step-" + name + " h2");
+    if (heading && focus) { heading.tabIndex = -1; heading.focus(); }
+  }
+
+  /* 1. consent */
+  $("consent").addEventListener("change", (e) => { $("consent-next").disabled = !e.target.checked; });
+  $("consent-next").addEventListener("click", () => show("wallet"));
+  document.querySelectorAll("[data-back]").forEach((b) => b.addEventListener("click", () => show(b.dataset.back)));
+
+  /* 2. handle + wallet (validate on blur, clear as soon as fixed) */
+  function checkHandle(final) {
+    const v = $("handle").value.trim();
+    const bad = !HANDLE_RE.test(v);
+    const showErr = bad && (final || v !== "") ;
+    $("handle-err").textContent = showErr ? "Use 1-64 letters, numbers, dots, dashes or underscores." : "";
+    $("handle").setAttribute("aria-invalid", showErr ? "true" : "false");
+    return !bad;
+  }
+  function checkWallet(final) {
+    const v = $("wallet").value.trim();
+    const bad = !WALLET_RE.test(v);
+    const showErr = bad && (final || v !== "");
+    $("wallet-err").textContent = showErr ? "That does not look like a Solana address (32-44 characters)." : "";
+    $("wallet").setAttribute("aria-invalid", showErr ? "true" : "false");
+    return !bad;
+  }
+  $("handle").addEventListener("blur", () => checkHandle(false));
+  $("handle").addEventListener("input", () => { if ($("handle").getAttribute("aria-invalid") === "true") checkHandle(false); });
+  $("wallet").addEventListener("blur", () => checkWallet(false));
+  $("wallet").addEventListener("input", () => { if ($("wallet").getAttribute("aria-invalid") === "true") checkWallet(false); });
+
+  const phantom = () => (window.phantom && window.phantom.solana) || window.solana;
+  $("phantom").addEventListener("click", async () => {
+    const p = phantom();
+    if (!p || !p.isPhantom) {
+      $("wallet-err").textContent = "Phantom was not found in this browser. Paste your address below instead.";
+      return;
+    }
+    try {
+      const r = await p.connect();
+      $("wallet").value = r.publicKey.toString();
+      checkWallet(true);
+    } catch (e) {
+      $("wallet-err").textContent = "Phantom did not connect. Try again, or paste your address.";
+    }
+  });
+  $("wallet-next").addEventListener("click", () => {
+    const a = checkHandle(true), b = checkWallet(true);
+    if (!a) return $("handle").focus();
+    if (!b) return $("wallet").focus();
+    handle = $("handle").value.trim(); wallet = $("wallet").value.trim();
+    show("camera");
+  });
+
+  /* 3. camera */
+  function stopCamera() {
+    if (stream) { stream.getTracks().forEach((t) => t.stop()); stream = null; }
+    $("video").srcObject = null;
+    $("cam-go").hidden = true; $("cam-start").hidden = false; $("prompt").textContent = "";
+  }
+  function camError(text) { const e = $("cam-err"); e.hidden = !text; e.replaceChildren(); if (text) e.append(text); }
+  function renderDots(n) {
+    $("dots").replaceChildren(...Array.from({ length: FRAMES }, (_, i) => {
+      const s = document.createElement("span"); if (i < n) s.className = "on"; return s;
+    }));
+  }
+  renderDots(0);
+
+  $("cam-start").addEventListener("click", async () => {
+    camError("");
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      return camError("This browser cannot use the camera here. Open the page at http://localhost:8000 or over https.");
+    }
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: { ideal: 960 } }, audio: false });
+      $("video").srcObject = stream;
+      $("cam-start").hidden = true; $("cam-go").hidden = false; $("cam-go").focus();
+    } catch (e) {
+      camError(e && e.name === "NotAllowedError"
+        ? "Camera access was blocked. Allow the camera for this site in your browser settings, then try again."
+        : "No camera could be started. Check that it is connected and not used by another app.");
+    }
+  });
+
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  function grab() {
+    const v = $("video"), scale = Math.min(1, 640 / v.videoWidth);
+    const c = document.createElement("canvas");
+    c.width = Math.round(v.videoWidth * scale); c.height = Math.round(v.videoHeight * scale);
+    c.getContext("2d").drawImage(v, 0, 0, c.width, c.height);   // not mirrored: matches the bin camera
+    return new Promise((res) => c.toBlob(res, "image/jpeg", 0.92));
+  }
+
+  $("cam-go").addEventListener("click", async () => {
+    camError(""); $("cam-go").disabled = true; $("cam-back").disabled = true;
+    const blobs = [];
+    try {
+      for (let i = 0; i < FRAMES; i++) {
+        $("prompt").textContent = PROMPTS[i];
+        await sleep(i === 0 ? 1200 : 1000);
+        blobs.push(await grab());
+        renderDots(i + 1);
+      }
+      $("prompt").textContent = "Checking…";
+      const fd = new FormData();
+      fd.append("user_id", handle); fd.append("wallet", wallet); fd.append("consent", "true");
+      blobs.forEach((b, i) => fd.append("frames", b, `f${i}.jpg`));
+      const res = await fetch("/enroll", { method: "POST", body: fd });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw { status: res.status, body };
+      const msg = $("done-msg"); msg.replaceChildren();
+      msg.append(`Registered as `, Object.assign(document.createElement("strong"), { textContent: handle }),
+                 `. Rewards go to `, Object.assign(document.createElement("code"), { textContent: wallet }), ".");
+      show("done");
+    } catch (err) {
+      renderDots(0); $("prompt").textContent = "";
+      camError(explain(err));
+      $("cam-go").textContent = "Try again";
+    } finally {
+      $("cam-go").disabled = false; $("cam-back").disabled = false;
+    }
+  });
+
+  function explain(err) {
+    if (!err || err.status === undefined) return "Could not reach CashCan. Check your connection and try again.";
+    const d = err.body && err.body.detail;
+    if (err.status === 409) return "That name is already registered. Pick another name, or delete the existing registration first.";
+    if (err.status === 422 && d && d.problems) {
+      return "We could not get a clear picture. " + [...new Set(d.problems.map((p) => p.replace(/^frame \d+: /, "")))].join(" ");
+    }
+    return typeof d === "string" ? d : "Something went wrong. Please try again.";
+  }
+
+  /* 4. delete */
+  $("delete").addEventListener("click", async () => {
+    if ($("delete").dataset.armed !== "1") {         // two-step, named confirmation
+      $("delete").dataset.armed = "1"; $("delete").textContent = `Confirm: delete everything for ${handle}`; return;
+    }
+    $("delete").disabled = true; $("del-err").hidden = true;
+    try {
+      const res = await fetch("/users/" + encodeURIComponent(handle), { method: "DELETE" });
+      if (!res.ok && res.status !== 404) throw new Error();
+      show("deleted");
+    } catch (e) {
+      $("del-err").hidden = false; $("del-err").textContent = "Could not delete right now. Try again.";
+    } finally {
+      $("delete").disabled = false; $("delete").dataset.armed = ""; $("delete").textContent = "Delete my face data";
+    }
+  });
+  $("restart").addEventListener("click", () => {
+    $("consent").checked = false; $("consent-next").disabled = true;
+    $("handle").value = ""; $("wallet").value = ""; camError(""); renderDots(0); $("cam-go").textContent = "Start scan";
+    show("consent");
+  });
+
+  show("consent", false);
+})();
+</script>
+</body>
+</html>

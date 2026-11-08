@@ -3,7 +3,39 @@
 **Smart sorting bins that know your city's rules, and pay you for sorting correctly.**
 
 > Hackathon project (24 hours). Theme: solve a problem in this world.
-> Status: in progress. The Solana payout backend (`backend/`) is built and verified end-to-end; everything else below is still the plan, not a finished build.
+> Status: in progress. **Built and tested on their own:** the Solana payout service (`backend/`), the garbage classifier (`ml/`), and the face recognition system (`face_api/`, `pi_client/`) with its Databricks face database. **Not done yet:** wiring these together on the device (see "Wiring the pieces together"), the local rule table, the dashboard, and a hardware demo. Nothing has been run on the real bin hardware yet.
+
+---
+
+## Repository layout
+
+```
+cashcan/
+├── README.md        this file: plan, status, layout
+├── backend/         Node/TypeScript Solana payout service + Databricks activity log
+├── ml/              garbage classifier (MobileNetV2, 3 bins): training, results, RKNN conversion scripts
+├── face_api/        Python face recognition: API + enrollment web page, matching, liveness,
+│   │                SQLite and Databricks face stores, tools, measured results
+│   ├── app/         FastAPI app (main.py), face_engine, matching, liveness, sessions, stores
+│   ├── tools/       face_demo (try it on a laptop), tune, eval_lfw, train_adapter, databricks_sync, databricks_check
+│   ├── tests/
+│   └── EVAL.md, TRAINING.md, DATABRICKS_CHECK.md    accuracy, training experiment, database check
+└── pi_client/       bin-side client: front camera -> /match -> liveness challenge -> session events
+                     (plain Python/OpenCV; runs on a Raspberry Pi or the Radxa board)
+```
+
+Each folder has its own README with setup and commands. To try the face recognition on your own laptop start with
+`face_api/README.md` ("Try it on your Mac").
+
+How the pieces are meant to connect (the arrows into the payout are **not built yet**):
+
+```
+front camera -> pi_client -> face_api /match + liveness -> live session {user, wallet}  ─┐
+                                   face templates <-> Databricks (workspace.cashcan_faces) │
+item camera  -> ml classifier -> item + confidence ─────────────────────────────────────┤
+                                                                                         v
+                                       backend payout (Solana) -> Databricks activity_log
+```
 
 ---
 
@@ -69,7 +101,7 @@ The classifier detects the item, then a lookup table decides whether it earns a 
 - [ ] Two cameras (top and front) + Raspberry Pi capturing each item
 - [ ] Bin indicator (LEDs or display) showing the correct bin and why
 - [x] Reward table + devnet SOL payout for reward-eligible items — backend built and verified end-to-end (reward lookup, contamination multiplier, confidence gate, per-user cooldown, real signed transfer); see `backend/README.md`. Reward amounts in the table are still placeholders (see Open questions)
-- [ ] Facial registration and face match at the bin, so each payout goes to the right user's wallet (opt-in consent screen, store face embeddings only, never raw photos, delete on request)
+- [x] Facial registration and face match at the bin, so each payout goes to the right user's wallet (opt-in consent screen, store face embeddings only, never raw photos, delete on request) — built in `face_api/` and `pi_client/`: consent-gated enrollment page, embeddings only, delete endpoint, head-turn liveness challenge, and a Databricks Delta + Vector Search face database. On LFW test photos it recognised 99.2% of enrolled people with 0 wrong names (`face_api/EVAL.md`); the Databricks lookup was checked with 100 photos of 100 people (`face_api/DATABRICKS_CHECK.md`). **Not yet tested with a bin webcam, the real hardware, or wired to the payout**
 - [x] Activity log to Databricks (Delta table). `backend/src/activityLog.ts` writes each payout decision (paid or rejected) to `workspace.cashcan.activity_log` via the Databricks SQL Statement API, wired into the payout CLI; gated on `DATABRICKS_SERVER_HOSTNAME`/`DATABRICKS_HTTP_PATH`/`DATABRICKS_TOKEN` in `.env` and never throws (a Databricks hiccup must not block a real payout). Verified end-to-end against the live workspace (Free Edition, Serverless Starter Warehouse) — a real row round-tripped. The AI/BI **dashboard** on top of this table is not yet built; do that once there's more than a couple of seed rows
 - [ ] Gemini API: generate the plain-language "why" text and auto-label photos to speed up data collection
 
@@ -86,10 +118,11 @@ The classifier detects the item, then a lookup table decides whether it earns a 
 
 | Area | Proposed |
 |---|---|
-| Face recognition | Existing open-source library (for example face_recognition, InsightFace, or DeepFace). Store embeddings only, not photos |
-| Vision model | Small model such as YOLOv8n or MobileNet, fine-tuned on our own photos |
-| Edge device | Raspberry Pi with two cameras (top + front; placement TBD by hardware team) |
-| Backend | Node / TypeScript — see `backend/` |
+| Face recognition | InsightFace `buffalo_s` (face detector + MobileFaceNet/ArcFace 512-number embeddings), embeddings only, never photos — see `face_api/`. The pretrained weights are **non-commercial research only**; a commercial product needs a different licence |
+| Vision model | MobileNetV2 classifier into 3 bins (organics / cans / waste) — see `ml/` (72.1% on a held-out dataset; needs photos from the real camera). RKNN conversion script is in `ml/scripts/`, not yet verified on the board |
+| Edge device | Radxa ROCK 5C Lite (RK3582, NPU) per `ml/README.md`; earlier plan was a Raspberry Pi. The bin client `pi_client/` is plain Python/OpenCV and runs on either. Camera layout: see Open questions |
+| Backend | Two services: Node/TypeScript payout (`backend/`) and Python face recognition API (`face_api/`) |
+| Face database | Databricks Delta tables + Vector Search index in `workspace.cashcan_faces` (schema separate from `workspace.cashcan`), with local matching on the device after a pull — see `face_api/README.md` |
 | Payout | Solana **devnet** — see `backend/` (Node/TypeScript, `@solana/web3.js`); demoing against a local `solana-test-validator` for reliability, see `backend/README.md` |
 | Dashboard | Web app, data in Databricks (Free Edition: Delta table + AI/BI dashboard). `workspace.cashcan.activity_log` table live and receiving rows via `backend/src/activityLog.ts`; the AI/BI dashboard view itself not yet built |
 | Gemini API | Plain-language "why this bin" explanations (English / Cantonese / Mandarin) and auto-labeling of our photo dataset. Keep the local model as the main classifier path, so the demo never depends on venue wifi |
@@ -97,6 +130,16 @@ The classifier detects the item, then a lookup table decides whether it earns a 
 | Version control | Git |
 
 ---
+
+## Wiring the pieces together (not built yet)
+
+Each piece works alone; nothing calls the next one yet. What is missing is one small "bin controller" process on the device:
+
+1. Read the bin client's JSON events (`session_started` carries the user's wallet, `session_ended` closes it) — `pi_client/README.md`.
+2. Run the item classifier from `ml/` on the item camera and get an item class and confidence.
+3. When a classification is stable **and a live face session exists**, call the payout (`backend/`: `payout --user <wallet> --item <class> --confidence <0-1>`). No live session means no payout; this is the face-match gate the payout README lists as missing.
+4. Decide what `activity_log.user_id` holds. The payout currently logs the wallet address; the face system identifies people by a name. Log both or map one to the other.
+5. Still missing from the anti-abuse list: rejecting repeated identical items and requiring the two cameras to agree.
 
 ## Data plan (the bottleneck, start first)
 
@@ -187,7 +230,8 @@ We are a **beginner team**, so the Beginner stream applies.
 - Crypto adds regulatory and credibility questions. We use devnet only.
 - The public devnet faucet is unreliable for a live demo: Solana shut off its RPC auto-airdrop, and the web faucet explicitly tells AI agents/scripts not to use its form. We demo against a local `solana-test-validator` instead (unlimited SOL, no rate limit, no network dependency during judging) — see `backend/README.md` for both setups.
 - Facial recognition handles biometric data, which carries privacy and legal obligations (consent, storage, deletion). We have not verified what applies in BC. Keep it opt-in, store embeddings only, and be ready to explain why a face is needed at all.
-- Face matching can be fooled by a photo or screen without liveness detection, and accuracy varies across lighting and faces. Test on our own team and report real results.
+- Face matching can be fooled by a photo or screen without liveness detection, and accuracy varies across lighting and faces. Test on our own team and report real results. The head-turn liveness check in `face_api/` stops a photo or a screen showing a still, but not a video of the right person turning the right way, a 3D mask or a deepfake. Published numbers so far are on public celebrity photos (LFW), which are easier than a bin webcam.
+- The face recognition weights we use are for non-commercial research only (see the tech stack table), and the Databricks workspace has two users who are both admins, so both can read the stored face templates.
 - Local rules change. Rules in this project are as of build time and must be re-verified.
 
 ## Open questions
@@ -195,7 +239,8 @@ We are a **beginner team**, so the Beginner stream applies.
 - [ ] Definition of the payout formula ("Classifier / 2")
 - [x] Who funds real payouts in a real deployment — the recycling/hauling company's payment for collected material, converted to SOL (see backend/README.md)
 - [ ] Domain: keep cashcan.com (likely ineligible for the GoDaddy Registry award) or also register an eligible TLD such as .co. Check trademark clearance for the name either way
-- [ ] Which face recognition library, and which camera does the face match (shared with the front item camera, or a third camera)
+- [x] Which face recognition library — InsightFace `buffalo_s`, see `face_api/` (research-only licence)
+- [ ] Which camera does the face match. The bin client currently reads one camera; the current idea is a dedicated face camera separate from the item camera. Confirm with whoever owns the hardware, because the anti-abuse list above assumes top and front item cameras
 - [ ] Camera placement and how the two views are combined (top = entry angle, front = side profile)
 - [ ] Which items are reward-eligible and how much each pays
 - [ ] Final list of 12 items and their verified local rules
