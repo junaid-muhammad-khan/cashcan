@@ -55,10 +55,12 @@ def check_quality(face: FaceResult) -> None:
 
 
 class InsightFaceEngine:
-    def __init__(self, model: str = "buffalo_s", det_size: int = 320):
+    def __init__(self, model: str = "buffalo_s", det_size: int = 320, modules: list[str] | None = None):
+        """modules=None loads the whole pack. ["detection", "recognition"] skips the 144 MB pose model
+        (about 2x faster); FaceResult.yaw is then None, which only diagnostics use."""
         from insightface.app import FaceAnalysis  # heavy import, keep lazy
 
-        self._app = FaceAnalysis(name=model, providers=["CPUExecutionProvider"])
+        self._app = FaceAnalysis(name=model, providers=["CPUExecutionProvider"], allowed_modules=modules)
         self._app.prepare(ctx_id=-1, det_size=(det_size, det_size))
 
     def analyse(self, image_bgr: np.ndarray) -> list[FaceResult]:

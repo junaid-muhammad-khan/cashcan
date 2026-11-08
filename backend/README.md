@@ -84,6 +84,19 @@ Real pipeline, threshold 0.45, 150 enrolled people (3 photos each), 757 later ph
 This is celebrity press photos, a gallery of 150, and no spoof attempts. It says the model is sound, not that the bin
 will hit these numbers under venue lighting. Fairness across groups was not measured. Measure on the team with `tools.tune`.
 
+## Training experiments (LFW)
+`tools.lfw_embed` embeds all 13,233 LFW images once (resumable); `tools.train_adapter` tests whether a small trained layer on
+top of the frozen model beats the pretrained model on people it never saw (5 people-disjoint splits). Result in
+[`TRAINING.md`](TRAINING.md): **no gain** (it overfits the training people), so nothing was adopted and the pipeline is unchanged.
+```bash
+pip install -r requirements-train.txt
+python -m tools.lfw_embed --data <dir with data.parquet> --out <dir>/emb
+python -m tools.train_adapter --emb <dir>/emb --report TRAINING.md
+```
+`InsightFaceEngine(modules=["detection", "recognition"])` skips the 144 MB pose model: identical embeddings (cosine 1.000000
+checked on 6 faces), about 6x faster on this CPU box (46 vs 7.4 img/s). Production still loads the full pack; only the
+`yaw` diagnostic needs the pose model.
+
 ## Known limits
 - Anyone who knows a user name can delete that registration (no auth yet). Fine for a demo, fix before real use.
 - Liveness stops a photo or a screen showing a still. It does **not** stop a video of the right person turning the
