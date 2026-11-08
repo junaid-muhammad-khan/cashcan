@@ -2,3 +2,5 @@
 __pycache__/
 *.pyc
 data/
+yolo11n-cls.pt
+models/yolo11n_runs/

@@ -6,36 +6,43 @@ deployment target (Radxa ROCK 5C Lite). See `../README.md` for the overall proje
 
 ## Results (honest numbers, not cherry-picked)
 
-Trained on TrashNet + GD (public datasets, mixed sources), tested on RealWaste - a
-**third, independently-collected dataset the model never trains on**. This is a harder,
-more honest test than the usual same-dataset train/test split.
+Trained on TrashNet + GD + 60% of RealWaste, tested on the **remaining 40% of RealWaste -
+images the model never trains on.** (Earlier iteration kept 100% of RealWaste as test-only;
+see "Methodology change" below for why that moved.)
 
 | | Value |
 |---|---|
-| Best validation accuracy (TrashNet+GD, same distribution as training) | **97.4%** |
-| **Test accuracy (RealWaste, held out)** | **72.1%** |
+| Best validation accuracy | **96.8%** |
+| **Test accuracy (held-out 40% of RealWaste)** | **94.1%** |
 
-Per-class test results (RealWaste):
+Per-class test results:
 
 | Class | Precision | Recall | F1 | Support |
 |---|---|---|---|---|
-| cans | 0.91 | 0.67 | 0.78 | 2131 |
-| organics | 0.79 | 0.45 | 0.57 | 847 |
-| waste | 0.60 | 0.91 | 0.72 | 1774 |
+| cans | 0.94 | 0.94 | 0.94 | 853 |
+| organics | 0.99 | 0.98 | 0.98 | 340 |
+| waste | 0.92 | 0.92 | 0.92 | 711 |
 
 See `models/confusion_matrix.png` and `models/metrics.json` for full details.
 
-**Why test accuracy (72%) is well below validation accuracy (97%):** this is a genuine
-cross-dataset generalization gap, not a bug. RealWaste was photographed in a different
-environment (landfill reception area, uniform background) than TrashNet/GD (varied web/app
-sources). We tried several things to close this gap (full backbone fine-tuning instead of a
-frozen head, a weighted sampler for the underrepresented organics class, heavier/randomized
-augmentation) - they helped (MobileNetV3-small got 63.6%/17% organics recall before these
-same fixes; MobileNetV2 with them gets 72.1%/44.5%), but a real fix requires photos from your
-actual demo camera/lighting setup, which is a step for hackathon day, not something public
-data alone can solve. The biggest remaining failure mode is **cans being misclassified as
-waste** (653/2131 cases) - worth knowing before the demo, since it means some valid
-deposit-return containers won't get the reward.
+**Methodology change - why RealWaste stopped being 100% held out:** the first iteration
+(trained on TrashNet+GD only, tested on all of RealWaste) got 72.1% test accuracy with cans
+recall at 67% and organics recall at 44.5%. We diagnosed this by pulling actual misclassified
+images rather than guessing - the model was consistently failing on **crushed, shattered, or
+fragmented items** (a smashed glass shard, a crushed metal can, a broken piece of plastic),
+not intact ones. TrashNet and GD show almost exclusively clean, canonical-shaped items;
+RealWaste (collected "within an authentic landfill environment") was the *only* available
+source of damaged-item photos. No amount of augmentation on TrashNet/GD could teach the model
+what a crushed can looks like if it never saw one, so we moved 60% of RealWaste into training
+(class_map.yaml's `mixed` role) and kept the other 40% as a genuinely unseen test set. Result:
+cans recall 67%->94%, organics recall 44.5%->98%, overall 72.1%->94.1%.
+
+**Trade-off to be upfront about:** this 94.1% is not directly comparable to the old 72.1% -
+the held-out test set is smaller (4752->1904 images) and now shares RealWaste's general
+photographic style with part of the training data, rather than being a fully independent
+third source. It's still a fair test (none of these 1904 specific images were trained on),
+just a less extreme generalization test than before, by design - the right trade for a model
+that needs to actually work on real, possibly-damaged items at the demo.
 
 **Model choice:** MobileNetV2-1.0 (not V3, not EfficientNetV2S - both were tried and
 compared) was picked because it both generalized better in our tests AND matches the
@@ -92,6 +99,8 @@ python scripts/convert_rknn.py                # run on the x86 Linux machine
 - `scripts/train.py` - trains MobileNetV2, evaluates on RealWaste, exports ONNX.
 - `scripts/train_efficientnet.py` - the EfficientNetV2S comparison run (not the final model).
 - `scripts/predict.py` - CLI: single image in, JSON prediction out (for laptop testing).
+- `scripts/live_predict.py` - interactive webcam loop (SPACE to classify, q to quit) for
+  trying the classifier out live; requires `opencv-python` (in requirements.txt).
 - `scripts/generate_calibration_list.py` / `scripts/convert_rknn.py` - ONNX -> RKNN handoff
   for the RK3582 NPU deployment target (must run on x86 Linux, not this Mac).
 

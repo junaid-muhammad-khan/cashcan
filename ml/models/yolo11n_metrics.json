@@ -1,0 +1,60 @@
+{
+  "model": "yolo11n-cls",
+  "classes": [
+    "cans",
+    "organics",
+    "waste"
+  ],
+  "test_classification_report": {
+    "cans": {
+      "precision": 0.9357907253269917,
+      "recall": 0.9226260257913247,
+      "f1-score": 0.9291617473435655,
+      "support": 853.0
+    },
+    "organics": {
+      "precision": 0.9701492537313433,
+      "recall": 0.9558823529411765,
+      "f1-score": 0.9629629629629629,
+      "support": 340.0
+    },
+    "waste": {
+      "precision": 0.8956043956043956,
+      "recall": 0.9170182841068917,
+      "f1-score": 0.906184850590688,
+      "support": 711.0
+    },
+    "accuracy": 0.9264705882352942,
+    "macro avg": {
+      "precision": 0.9338481248875768,
+      "recall": 0.9318422209464643,
+      "f1-score": 0.9327698536324055,
+      "support": 1904.0
+    },
+    "weighted avg": {
+      "precision": 0.926919621978627,
+      "recall": 0.9264705882352942,
+      "f1-score": 0.9266175455154664,
+      "support": 1904.0
+    }
+  },
+  "test_confusion_matrix": [
+    [
+      787,
+      2,
+      64
+    ],
+    [
+      3,
+      325,
+      12
+    ],
+    [
+      51,
+      8,
+      652
+    ]
+  ],
+  "seed": 42,
+  "device": "mps"
+}

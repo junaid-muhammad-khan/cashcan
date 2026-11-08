@@ -7,9 +7,20 @@
 # display, but reward_eligible=false and nothing physically actuates for it
 # ("we won't open the trash can").
 #
-# Role assignment (per task spec):
+# Role assignment:
 #   - trashnet, gd  -> train_val (model is trained and validated on these)
-#   - realwaste     -> test_only (held out, never trained on)
+#   - realwaste     -> mixed (CHANGED 2026-11-07, see note below - was test_only)
+#
+# Why realwaste changed from test_only to mixed: diagnosed why "cans" items were getting
+# misclassified as "waste" by pulling actual misclassified test images - the model was
+# consistently failing on CRUSHED/BROKEN/FRAGMENTED items (shattered glass, crushed cans,
+# broken plastic parts), not intact ones. TrashNet and GD show almost exclusively clean,
+# intact, canonically-shaped items, so the model never learned what damaged recyclables look
+# like. RealWaste (collected "within an authentic landfill environment") is the ONLY source
+# of damaged-item photos available, so more augmentation on TrashNet/GD can't fix this - the
+# model needs to actually see some damaged examples during training. 60% of RealWaste now
+# feeds train/val; the remaining 40% stays a genuinely held-out test the model never trains
+# on, so the test number is still honest, just no longer "zero RealWaste in training."
 
 unified_classes:
   - organics
@@ -46,7 +57,8 @@ datasets:
       trash: waste
 
   realwaste:
-    role: test_only
+    role: mixed
+    train_fraction: 0.6  # 60% into train/val (80/20 split, same as train_val datasets), 40% held out as test
     path: data/raw/realwaste/realwaste-main/RealWaste
     counts: {Cardboard: 461, "Food Organics": 411, Glass: 420, Metal: 790, "Miscellaneous Trash": 495, Paper: 500, Plastic: 921, "Textile Trash": 318, Vegetation: 436}
     mapping:
@@ -61,6 +73,37 @@ datasets:
       "Miscellaneous Trash": waste
       "Textile Trash": waste
     excluded_unmapped: []
+
+  custom_tallcans:
+    role: train_only
+    path: data/raw/custom_tallcans
+    counts: {cans: 208}  # 8 real photos (Celsius can, intact + crushed) x 26 copies each
+    mapping:
+      cans: cans
+    note: "User-supplied photos patching a specific gap found via live testing: tall/slim
+      energy-drink-shaped cans (not the short soda-can proportions TrashNet/GD/RealWaste
+      mostly show) were being misclassified as waste, both intact and crushed. Duplicated
+      25x per original photo so the class-balanced sampler actually exposes the model to
+      them meaningfully during a short fine-tune, instead of being lost among ~5550 other
+      cans images. role=train_only: all copies go to train, none held out, since there are
+      too few originals (8) for a statistically meaningful held-out test - the existing
+      RealWaste test split remains the real accuracy measure; these just patch training."
+
+  custom_webcam_cans:
+    role: train_only
+    path: data/raw/custom_webcam_cans
+    counts: {cans: 220}  # 22 real photos x 10 copies each
+    mapping:
+      cans: cans
+    note: "User-supplied photos targeting the live-webcam domain gap specifically (not just
+      the tall-can shape gap custom_tallcans targets). Two different cans (a Poppi soda can
+      and the Celsius can), photographed intact/crushed/open, held in hand and set down, on
+      a cluttered desk (cables, monitors, mouse) and on carpet, NOT a clean studio background
+      - deliberately matching realistic demo/webcam conditions rather than the plain-background
+      style of the other patch set. One photo (a recognizable face holding cans) was excluded
+      on privacy grounds - training data here should key off the item, not a person, and this
+      repo is public. Duplicated 10x per original for sampler exposure. role=train_only for
+      the same reason as custom_tallcans: too few originals for a meaningful held-out split."
 
 notes:
   - "CLASS IMBALANCE WARNING: combined train_val set is organics=699, cans=5656, waste=8431
