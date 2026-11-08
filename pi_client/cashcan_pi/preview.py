@@ -41,10 +41,14 @@ def draw(frame: np.ndarray, status: dict, indicator_state: str, indicator_msg: s
     if status["collecting_looks"]:
         _text(out, "classifying...", (12, 84), AMBER, 0.7, 2)
     elif item:
-        pay = f"reward {item['reward_lamports'] / 1e9:g} SOL" if item["reward_lamports"] else "no reward"
+        st, cents = item.get("payout_status"), item.get("reward_cents")
+        pay = ("waiting for the server" if st is None else
+               {"paid": f"paid {cents}c in SOL", "pending": f"{cents}c reward, paying", "sending": f"{cents}c reward, paying",
+                "held": f"{cents}c reward held (no wallet yet)", "failed": f"{cents}c reward, payout will be retried"}.get(st)
+               or f"no reward ({item.get('reason') or 'none'})")
         note = " (unsure -> waste)" if item["reason"] == "low_confidence" else ""
         _text(out, f"ITEM: {item['bin'].upper()} {item['confidence'] * 100:.0f}%{note}", (12, 84), WHITE, 0.7, 2)
-        _text(out, f"{pay} - {'paid to ' + item['user_id'][:8] if item['user_id'] else 'nobody verified'}", (12, 110), WHITE, 0.55)
+        _text(out, f"{pay} - {'for ' + item['user_id'][:8] if item['user_id'] else 'nobody verified'}", (12, 110), WHITE, 0.55)
     else:
         _text(out, "show an item and hold it still in the box", (12, 84), GREY, 0.6)
 

@@ -1,47 +1,25 @@
-import { readFileSync, writeFileSync, existsSync } from "node:fs";
-import { Connection, Keypair, clusterApiUrl, LAMPORTS_PER_SOL } from "@solana/web3.js";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { Connection, Keypair } from "@solana/web3.js";
 import bs58 from "bs58";
 
-const KEYPAIR_PATH = new URL("../treasury-keypair.json", import.meta.url).pathname;
+// Local operator copy of the treasury key (gitignored). Production reads TREASURY_SECRET_KEY from Vercel instead.
+export const KEYPAIR_PATH = new URL("../treasury-keypair.json", import.meta.url).pathname;
 
 export function getConnection(): Connection {
-  const cluster = process.env.SOLANA_CLUSTER ?? "devnet";
-  if (cluster === "localnet") {
-    // solana-test-validator's default RPC endpoint — unlimited, instant airdrops,
-    // no dependency on the public devnet faucet (useful for a live demo).
-    return new Connection("http://127.0.0.1:8899", "confirmed");
-  }
-  return new Connection(clusterApiUrl(cluster as "devnet" | "testnet" | "mainnet-beta"), "confirmed");
+  const url = process.env.SOLANA_RPC_URL || "https://api.devnet.solana.com";
+  if (/mainnet/i.test(url)) throw new Error("SOLANA_RPC_URL points at mainnet; CashCan only pays on devnet.");
+  return new Connection(url, "confirmed");
 }
 
-export function loadOrCreateTreasury(): Keypair {
+/** TREASURY_SECRET_KEY (base58) if set, else the local file; with create=true a new key is generated into the file. */
+export function loadTreasury(create = false): Keypair {
   const envKey = process.env.TREASURY_SECRET_KEY;
-  if (envKey) {
-    return Keypair.fromSecretKey(bs58.decode(envKey));
-  }
-
-  if (existsSync(KEYPAIR_PATH)) {
-    const raw = JSON.parse(readFileSync(KEYPAIR_PATH, "utf-8"));
-    return Keypair.fromSecretKey(Uint8Array.from(raw));
-  }
-
+  if (envKey) return Keypair.fromSecretKey(bs58.decode(envKey.trim()));
+  if (existsSync(KEYPAIR_PATH)) return Keypair.fromSecretKey(Uint8Array.from(JSON.parse(readFileSync(KEYPAIR_PATH, "utf-8"))));
+  if (!create) throw new Error("No treasury key: set TREASURY_SECRET_KEY or run `npm run init-treasury`.");
   const keypair = Keypair.generate();
-  writeFileSync(KEYPAIR_PATH, JSON.stringify(Array.from(keypair.secretKey)));
+  writeFileSync(KEYPAIR_PATH, JSON.stringify(Array.from(keypair.secretKey)), { mode: 0o600 });
   return keypair;
 }
 
-export async function airdropIfLow(
-  connection: Connection,
-  keypair: Keypair,
-  minSol = 1,
-  airdropSol = 2,
-): Promise<number> {
-  const balance = await connection.getBalance(keypair.publicKey);
-  if (balance >= minSol * LAMPORTS_PER_SOL) {
-    return balance;
-  }
-
-  const signature = await connection.requestAirdrop(keypair.publicKey, airdropSol * LAMPORTS_PER_SOL);
-  await connection.confirmTransaction(signature, "confirmed");
-  return connection.getBalance(keypair.publicKey);
-}
+export const secretBase58 = (k: Keypair) => bs58.encode(k.secretKey);

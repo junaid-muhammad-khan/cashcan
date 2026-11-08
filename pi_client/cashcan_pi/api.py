@@ -30,8 +30,9 @@ class FaceApi:
         return r.json()
 
     def interaction(self, payload: dict) -> dict:
-        """Record one sorted item (needs the bin key). The same interaction_id is stored once, so retrying is safe."""
-        r = self._http.post("/interactions", json=payload)
+        """Record one sorted item (needs the bin key). The same interaction_id is stored once and paid at most once, so retrying
+        is safe. Returns the server's decision: reward_cents, payout_status (none | held | pending | sending | paid | failed), reason."""
+        r = self._http.post("/interactions", json=payload, timeout=25)  # the server records AND pays within the request (~5-10 s)
         r.raise_for_status()
         return r.json()
 

@@ -2,7 +2,7 @@
   "name": "cashcan-backend",
   "version": "0.1.0",
   "private": true,
-  "description": "Devnet Solana payout service for CashCan",
+  "description": "Operator CLI for the CashCan devnet treasury (payouts run in website/app/api/payout)",
   "type": "module",
   "scripts": {
     "cli": "tsx src/cli.ts",
