@@ -102,17 +102,17 @@ face disappears or a different-looking face steps in, so nobody can borrow anoth
 `tform.estimate(lmk, dst)` seen in older versions was a harmless library warning, now silenced.
 
 **If it says "skipped":** the face was found but a quality gate rejected the frame, and the label says which one and by how much,
-e.g. `too small: face 52px < 60px (move closer)`. Add `--debug` to see every number (face size, detector confidence, sharpness, head
+e.g. `too small: face 40px < 48px (move closer)`. Add `--debug` to see every number (face size, detector confidence, sharpness, head
 turn, and your match score as a percentage with the percentage needed to match). Fixes: more light on your face, face the camera, move
-closer (face at least 60 px wide), hold still, clean the lens. The percentage is a similarity score, not a probability of being right;
+closer (face at least 48 px wide), hold still, clean the lens. The percentage is a similarity score, not a probability of being right;
 the default match line is 45% (`--threshold 0.50` is stricter; with your own frontal scores of 56-82% and strangers topping out at 25%, 50% is a sensible choice once a friend has also been tested). To experiment, override a gate for one run: `python -m tools.face_demo --min-face 45 identify --webcam --debug`
 (also `--min-sharpness`, `--min-det`).
 
 **Two tiers of quality gates.** *Enrollment is strict* (face >= 80 px, detector >= 0.60, sharpness >= 60), because a bad frame would be saved
-as a bad template. *Identification is lenient* (face >= 60 px, detector >= 0.45, sharpness >= 25), because a weak frame can only fail to
+as a bad template. *Identification is lenient* (face >= 48 px, detector >= 0.45, sharpness >= 25), because a weak frame can only fail to
 match: the match threshold, not these gates, keeps strangers out. Measured on LFW, letting in the 27 photos the strict gates rejected gave
 93% recognised and 0 wrong names, and strangers accepted did not change. Both the API (`/enroll` strict, `/match` lenient) and the tools use
-the split. In `ROBUSTNESS.md`, the strict gates rejected 54% of warm-lamp photos and 99% of 60 px faces that the model alone recognised 96-97% of the time.
+the split. In `ROBUSTNESS.md`, the old gates rejected 45% of warm-lamp photos and 99% of small faces that the model alone recognised 96-97% of the time; with the lenient tier, warm-lamp photos went from 52% to 96% recognised at the bin and side light from 75% to 96%.
 
 **Sharpness is measured at a fixed size and contrast.** The face is resized to 112x112 and its contrast standardised before the blur
 measure, because the raw crop confused two things with blur: a close face (the same sharp photo scored 1067 at a 100 px face and 27 at
@@ -146,17 +146,17 @@ put the right person first 5/5; push, pull (exact round trip) and delete worked;
 - **Who can read the face tables:** no grants beyond the owner exist, but Trevor Lau is also a workspace admin, and admins can read
   everything. Treat the tables as readable by both of you. Biometric data: consent, deletion on request, no photos stored.
 
-## Measured accuracy (LFW, re-run 2026-11-08 with the current blur gate)
+## Measured accuracy (LFW, latest re-run 2026-11-08 with the two-tier gates)
 Full tables in [`EVAL.md`](EVAL.md); regenerate with `python -m tools.eval_lfw --data <dir>` (see its docstring).
 Real pipeline, threshold 0.45, 150 enrolled people (3 photos each), 757 later photos of them, 831 photos of 600 strangers:
 
 | What | Result |
 |---|---|
-| Enrolled person recognised | **99.2%** (6 of 759 not recognised) |
-| Wrong person named | **0 of 759** |
-| Strangers accepted | 1 of 837 at 0.45; on inspection that photo shows an enrolled person (Jimmy Carter) next to the labelled one, so it is a labelling artefact, i.e. 0 real false accepts (95% upper bound still ~0.7%) |
-| Photos rejected by quality gates | ~2.5% (mostly face too small, 1.7-2.0%; blur 0.5-0.6%) |
-| 1:1 verification (2,082 pairs) | AUC 0.996, EER 0.96%, 99.52% accuracy at the best threshold; 95.2% at 0.45, because single-photo-vs-single-photo is stricter than matching against 3 enrolled photos |
+| Enrolled person recognised | **99.0%** (8 of 777 not recognised) |
+| Wrong person named | **0 of 777** |
+| Strangers accepted | 1 of 858 at 0.45; on inspection that photo shows an enrolled person (Jimmy Carter) next to the labelled one, so it is a labelling artefact, i.e. 0 real false accepts (95% upper bound still ~0.7%) |
+| Photos rejected by quality gates | enrollment tier (strict): ~4% (blur 2.5%, too small 1.7-2.0%); identification tier (lenient): 0% on LFW |
+| 1:1 verification (2,199 pairs) | AUC 0.994, EER 1.18%, 99.36% accuracy at the best threshold; 95.0% at 0.45, because single-photo-vs-single-photo is stricter than matching against 3 enrolled photos |
 | Liveness turn measure vs InsightFace yaw (4,400 faces) | correlation 0.93; faces within 10 degrees of frontal pass "facing camera" 95-100% and "turned" 0%; faces 30+ degrees pass "turned" 98-100%, 20-30 degrees only 47% |
 
 This is celebrity press photos, a gallery of 150, and no spoof attempts. It says the model is sound, not that the bin

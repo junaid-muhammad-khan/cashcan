@@ -21,7 +21,7 @@ MIN_SHARPNESS = 60.0  # contrast-normalised Laplacian variance of the face at 11
 # IDENTIFICATION is lenient: a weak frame can only fail to match, and the match threshold (not these gates) is what keeps strangers out.
 # Measured: letting in the photos these gates used to reject gave 93% recognised and 0 wrong names on LFW (see ROBUSTNESS.md).
 ID_MIN_DET_SCORE = 0.45
-ID_MIN_FACE_PX = 60  # with real webcam noise + JPEG the model alone gets 86% at 60 px, 72% at 45 px, 40% at 35 px (ROBUSTNESS.md)
+ID_MIN_FACE_PX = 48  # measured width of the detected face; with sensor noise + JPEG the model alone recognises 88% at 47 px, 73% at 38 px, 42% at 28 px (ROBUSTNESS.md)
 ID_MIN_SHARPNESS = 25.0
 
 # Bin session: after one successful match, items in this window pay out to that user
