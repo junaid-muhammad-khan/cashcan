@@ -29,6 +29,7 @@ from fastapi.responses import FileResponse, JSONResponse
 
 from . import config, rewards
 from .activity import RANGES, summarise, window, zone
+from .cache import TTLCache
 from .auth import TokenVerifier, bearer, bin_for_key
 from .databricks_store import DatabaseUnavailable
 from .face_engine import FaceEngine, InsightFaceEngine, QualityError, check_quality, decode_image, pick_face
@@ -125,6 +126,7 @@ def create_app(engine: FaceEngine | None = None, store: FaceStore | None = None,
              "accounts": accounts or make_accounts(), "verifier": verifier or make_verifier()}
     state["payouts"] = payouts or make_payouts(state["accounts"])
     state["game"] = game or make_game(state["accounts"])
+    activity_cache = TTLCache(15.0)   # /me/activity rows per user, a few seconds old at most
 
     def need_payouts():
         if state["payouts"] is None:
@@ -357,7 +359,8 @@ def create_app(engine: FaceEngine | None = None, store: FaceStore | None = None,
         u = current_user(bearer(authorization))
         zi = zone(tz)
         start, _, _ = window(range, zi)
-        rows = need_payouts().ledger.rows_for_user(u["user_id"], start)
+        # a few seconds old is fine for a dashboard, and it saves waking the database on every refresh
+        rows = activity_cache.get((u["user_id"], range, tz), lambda: need_payouts().ledger.rows_for_user(u["user_id"], start))
         return summarise(rows, range, zi)
 
     @app.get("/rewards")
@@ -379,10 +382,7 @@ def create_app(engine: FaceEngine | None = None, store: FaceStore | None = None,
                 me = None
         g = need_game()
         board = g.leaderboard(period, max(1, min(limit, 50)), me)
-        mine = None
-        if me:
-            best = g.best(me, period)
-            mine = {"best": best, "rank": g.rank_of(best, period) if best else None}
+        mine = g.standing(me, period) if me else None
         return {"period": period, "leaderboard": board, "me": mine}
 
     @app.post("/game/scores")
@@ -409,6 +409,8 @@ def create_app(engine: FaceEngine | None = None, store: FaceStore | None = None,
         except ValueError as e:
             raise HTTPException(400, str(e)) from e
         need_accounts().update_profile(u["user_id"], None, name, None)
+        if state.get("game") is not None:
+            state["game"].invalidate()          # the board shows nicknames: show the new one at once
         return {"nickname": name}
 
     @app.get("/leaderboard")

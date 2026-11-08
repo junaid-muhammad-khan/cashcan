@@ -12,6 +12,7 @@ from __future__ import annotations
 import re
 import uuid
 
+from .cache import TTLCache
 from .databricks_store import DatabricksFaces
 
 APP_SCHEMA = "workspace.cashcan_app"
@@ -24,6 +25,7 @@ MIN_MS_PER_ITEM = 600             # nobody can swipe faster than this on average
 MAX_ITEMS = 600
 MAX_DURATION_MS = 3 * 60 * 60 * 1000
 SUBMIT_COOLDOWN_SECONDS = 15
+READ_CACHE_SECONDS = 30   # the public board / a player's standing may be this old; saving a score clears it at once
 PERIODS = ("week", "all")
 
 GAME_ID_RE = re.compile(r"^[A-Za-z0-9-]{8,64}$")
@@ -78,6 +80,7 @@ def check_result(body: dict) -> dict:
 
 class GameScores:
     def __init__(self, db: DatabricksFaces, schema: str = APP_SCHEMA):
+        self._cache = TTLCache(READ_CACHE_SECONDS)   # the board and ranks change only when a score is saved (cleared then) or time passes
         self.db, self.t = db, schema
         self._ready = False
 
@@ -109,9 +112,21 @@ class GameScores:
             f"CAST(:d AS BIGINT), current_timestamp())",
             {"g": result["game_id"], "u": user_id, "sc": str(result["score"]), "c": str(result["correct"]), "w": str(result["wrong"]),
              "sp": str(result["spilled"]), "bs": str(result["best_streak"]), "lv": str(result["level"]), "d": str(result["duration_ms"])})
+        self.invalidate()
         best = max(before or 0, result["score"])
         return {"saved": True, "score": result["score"], "best": best, "personal_best": result["score"] > (before or 0),
                 "rank": self.rank_of(best, "all")}
+
+    def invalidate(self) -> None:
+        """Forget cached reads (a score was saved or a nickname changed)."""
+        self._cache.clear()
+
+    def standing(self, user_id: str, period: str) -> dict:
+        """The player's best score and rank in the period, cached briefly."""
+        def make():
+            best = self.best(user_id, period)
+            return {"best": best, "rank": self.rank_of(best, period) if best else None}
+        return self._cache.get(("me", user_id, period), make)
 
     def best(self, user_id: str, period: str = "all") -> int | None:
         self.ensure_table()
@@ -135,18 +150,21 @@ class GameScores:
         """Each player's best game in the period, best first. Nicknames only."""
         self.ensure_table()
         where = self._where(period).replace("WHERE ", "WHERE s.")
-        rows = self.db.sql(
-            f"SELECT p.user_id, COALESCE(u.pseudonym, concat('Sorter ', substr(p.user_id, 1, 4))) AS name, p.score, p.correct, p.wrong, p.spilled, "
-            f"p.best_streak, p.level FROM (SELECT s.user_id, s.score, s.correct, s.wrong, s.spilled, s.best_streak, s.level, "
-            f"ROW_NUMBER() OVER (PARTITION BY s.user_id ORDER BY s.score DESC, s.created_at ASC) AS rn, s.created_at "
-            f"FROM {self.t}.game_scores s {where}) p JOIN {self.t}.users u ON u.user_id = p.user_id WHERE p.rn = 1 "
-            f"ORDER BY p.score DESC, p.created_at ASC LIMIT {int(limit)}")
+        rows = self._cache.get(("board", period, int(limit)), lambda: self._board_rows(where, limit))
         out = []
         for n, r in enumerate(rows, 1):
             correct, wrong, spilled = int(float(r[3])), int(float(r[4])), int(float(r[5]))
             out.append({"rank": n, "name": r[1], "score": int(float(r[2])), "correct": correct, "best_streak": int(float(r[6])),
                         "level": int(float(r[7])), "accuracy": accuracy_of(correct, wrong, spilled), "is_me": bool(me) and r[0] == me})
         return out
+
+    def _board_rows(self, where: str, limit: int):
+        return self.db.sql(
+            f"SELECT p.user_id, COALESCE(u.pseudonym, concat('Sorter ', substr(p.user_id, 1, 4))) AS name, p.score, p.correct, p.wrong, p.spilled, "
+            f"p.best_streak, p.level FROM (SELECT s.user_id, s.score, s.correct, s.wrong, s.spilled, s.best_streak, s.level, "
+            f"ROW_NUMBER() OVER (PARTITION BY s.user_id ORDER BY s.score DESC, s.created_at ASC) AS rn, s.created_at "
+            f"FROM {self.t}.game_scores s {where}) p JOIN {self.t}.users u ON u.user_id = p.user_id WHERE p.rn = 1 "
+            f"ORDER BY p.score DESC, p.created_at ASC LIMIT {int(limit)}")
 
 
 class TooFast(ValueError):

@@ -187,3 +187,49 @@ def test_nickname_endpoint_saves_and_rejects(env):
     assert c.put("/game/nickname", json={"nickname": "a@b.com"}, headers=auth()).status_code == 400
     assert c.put("/game/nickname", json={"nickname": "Ace"}, headers=auth()).json() == {"nickname": "Ace"}
     assert c.get("/me", headers=auth()).json()["pseudonym"] == "Ace"
+
+
+# ---- reads are cached briefly, so repeated page views do not wake the warehouse
+def test_the_leaderboard_is_read_once_per_window_and_a_saved_score_refreshes_it():
+    from app.cache import TTLCache
+
+    class CountingDB:
+        schema = "workspace.cashcan_faces"
+
+        def __init__(self):
+            self.queries = 0
+
+        def sql(self, stmt, params=None):
+            if "ROW_NUMBER" in stmt:
+                self.queries += 1
+                return [["u1", "Ace", "50", "5", "0", "0", "5", "1"]]
+            return []
+
+    db = CountingDB()
+    g = GameScores(db)
+    g._ready = True
+    for _ in range(5):
+        assert g.leaderboard("week", 10)[0]["name"] == "Ace"
+    assert db.queries == 1
+    g.invalidate()
+    g.leaderboard("week", 10)
+    assert db.queries == 2
+
+
+def test_ttlcache_expires_and_does_not_cache_errors():
+    from app.cache import TTLCache
+
+    now = [0.0]
+    c = TTLCache(10, clock=lambda: now[0])
+    calls = []
+    assert c.get("k", lambda: calls.append(1) or "v") == "v" and c.get("k", lambda: calls.append(1) or "w") == "v"
+    assert len(calls) == 1
+    now[0] = 11
+    assert c.get("k", lambda: "w") == "w"
+
+    def boom():
+        raise RuntimeError("db down")
+
+    for _ in range(2):
+        with pytest.raises(RuntimeError):
+            c.get("e", boom)
