@@ -1,0 +1,75 @@
+# Unified class map for CashCan ML pipeline - 3 PHYSICAL BINS, not materials.
+#
+# Design (confirmed with user 2026-11-07): the bin only has 3 openings -
+# Organics, Cans, Waste. "Cans" = BC Return-It deposit-refund containers
+# (metal/plastic/glass), tying directly into the reward/payout story. "Waste"
+# is the catch-all for everything else - it is classified and shown on the
+# display, but reward_eligible=false and nothing physically actuates for it
+# ("we won't open the trash can").
+#
+# Role assignment (per task spec):
+#   - trashnet, gd  -> train_val (model is trained and validated on these)
+#   - realwaste     -> test_only (held out, never trained on)
+
+unified_classes:
+  - organics
+  - cans
+  - waste
+
+datasets:
+  trashnet:
+    role: train_val
+    path: data/raw/trashnet/dataset-resized
+    counts: {cardboard: 403, glass: 501, metal: 410, paper: 594, plastic: 482, trash: 137}
+    mapping:
+      glass: cans
+      metal: cans
+      plastic: cans
+      cardboard: waste
+      paper: waste
+      trash: waste
+
+  gd:
+    role: train_val
+    path: data/raw/gd/standardized_256
+    counts: {battery: 756, biological: 699, cardboard: 1411, clothes: 1892, glass: 1736, metal: 930, paper: 1336, plastic: 1597, shoes: 1449, trash: 453}
+    mapping:
+      biological: organics
+      glass: cans
+      metal: cans
+      plastic: cans
+      battery: waste
+      cardboard: waste
+      clothes: waste
+      paper: waste
+      shoes: waste
+      trash: waste
+
+  realwaste:
+    role: test_only
+    path: data/raw/realwaste/realwaste-main/RealWaste
+    counts: {Cardboard: 461, "Food Organics": 411, Glass: 420, Metal: 790, "Miscellaneous Trash": 495, Paper: 500, Plastic: 921, "Textile Trash": 318, Vegetation: 436}
+    mapping:
+      # Every RealWaste class maps cleanly now that buckets are coarse (3 bins, not materials).
+      "Food Organics": organics
+      Vegetation: organics
+      Glass: cans
+      Metal: cans
+      Plastic: cans
+      Cardboard: waste
+      Paper: waste
+      "Miscellaneous Trash": waste
+      "Textile Trash": waste
+    excluded_unmapped: []
+
+notes:
+  - "CLASS IMBALANCE WARNING: combined train_val set is organics=699, cans=5656, waste=8431
+     (organics is only ~4.7% of training data, since only GD's 'biological' folder feeds it -
+     TrashNet has no organics-equivalent class). Will use class-weighted loss and report
+     per-class recall/precision honestly, especially for organics."
+  - "RealWaste test set distribution: organics=847, cans=2131, waste=1774 (total 4752, nothing
+     excluded - unlike the old 10-class map, no RealWaste folder is ambiguous once collapsed
+     into just 3 physical-bin buckets)."
+  - "'Cans' = metal + plastic + glass, matching BC's Return-It deposit-refund containers
+     (ties to the reward/payout mechanic). 'Waste' is classified and shown on the display but
+     reward_eligible=false and the bin is never physically actuated for it."

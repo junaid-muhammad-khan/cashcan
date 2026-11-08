@@ -1,5 +1,10 @@
+# macOS
+.DS_Store
+**/.DS_Store
+
+# Python (face_api, pi_client, ml)
 __pycache__/
 .pytest_cache/
-*.db
 .venv/
+*.db
 tuning_data/

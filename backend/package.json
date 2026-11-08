@@ -1,0 +1,23 @@
+{
+  "name": "cashcan-backend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Devnet Solana payout service for CashCan",
+  "type": "module",
+  "scripts": {
+    "cli": "tsx src/cli.ts",
+    "init-treasury": "tsx src/cli.ts init-treasury",
+    "balance": "tsx src/cli.ts balance"
+  },
+  "dependencies": {
+    "@solana/web3.js": "1.95.3",
+    "bs58": "6.0.0",
+    "commander": "12.1.0",
+    "dotenv": "16.4.5"
+  },
+  "devDependencies": {
+    "@types/node": "22.7.4",
+    "tsx": "4.19.1",
+    "typescript": "5.6.2"
+  }
+}

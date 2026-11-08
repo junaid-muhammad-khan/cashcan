@@ -1,0 +1,26 @@
+# Bin rules for CashCan. Keys match the model's unified classes (class_map.yaml).
+#
+# DO NOT fill in bin/reason with assumed Metro Vancouver / Recycle BC rules - the team
+# must verify these against the current Recycle BC and Metro Vancouver accepted-materials
+# lists before hard-coding anything (see ml/README.md "Data plan" section, and the main
+# README's "Not yet verified" note). All values below are placeholders.
+#
+# Schema per material/bin class:
+#   bin:              TODO - the physical bin name/label to display (e.g. "Green bin - Organics")
+#   reason:           TODO - plain-language explanation shown on the bin display
+#   reward_eligible:  TODO - whether a correct, clean item in this bin earns a payout (bool)
+
+organics:
+  bin: TODO
+  reason: TODO
+  reward_eligible: TODO
+
+cans:
+  bin: TODO
+  reason: TODO
+  reward_eligible: TODO
+
+waste:
+  bin: TODO
+  reason: TODO
+  reward_eligible: false  # per README: "we won't open the trash can" - no reward for this bin

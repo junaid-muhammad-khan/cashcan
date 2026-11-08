@@ -3,7 +3,7 @@
 **Smart sorting bins that know your city's rules, and pay you for sorting correctly.**
 
 > Hackathon project (24 hours). Theme: solve a problem in this world.
-> Status: planning. Everything below is the plan, not a finished build.
+> Status: in progress. The Solana payout backend (`backend/`) is built and verified end-to-end; everything else below is still the plan, not a finished build.
 
 ---
 
@@ -68,9 +68,9 @@ The classifier detects the item, then a lookup table decides whether it earns a 
 - [ ] Local rule lookup table (item -> correct bin + reason)
 - [ ] Two cameras (top and front) + Raspberry Pi capturing each item
 - [ ] Bin indicator (LEDs or display) showing the correct bin and why
-- [ ] Reward table + devnet SOL payout for reward-eligible items
+- [x] Reward table + devnet SOL payout for reward-eligible items — backend built and verified end-to-end (reward lookup, contamination multiplier, confidence gate, per-user cooldown, real signed transfer); see `backend/README.md`. Reward amounts in the table are still placeholders (see Open questions)
 - [ ] Facial registration and face match at the bin, so each payout goes to the right user's wallet (opt-in consent screen, store face embeddings only, never raw photos, delete on request)
-- [ ] Activity log / dashboard of items and contamination, built on Databricks (Delta table + AI/BI dashboard). Free Edition has no GPUs, so train the vision model elsewhere and use Databricks for data and analytics
+- [x] Activity log to Databricks (Delta table). `backend/src/activityLog.ts` writes each payout decision (paid or rejected) to `workspace.cashcan.activity_log` via the Databricks SQL Statement API, wired into the payout CLI; gated on `DATABRICKS_SERVER_HOSTNAME`/`DATABRICKS_HTTP_PATH`/`DATABRICKS_TOKEN` in `.env` and never throws (a Databricks hiccup must not block a real payout). Verified end-to-end against the live workspace (Free Edition, Serverless Starter Warehouse) — a real row round-tripped. The AI/BI **dashboard** on top of this table is not yet built; do that once there's more than a couple of seed rows
 - [ ] Gemini API: generate the plain-language "why" text and auto-label photos to speed up data collection
 
 ### Nice to have (only if time remains)
@@ -89,9 +89,9 @@ The classifier detects the item, then a lookup table decides whether it earns a 
 | Face recognition | Existing open-source library (for example face_recognition, InsightFace, or DeepFace). Store embeddings only, not photos |
 | Vision model | Small model such as YOLOv8n or MobileNet, fine-tuned on our own photos |
 | Edge device | Raspberry Pi with two cameras (top + front; placement TBD by hardware team) |
-| Backend | TBD (for example Python / Node) |
-| Payout | Solana **devnet** |
-| Dashboard | Web app, data in Databricks (Free Edition: Delta table + AI/BI dashboard) |
+| Backend | Node / TypeScript — see `backend/` |
+| Payout | Solana **devnet** — see `backend/` (Node/TypeScript, `@solana/web3.js`); demoing against a local `solana-test-validator` for reliability, see `backend/README.md` |
+| Dashboard | Web app, data in Databricks (Free Edition: Delta table + AI/BI dashboard). `workspace.cashcan.activity_log` table live and receiving rows via `backend/src/activityLog.ts`; the AI/BI dashboard view itself not yet built |
 | Gemini API | Plain-language "why this bin" explanations (English / Cantonese / Mandarin) and auto-labeling of our photo dataset. Keep the local model as the main classifier path, so the demo never depends on venue wifi |
 | Domain | cashcan.com (set). See the domain note under "Awards we're targeting" |
 | Version control | Git |
@@ -173,7 +173,7 @@ We are a **beginner team**, so the Beginner stream applies.
 - Show the bin catching a contaminated item live, then the payout changing.
 - Show real held-out accuracy, including where the model fails.
 - Say plainly: "We found no product doing local-rule plus contamination sorting, but our dataset is small."
-- Have a one-sentence answer for **who funds the payouts** (for example, municipalities or brands paying for cleaner streams). **TBD.**
+- **Who funds the payouts:** the recycling/hauling company that picks up the bin's contents pays CashCan cash for the collected material. CashCan converts part of that revenue into SOL to fund the treasury wallet, which pays users per reward-eligible item. See `backend/README.md` for the devnet implementation of the payout leg.
 - Be ready to explain how this differs from existing deposit-refund programs for drink containers.
 - Have a one-sentence answer for "why facial recognition?" (for example: it ties each reward to one real person without carrying a card or phone) and for privacy: opt-in, embeddings only, deletable.
 
@@ -185,6 +185,7 @@ We are a **beginner team**, so the Beginner stream applies.
 - Classifier accuracy will drop on messy real-world items.
 - Payout abuse is possible without strong rate limits and confidence thresholds.
 - Crypto adds regulatory and credibility questions. We use devnet only.
+- The public devnet faucet is unreliable for a live demo: Solana shut off its RPC auto-airdrop, and the web faucet explicitly tells AI agents/scripts not to use its form. We demo against a local `solana-test-validator` instead (unlimited SOL, no rate limit, no network dependency during judging) — see `backend/README.md` for both setups.
 - Facial recognition handles biometric data, which carries privacy and legal obligations (consent, storage, deletion). We have not verified what applies in BC. Keep it opt-in, store embeddings only, and be ready to explain why a face is needed at all.
 - Face matching can be fooled by a photo or screen without liveness detection, and accuracy varies across lighting and faces. Test on our own team and report real results.
 - Local rules change. Rules in this project are as of build time and must be re-verified.
@@ -192,7 +193,7 @@ We are a **beginner team**, so the Beginner stream applies.
 ## Open questions
 
 - [ ] Definition of the payout formula ("Classifier / 2")
-- [ ] Who funds real payouts in a real deployment
+- [x] Who funds real payouts in a real deployment — the recycling/hauling company's payment for collected material, converted to SOL (see backend/README.md)
 - [ ] Domain: keep cashcan.com (likely ineligible for the GoDaddy Registry award) or also register an eligible TLD such as .co. Check trademark clearance for the name either way
 - [ ] Which face recognition library, and which camera does the face match (shared with the front item camera, or a third camera)
 - [ ] Camera placement and how the two views are combined (top = entry angle, front = side profile)
