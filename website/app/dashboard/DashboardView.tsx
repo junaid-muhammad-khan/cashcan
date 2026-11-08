@@ -1,7 +1,6 @@
 "use client";
 
-import Link from "next/link";
-import { LogoMark } from "@/components/icons";
+import { AppFooter, AppHeader } from "@/components/AppChrome";
 import { useEffect, useRef, useState } from "react";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
@@ -93,22 +92,7 @@ export default function DashboardView({ firstName, walletAddress, onSaveWallet, 
 
   return (
     <div className="db" ref={root}>
-      <header className="db-top">
-        <Link href="/" className="db-logo">
-          <span className="db-logo-mark">
-            {/* Same bin mark as the browser-tab icon (app/icon.svg) */}
-            <svg {...S} width={22} height={22} viewBox="0 0 32 32" strokeWidth={2.6} stroke="#fff">
-              <path d="M7 9h18l-2 18H9z" /><path d="M5 9h22" /><path d="M12 9V6h8v3" /><path d="M13 15c1.5-1.5 4.5-1.5 6 0M16 14v8" />
-            </svg>
-          </span>
-          <span>cashcan</span>
-        </Link>
-        <nav aria-label="Account" className="db-top-links">
-          <Link href="/" className="db-pill">Home</Link>
-          <a href="#redeem" className="db-pill">Redeem</a>
-          <Link href="/account" className="db-pill">Profile</Link>
-        </nav>
-      </header>
+      <AppHeader current="dashboard" />
 
       <main className="db-wrap">
         <div className="db-inner">
@@ -293,10 +277,7 @@ export default function DashboardView({ firstName, walletAddress, onSaveWallet, 
             </div>
           </div>
 
-          <footer className="db-footer">
-            <span className="db-footer-brand"><LogoMark size={18} />Cashcan · Thoughtful sorting, one item at a time.</span>
-            <span>Demo data · Metro Vancouver · All times local</span>
-          </footer>
+          <AppFooter note="Demo data · Metro Vancouver · All times local" />
         </div>
       </main>
     </div>

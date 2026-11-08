@@ -117,3 +117,17 @@
   .db-learn { padding: 20px 16px 24px; }
 }
 @media (prefers-reduced-motion: reduce) { .db-bar, .db-bar-col { transition: none; } }
+
+/* Header tabs and the Profile page */
+.db-pill.is-current { background: var(--db-ink); border-color: var(--db-ink); color: #fff; }
+button.db-pill { font-family: var(--font-inter), sans-serif; }
+.db-profile { max-width: 760px; }
+.db-profile-card { background: #fff; border: 1px solid var(--db-line); border-radius: 14px; padding: 8px 22px; margin-top: 22px; }
+.db-profile-card dl { display: grid; grid-template-columns: 120px 1fr; margin: 0; }
+.db-profile-card dt, .db-profile-card dd { padding: 14px 0; border-bottom: 1px solid var(--db-line-2); font-size: 14px; }
+.db-profile-card dt { color: var(--db-muted); }
+.db-profile-card dd { margin: 0; word-break: break-all; }
+.db-profile-card dt:last-of-type, .db-profile-card dd:last-of-type { border-bottom: 0; }
+.db-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
+.db-inline-link { margin-left: 8px; font-size: 13px; font-weight: 600; white-space: nowrap; }
+@media (max-width: 560px) { .db-profile-card dl { grid-template-columns: 1fr; } .db-profile-card dt { border-bottom: 0; padding-bottom: 0; } }
