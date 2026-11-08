@@ -216,3 +216,9 @@ python -m tools.tune report
 Tag `enroll` is the gallery; every other tag is a probe condition (try dim, bright, angle, glasses, mask-down, a different day).
 `report` prints genuine vs impostor scores, a threshold sweep (FRR, wrong-user rate, open-set FAR) and a suggested
 `MATCH_THRESHOLD`. Set it with the env var, e.g. `MATCH_THRESHOLD=0.5 uvicorn ...`. No webcam? `tools.tune ingest --person X --tag T --dir photos/`.
+
+## Storage: Databricks (default when configured)
+The API stores templates in Databricks (`workspace.cashcan_faces`) whenever `DATABRICKS_HOST`, `DATABRICKS_TOKEN` and `DATABRICKS_WAREHOUSE_ID`
+are set (or `CASHCAN_STORE=databricks`). Without them it falls back to the local SQLite file (`CASHCAN_STORE=sqlite` forces that). Matching still
+runs in the API process on a copy of the templates cached for 30 s and refreshed after every enroll/delete; the Vector Search index is not synced
+per request (run `python -m tools.databricks_sync status`). On Vercel, set the three variables in the project settings; the SQLite file is not persistent there.

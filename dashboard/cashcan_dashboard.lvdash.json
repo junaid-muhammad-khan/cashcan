@@ -1,0 +1,1004 @@
+{
+  "datasets": [
+    {
+      "name": "ds_activity",
+      "displayName": "Bin activity",
+      "queryLines": [
+        "SELECT event_id, ts, user_id, item_label, bin_decision, contaminated,\n",
+        "  contamination_score, classifier_confidence, top_cam_label, front_cam_label,\n",
+        "  reward_eligible, payout_sol, payout_tx_sig,\n",
+        "  CASE WHEN contaminated THEN 'Contaminated' ELSE 'Clean' END AS item_condition,\n",
+        "  CAST(contaminated AS INT) AS is_contaminated,\n",
+        "  CASE WHEN payout_sol > 0 THEN 1 ELSE 0 END AS is_paid,\n",
+        "  CASE WHEN payout_sol > 0 THEN 'Paid'\n",
+        "       WHEN NOT reward_eligible AND item_label = 'trash' THEN 'Not reward-eligible'\n",
+        "       WHEN classifier_confidence < 0.75 THEN 'Low confidence'\n",
+        "       WHEN coalesce(top_cam_label, '') <> coalesce(front_cam_label, '') THEN 'Cameras disagree'\n",
+        "       ELSE 'Other / cooldown' END AS outcome\n",
+        "FROM activity_log\n"
+      ],
+      "columns": [
+        {
+          "displayName": "Items Sorted",
+          "description": "Count of bin events",
+          "expression": "COUNT(`event_id`)"
+        },
+        {
+          "displayName": "Contamination Rate",
+          "description": "Share of items flagged contaminated",
+          "expression": "AVG(`is_contaminated`)"
+        },
+        {
+          "displayName": "SOL Paid",
+          "description": "Total devnet SOL paid out",
+          "expression": "SUM(`payout_sol`)"
+        },
+        {
+          "displayName": "Payout Rate",
+          "description": "Share of items that earned a payout",
+          "expression": "AVG(`is_paid`)"
+        },
+        {
+          "displayName": "Active Users",
+          "description": "Distinct users at the bin",
+          "expression": "COUNT(DISTINCT `user_id`)"
+        }
+      ]
+    }
+  ],
+  "pages": [
+    {
+      "name": "overview",
+      "displayName": "Overview",
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1",
+      "layout": [
+        {
+          "widget": {
+            "name": "title",
+            "multilineTextboxSpec": {
+              "lines": [
+                "# CashCan \u2014 Bin Activity\n"
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 12,
+            "height": 1
+          }
+        },
+        {
+          "widget": {
+            "name": "subtitle",
+            "multilineTextboxSpec": {
+              "lines": [
+                "Every item dropped in a CashCan bin: what the classifier saw, which bin it went to, whether it was contaminated, and whether the devnet SOL payout went through. Use the **Filters** page to narrow by date, bin or item.\n"
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 1,
+            "width": 12,
+            "height": 1
+          }
+        },
+        {
+          "widget": {
+            "name": "kpi_items",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_activity",
+                  "fields": [
+                    {
+                      "name": "daily(ts)",
+                      "expression": "DATE_TRUNC(\"DAY\", `ts`)"
+                    },
+                    {
+                      "name": "measure(Items Sorted)",
+                      "expression": "MEASURE(`Items Sorted`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "measure(Items Sorted)",
+                  "displayName": "Items sorted"
+                },
+                "period": {
+                  "fieldName": "daily(ts)"
+                }
+              },
+              "frame": {
+                "title": "Items sorted",
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 2,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "kpi_contam",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_activity",
+                  "fields": [
+                    {
+                      "name": "measure(Contamination Rate)",
+                      "expression": "MEASURE(`Contamination Rate`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "measure(Contamination Rate)",
+                  "displayName": "Contamination rate",
+                  "format": {
+                    "type": "number-percent",
+                    "decimalPlaces": {
+                      "type": "max",
+                      "places": 1
+                    }
+                  }
+                }
+              },
+              "frame": {
+                "title": "Contamination rate",
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 2,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "kpi_sol",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_activity",
+                  "fields": [
+                    {
+                      "name": "measure(SOL Paid)",
+                      "expression": "MEASURE(`SOL Paid`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "measure(SOL Paid)",
+                  "displayName": "SOL paid (devnet)",
+                  "format": {
+                    "type": "number-plain",
+                    "decimalPlaces": {
+                      "type": "max",
+                      "places": 3
+                    }
+                  }
+                }
+              },
+              "frame": {
+                "title": "SOL paid (devnet)",
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 2,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "kpi_payout_rate",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_activity",
+                  "fields": [
+                    {
+                      "name": "measure(Payout Rate)",
+                      "expression": "MEASURE(`Payout Rate`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "measure(Payout Rate)",
+                  "displayName": "Payout rate",
+                  "format": {
+                    "type": "number-percent",
+                    "decimalPlaces": {
+                      "type": "max",
+                      "places": 1
+                    }
+                  }
+                }
+              },
+              "frame": {
+                "title": "Payout rate",
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 9,
+            "y": 2,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "h_trends",
+            "multilineTextboxSpec": {
+              "lines": [
+                "## Volume and bins\n"
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 5,
+            "width": 12,
+            "height": 1
+          }
+        },
+        {
+          "widget": {
+            "name": "daily_by_bin",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_activity",
+                  "fields": [
+                    {
+                      "name": "daily(ts)",
+                      "expression": "DATE_TRUNC(\"DAY\", `ts`)"
+                    },
+                    {
+                      "name": "bin_decision",
+                      "expression": "`bin_decision`"
+                    },
+                    {
+                      "name": "measure(Items Sorted)",
+                      "expression": "MEASURE(`Items Sorted`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "daily(ts)",
+                  "scale": {
+                    "type": "temporal"
+                  },
+                  "displayName": "Day"
+                },
+                "y": {
+                  "fieldName": "measure(Items Sorted)",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "Items"
+                },
+                "color": {
+                  "fieldName": "bin_decision",
+                  "scale": {
+                    "type": "categorical",
+                    "mappings": [
+                      {
+                        "value": "cans",
+                        "color": "#2BB673"
+                      },
+                      {
+                        "value": "organics",
+                        "color": "#E3B23C"
+                      },
+                      {
+                        "value": "waste",
+                        "color": "#7A8794"
+                      }
+                    ]
+                  },
+                  "displayName": "Bin"
+                }
+              },
+              "frame": {
+                "title": "Items per day, by bin",
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 6,
+            "width": 8,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "bin_share",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_activity",
+                  "fields": [
+                    {
+                      "name": "bin_decision",
+                      "expression": "`bin_decision`"
+                    },
+                    {
+                      "name": "measure(Items Sorted)",
+                      "expression": "MEASURE(`Items Sorted`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "pie",
+              "encodings": {
+                "angle": {
+                  "fieldName": "measure(Items Sorted)",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "Items"
+                },
+                "color": {
+                  "fieldName": "bin_decision",
+                  "scale": {
+                    "type": "categorical",
+                    "mappings": [
+                      {
+                        "value": "cans",
+                        "color": "#2BB673"
+                      },
+                      {
+                        "value": "organics",
+                        "color": "#E3B23C"
+                      },
+                      {
+                        "value": "waste",
+                        "color": "#7A8794"
+                      }
+                    ]
+                  },
+                  "displayName": "Bin"
+                },
+                "label": {
+                  "show": true
+                }
+              },
+              "frame": {
+                "title": "Share by bin",
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 8,
+            "y": 6,
+            "width": 4,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "h_quality",
+            "multilineTextboxSpec": {
+              "lines": [
+                "## Where sorting goes wrong\n"
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 12,
+            "width": 12,
+            "height": 1
+          }
+        },
+        {
+          "widget": {
+            "name": "contam_by_item",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_activity",
+                  "fields": [
+                    {
+                      "name": "item_label",
+                      "expression": "`item_label`"
+                    },
+                    {
+                      "name": "measure(Contamination Rate)",
+                      "expression": "MEASURE(`Contamination Rate`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "measure(Contamination Rate)",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "Contamination rate",
+                  "format": {
+                    "type": "number-percent",
+                    "decimalPlaces": {
+                      "type": "max",
+                      "places": 1
+                    }
+                  }
+                },
+                "y": {
+                  "fieldName": "item_label",
+                  "scale": {
+                    "type": "categorical",
+                    "sort": {
+                      "by": "x-reversed"
+                    }
+                  },
+                  "displayName": "Item"
+                }
+              },
+              "frame": {
+                "title": "Contamination rate by item",
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 13,
+            "width": 6,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "outcomes",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_activity",
+                  "fields": [
+                    {
+                      "name": "daily(ts)",
+                      "expression": "DATE_TRUNC(\"DAY\", `ts`)"
+                    },
+                    {
+                      "name": "outcome",
+                      "expression": "`outcome`"
+                    },
+                    {
+                      "name": "measure(Items Sorted)",
+                      "expression": "MEASURE(`Items Sorted`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "mark": {
+                "layout": "stack-100"
+              },
+              "encodings": {
+                "x": {
+                  "fieldName": "daily(ts)",
+                  "scale": {
+                    "type": "temporal"
+                  },
+                  "displayName": "Day"
+                },
+                "y": {
+                  "fieldName": "measure(Items Sorted)",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "Items"
+                },
+                "color": {
+                  "fieldName": "outcome",
+                  "scale": {
+                    "type": "categorical",
+                    "mappings": [
+                      {
+                        "value": "Paid",
+                        "color": "#2BB673"
+                      },
+                      {
+                        "value": "Low confidence",
+                        "color": "#FF7E5C"
+                      },
+                      {
+                        "value": "Cameras disagree",
+                        "color": "#C2477A"
+                      },
+                      {
+                        "value": "Not reward-eligible",
+                        "color": "#7A8794"
+                      },
+                      {
+                        "value": "Other / cooldown",
+                        "color": "#4E79A7"
+                      }
+                    ]
+                  },
+                  "displayName": "Outcome"
+                }
+              },
+              "frame": {
+                "title": "Payout outcome mix per day (anti-abuse gates)",
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 13,
+            "width": 6,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "h_detail",
+            "multilineTextboxSpec": {
+              "lines": [
+                "## Users and recent events\n"
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 19,
+            "width": 12,
+            "height": 1
+          }
+        },
+        {
+          "widget": {
+            "name": "top_users",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_activity",
+                  "fields": [
+                    {
+                      "name": "user_id",
+                      "expression": "`user_id`"
+                    },
+                    {
+                      "name": "measure(Items Sorted)",
+                      "expression": "MEASURE(`Items Sorted`)"
+                    },
+                    {
+                      "name": "measure(SOL Paid)",
+                      "expression": "MEASURE(`SOL Paid`)"
+                    },
+                    {
+                      "name": "measure(Contamination Rate)",
+                      "expression": "MEASURE(`Contamination Rate`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "user_id",
+                    "displayName": "User"
+                  },
+                  {
+                    "fieldName": "measure(Items Sorted)",
+                    "displayName": "Items"
+                  },
+                  {
+                    "fieldName": "measure(SOL Paid)",
+                    "displayName": "SOL paid",
+                    "format": {
+                      "type": "number-plain",
+                      "decimalPlaces": {
+                        "type": "max",
+                        "places": 3
+                      }
+                    }
+                  },
+                  {
+                    "fieldName": "measure(Contamination Rate)",
+                    "displayName": "Contamination",
+                    "format": {
+                      "type": "number-percent",
+                      "decimalPlaces": {
+                        "type": "max",
+                        "places": 1
+                      }
+                    }
+                  }
+                ]
+              },
+              "frame": {
+                "title": "Users",
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 20,
+            "width": 4,
+            "height": 8
+          }
+        },
+        {
+          "widget": {
+            "name": "recent",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_activity",
+                  "fields": [
+                    {
+                      "name": "ts",
+                      "expression": "`ts`"
+                    },
+                    {
+                      "name": "user_id",
+                      "expression": "`user_id`"
+                    },
+                    {
+                      "name": "item_label",
+                      "expression": "`item_label`"
+                    },
+                    {
+                      "name": "bin_decision",
+                      "expression": "`bin_decision`"
+                    },
+                    {
+                      "name": "item_condition",
+                      "expression": "`item_condition`"
+                    },
+                    {
+                      "name": "classifier_confidence",
+                      "expression": "`classifier_confidence`"
+                    },
+                    {
+                      "name": "outcome",
+                      "expression": "`outcome`"
+                    },
+                    {
+                      "name": "payout_sol",
+                      "expression": "`payout_sol`"
+                    },
+                    {
+                      "name": "payout_tx_sig",
+                      "expression": "`payout_tx_sig`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "ts",
+                    "displayName": "Time"
+                  },
+                  {
+                    "fieldName": "user_id",
+                    "displayName": "User"
+                  },
+                  {
+                    "fieldName": "item_label",
+                    "displayName": "Item"
+                  },
+                  {
+                    "fieldName": "bin_decision",
+                    "displayName": "Bin"
+                  },
+                  {
+                    "fieldName": "item_condition",
+                    "displayName": "Condition"
+                  },
+                  {
+                    "fieldName": "classifier_confidence",
+                    "displayName": "Confidence",
+                    "format": {
+                      "type": "number-percent",
+                      "decimalPlaces": {
+                        "type": "max",
+                        "places": 1
+                      }
+                    }
+                  },
+                  {
+                    "fieldName": "outcome",
+                    "displayName": "Outcome"
+                  },
+                  {
+                    "fieldName": "payout_sol",
+                    "displayName": "SOL",
+                    "format": {
+                      "type": "number-plain",
+                      "decimalPlaces": {
+                        "type": "max",
+                        "places": 3
+                      }
+                    }
+                  },
+                  {
+                    "fieldName": "payout_tx_sig",
+                    "displayName": "Tx signature"
+                  }
+                ]
+              },
+              "frame": {
+                "title": "Recent events",
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 4,
+            "y": 20,
+            "width": 8,
+            "height": 8
+          }
+        }
+      ]
+    },
+    {
+      "name": "filters",
+      "displayName": "Filters",
+      "pageType": "PAGE_TYPE_GLOBAL_FILTERS",
+      "layoutVersion": "GRID_V1",
+      "layout": [
+        {
+          "widget": {
+            "name": "f_date",
+            "queries": [
+              {
+                "name": "q_f_date",
+                "query": {
+                  "datasetName": "ds_activity",
+                  "fields": [
+                    {
+                      "name": "ts",
+                      "expression": "`ts`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "filter-date-range-picker",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "ts",
+                    "displayName": "Date range",
+                    "queryName": "q_f_date"
+                  }
+                ]
+              },
+              "frame": {
+                "title": "Date range",
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 4,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "f_bin",
+            "queries": [
+              {
+                "name": "q_f_bin",
+                "query": {
+                  "datasetName": "ds_activity",
+                  "fields": [
+                    {
+                      "name": "bin_decision",
+                      "expression": "`bin_decision`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "filter-multi-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "bin_decision",
+                    "displayName": "Bin",
+                    "queryName": "q_f_bin"
+                  }
+                ]
+              },
+              "frame": {
+                "title": "Bin",
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 4,
+            "y": 0,
+            "width": 4,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "f_item",
+            "queries": [
+              {
+                "name": "q_f_item",
+                "query": {
+                  "datasetName": "ds_activity",
+                  "fields": [
+                    {
+                      "name": "item_label",
+                      "expression": "`item_label`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "filter-multi-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "item_label",
+                    "displayName": "Item",
+                    "queryName": "q_f_item"
+                  }
+                ]
+              },
+              "frame": {
+                "title": "Item",
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 8,
+            "y": 0,
+            "width": 4,
+            "height": 2
+          }
+        }
+      ]
+    }
+  ],
+  "uiSettings": {
+    "theme": {
+      "canvasBackgroundColor": {
+        "light": "#F6F8F5",
+        "dark": "#0F1512"
+      },
+      "widgetBackgroundColor": {
+        "light": "#FFFFFF",
+        "dark": "#151D19"
+      },
+      "widgetBorderColor": {
+        "light": "#FFFFFF",
+        "dark": "#151D19"
+      },
+      "fontColor": {
+        "light": "#10201A",
+        "dark": "#E6EEE9"
+      },
+      "selectionColor": {
+        "light": "#2272B4",
+        "dark": "#8ACAFF"
+      },
+      "visualizationColors": [
+        "#2BB673",
+        "#E3B23C",
+        "#4E79A7",
+        "#C2477A",
+        "#FF7E5C",
+        "#7A8794",
+        "#76B7B2"
+      ],
+      "widgetHeaderAlignment": "LEFT",
+      "fontFamily": "Inter",
+      "widgetCornerRadius": 12
+    }
+  }
+}

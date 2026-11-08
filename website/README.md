@@ -36,10 +36,11 @@ without JavaScript, and everything that moves is skipped when the visitor has re
 - Credentials, password reset, and signup are entirely handled by Auth0's hosted Universal Login — this app
   never sees a password.
 - Not carried over from the old custom auth: the wallet-address and face-opt-in fields that used to live in
-  `.data/users.json` have no replacement yet. `/account` shows them as static placeholders ("Not linked yet" /
+  the account store have no replacement yet. `/account` shows them as static placeholders ("Not linked yet" /
   "Not enrolled"). Reintroducing them means a small profile store keyed by the Auth0 `sub` claim (e.g. verify
-  the ID token server-side with `jose` + Auth0's JWKS endpoint in an API route), plus linking that to the
-  face-enrollment flow in `face_api/`.
+  the ID token server-side with `jose` + Auth0's JWKS endpoint in an API route — Databricks, set up in
+  `../databricks/website_users.sql` for the previous password-based accounts, would work for this too), plus
+  linking that to the face-enrollment flow in `face_api/`.
 
 ## Sample data
 The hero's live feed and the dashboard preview use sample values and are labelled "sample data" / "Demo data" in the UI.

@@ -273,7 +273,7 @@
       const fd = new FormData();
       fd.append("user_id", handle); fd.append("wallet", wallet); fd.append("consent", "true");
       blobs.forEach((b, i) => fd.append("frames", b, `f${i}.jpg`));
-      const res = await fetch("/enroll", { method: "POST", body: fd });
+      const res = await fetch("enroll", { method: "POST", body: fd });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw { status: res.status, body };
       const msg = $("done-msg"); msg.replaceChildren();
@@ -306,7 +306,7 @@
     }
     $("delete").disabled = true; $("del-err").hidden = true;
     try {
-      const res = await fetch("/users/" + encodeURIComponent(handle), { method: "DELETE" });
+      const res = await fetch("users/" + encodeURIComponent(handle), { method: "DELETE" });
       if (!res.ok && res.status !== 404) throw new Error();
       show("deleted");
     } catch (e) {

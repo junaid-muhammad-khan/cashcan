@@ -5,7 +5,11 @@ the team's own faces and report the real false-accept / false-reject rates.
 """
 import os
 
-DB_PATH = os.environ.get("CASHCAN_DB", "cashcan_faces.db")
+DB_PATH = os.environ.get("CASHCAN_DB", "cashcan_faces.db")  # local SQLite, used only when the Databricks store is off
+
+# Where face templates live. "databricks" (default whenever DATABRICKS_HOST/TOKEN/WAREHOUSE_ID are set) or "sqlite" (local file).
+STORE = os.environ.get("CASHCAN_STORE", "").lower() or (
+    "databricks" if all(os.environ.get(k) for k in ("DATABRICKS_HOST", "DATABRICKS_TOKEN", "DATABRICKS_WAREHOUSE_ID")) else "sqlite")
 
 # Matching
 MATCH_THRESHOLD = float(os.environ.get("MATCH_THRESHOLD", "0.45"))  # cosine similarity
