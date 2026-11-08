@@ -223,19 +223,42 @@ are set (or `CASHCAN_STORE=databricks`). Without them it falls back to the local
 runs in the API process on a copy of the templates cached for 30 s and refreshed after every enroll/delete; the Vector Search index is not synced
 per request (run `python -m tools.databricks_sync status`). On Vercel, set the three variables in the project settings; the SQLite file is not persistent there.
 
-## Accounts, bins and interactions (Databricks + Auth0)
-Tables are defined in `../databricks/app_schema.sql` (schema `workspace.cashcan_app`: `users`, `bins`, `interactions`, and a `leaderboard` view). Delta does not
-enforce unique keys, so the code does: users are created with `MERGE` on `auth0_sub`, interactions with `MERGE` on `interaction_id`, and a payout can only move
-`pending -> paid|failed` once.
+## Accounts, bins, interactions and payouts (Databricks + Auth0)
+Tables: `../databricks/app_schema.sql`, then `../databricks/002_interactions_payouts.sql` (schema `workspace.cashcan_app`: `users`, `bins`,
+`interactions`, views `leaderboard` and `city_activity`). Delta does not enforce unique keys, so the code does: users are created with `MERGE` on
+`auth0_sub`, interactions with `MERGE` on `interaction_id`, and every payout status change is a `MERGE ... WHEN MATCHED AND payout_status = '<expected>'`
+(`app/ledger.py`), so two workers can never both pay a row.
 
 | Endpoint | Auth | What |
 |---|---|---|
-| `GET/PUT /me` | Auth0 access token | profile (created on first login); pseudonym and Solana wallet |
+| `GET/PUT /me` | Auth0 access token | profile (created on first login); pseudonym and Solana wallet. Saving a wallet pays the user's **held** rewards and returns `held_queued` / `held_paid` |
+| `GET /me/activity?range=today\|week\|30d&tz=` | Auth0 access token | the user's drops: totals (items, paid SOL, paid CAD at each row's stored rate, held, pending), counts by bin, a time series and the 10 most recent drops |
 | `POST /enroll` | Auth0 access token | with Auth0 on, user and wallet come from the token and profile, never the form |
-| `POST /interactions` | `X-Bin-Key` | one sorted item; `interaction_id` makes retries safe; user comes from the live bin session, no face data is sent |
-| `POST /interactions/{id}/payout` | `X-Bin-Key` | payout result (`paid` + `tx_signature`, or `failed`), applied once |
+| `GET /rewards` | none | the reward table (`app/rewards.py`): cents per item class |
+| `POST /interactions` | `X-Bin-Key` | one sorted item; the server decides the reward and pays it (below); `interaction_id` makes retries safe |
+| `GET /cron/reconcile` | `Bearer $CRON_SECRET` | Vercel cron, every minute: retries failed payouts and resolves stuck ones |
 | `GET /leaderboard` | none | pseudonym and SOL earned, from paid interactions only |
 
-Settings: `AUTH0_DOMAIN` + `AUTH0_AUDIENCE` (Auth0 API identifier), `BIN_API_KEYS="bin-1:key,bin-2:key"`, plus the three `DATABRICKS_*` variables.
-Not built yet: the website calling these endpoints, an Auth0 "API" for the audience, the bin client sending `/interactions`, and a retry queue (only needed if the bin goes offline).
-Tested against a fake database, not yet against the real workspace.
+### Rewards and payouts
+- **Reward table** (`app/rewards.py`, the one source of truth): a can earns **5¢ CAD**, half the 10¢ BC deposit; organics and waste 0. The website's
+  `/prices` page reads `GET /rewards`; `tests/test_payouts.py` fails if `website/lib/prices.ts` (its fallback) disagrees.
+- **`POST /interactions`** ignores any amount the bin sends. A reward is owed only with a live verified session (`session_token`), `confidence >=
+  MIN_CONFIDENCE` (0.75) and a paying class, and not within `PAYOUT_COOLDOWN_SECONDS` (30) of the same user's last paying drop (checked in the
+  interactions table). Otherwise `reward_cents = 0`, status `none`, and `reason` says why (`not_recognised`, `low_confidence`,
+  `not_reward_eligible`, `cooldown`).
+- **Status:** `none` (no reward) · `held` (reward, no wallet yet) · `pending` (reward + wallet) · `sending` (claimed by one worker) · `paid` · `failed`.
+- **Instant payout:** a `pending` row is claimed (`pending -> sending`) and sent to the website's `POST /api/payout` (`PAYOUT_URL`, `Bearer
+  PAYOUT_SECRET`, `PAYOUT_TIMEOUT_SECONDS` 8) within the request. That route converts cents to lamports at the live SOL/CAD rate and sends the devnet
+  transfer with memo `cashcan:<interaction_id>`; the row stores `lamports`, `cad_per_sol`, `rate_source`, `tx_signature`. A timeout leaves it
+  `sending`. A paying drop takes about 10 s end to end (about 5 Databricks statements plus the transfer), so the bin waits up to 25 s.
+- **Held rewards:** saving a wallet (`PUT /me`) moves the user's `held` rows to `pending` and pays them one by one (15 s budget; the cron pays the rest).
+- **Reconcile** (`GET /cron/reconcile`): `failed` rows are retried with backoff (30 s, 60 s, 120 s, ...) up to `PAYOUT_MAX_ATTEMPTS` (5) sends;
+  `sending` rows older than `PAYOUT_STUCK_SECONDS` (180) are looked up on chain by memo (`GET /api/payout?interaction_id=`) and become `paid` if found,
+  otherwise `pending` again. The payout route itself also checks the memo before sending, so a lost response is never paid twice. 180 s is above the
+  route's 30 s limit plus a blockhash's ~90 s life, so a transaction still unknown by then can no longer land.
+
+Settings: see `.env.example` (`AUTH0_*`, `BIN_API_KEYS`, `DATABRICKS_*`, `PAYOUT_URL`, `PAYOUT_SECRET`, `MIN_CONFIDENCE`, `PAYOUT_COOLDOWN_SECONDS`,
+`CRON_SECRET`, retry tuning). Tested with an in-memory ledger (`tests/test_payouts.py`) and against the real Databricks tables (`../scripts/e2e_devnet.py local`).
+
+**Known limit:** bin sessions (`app/sessions.py`) live in the memory of one server instance. On Vercel, `/match` and `/interactions` can land on
+different instances, and then the drop is recorded as `not_recognised` (no reward). This is unchanged by the payout work.

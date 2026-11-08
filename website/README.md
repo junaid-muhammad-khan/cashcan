@@ -24,7 +24,7 @@ for local dev, `https://cashcan.biz` in production) or login/logout will fail wi
 | `/signup` | Two-panel signup design; the right panel (`components/AuthPanel.tsx`) has "Continue with Google" / "Continue with email", both redirecting to Auth0 Universal Login with `screen_hint: signup` |
 | `/login` | Two-panel login design, same `AuthPanel`; `?next=/path` returns you where you were after login |
 | `/enroll` | Face match setup, where sign-up lands. Consent (+ Solana wallet if the profile has none, saved with `PUT /me`), live webcam with an oval guide, three auto-captured angles (straight, left, right), `POST /enroll` to the face API, then a one-frame `POST /match` test showing the similarity score. Handles camera blocked/missing, unclear frames (per-angle tips from the API's quality checks) and already-enrolled (409). Skippable |
-| `/dashboard` | Signed-in only (client-side redirect to Auth0 if not); where login and signup land. Recent detections (click to expand), rewards card (pending configuration), four summary cards and the sorting-outcomes chart. The date-range menu updates every number; clicking a bar filters the detections. **All figures are demo data** (`app/dashboard/data.ts`) until drops are linked to accounts |
+| `/dashboard` | Signed-in only. The user's real drops from `GET /face-api/me/activity` (`lib/activity.ts`): SOL paid (and its CAD value at the rate stored on each payout), held and on-the-way rewards, recent drops with status and a devnet explorer link, items per bin over time, wallet with its devnet balance (`/api/balance`). Loading, empty (new user) and error states. `?preview=1` shows demo data in local dev only (`app/dashboard/data.ts`) |
 | `/account` | Signed-in only (client-side redirect to `/login` if not); shows name, email, a link back to the dashboard and a log-out button ("Profile" in the dashboard header) |
 
 All motion is in `components/HomeMotion.tsx` and `components/AuthShell.tsx`. Content is visible
@@ -54,6 +54,19 @@ without JavaScript, and everything that moves is skipped when the visitor has re
   `GET /me` — and possibly a real leaderboard somewhere on the site — is the next real step here, not a
   from-scratch build.
 
+## Rewards and payouts (server routes)
+| Route | Who calls it | What |
+|---|---|---|
+| `POST /api/payout` | the face API only (`Authorization: Bearer $PAYOUT_SECRET`) | `{interaction_id, to, reward_cents}` -> live SOL/CAD rate -> lamports -> devnet transfer from the treasury with memo `cashcan:<interaction_id>` -> `{signature, lamports, cad_per_sol, rate_source}`. Checks the memo first and returns the existing transfer instead of paying twice; refuses a bad wallet, more than 100¢, or a treasury that can't cover it (`503 treasury_low`, retried later by the face API) |
+| `GET /api/payout?interaction_id=` | the face API's reconcile job | `{found, signature, lamports}` by memo |
+| `GET /api/rate` | the browser | live SOL/CAD (Coinbase -> CoinGecko -> Kraken, `lib/rateQuote.ts`, the same code the payout uses) |
+| `GET /api/balance?address=` | the dashboard | devnet balance of a wallet |
+
+Code: `lib/payoutHandler.ts`, `lib/solana/` (treasury key only from `TREASURY_SECRET_KEY`, RPC from `SOLANA_RPC_URL`, mainnet refused).
+`/prices` reads the reward table from `GET /face-api/rewards` (revalidated every 5 minutes), with `lib/prices.ts` as the fallback.
+Tests: `npm test` (vitest: cents -> lamports, the route's auth and validation with a mocked Solana connection).
+Server env vars (Vercel, never `NEXT_PUBLIC_`): `TREASURY_SECRET_KEY`, `SOLANA_RPC_URL`, `PAYOUT_SECRET`, `CRON_SECRET` (see `.env.example`).
+
 ## Face match setup (`/enroll`)
 - Talks to the face API in `../face_api` through `/face-api/*` (`lib/faceApi.ts`). Vercel routes that path to the
   face service (`../vercel.json`); for local dev, start the API (`uvicorn app.main:app_factory --factory --port 8000`
@@ -69,9 +82,7 @@ without JavaScript, and everything that moves is skipped when the visitor has re
 
 ## Sample / illustrative content
 The homepage's old "Bin Activity" section (fabricated 14-day charts, no real data behind them) has been removed
-entirely — it's been replaced by the real `/dashboard` page above, which is honest about still running on demo
-figures (`app/dashboard/data.ts`) until real drops are linked to accounts, rather than a marketing section
-pretending to be live. The hero's "Example drops" mock panel is static illustrative content, explicitly labelled
+entirely — it's been replaced by the real `/dashboard` page above, which now shows the signed-in user's real drops. The hero's "Example drops" mock panel is static illustrative content, explicitly labelled
 as such in the UI (not live, not historical). The "How an item flows through CashCan" section's example numbers
 (confidence score, cooldown timer, etc.) are a labelled walkthrough of the decision logic, not a claim of actual
 usage history. Real per-drop activity lands in the Databricks schema from the Auth0 section above via `face_api`.

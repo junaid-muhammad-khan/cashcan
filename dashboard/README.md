@@ -1,38 +1,28 @@
-# CashCan dashboard (Databricks AI/BI)
+# CashCan city dashboard (Databricks AI/BI)
 
-AI/BI (Lakeview) dashboard over `activity_log` — the table `backend/src/activityLog.ts` writes one row to per payout decision.
+AI/BI (Lakeview) dashboard over the view `workspace.cashcan_app.city_activity` (`databricks/002_interactions_payouts.sql`): every drop
+recorded by a bin, joined with its bin and, for recognised people, their **pseudonym only** (never username, email or wallet).
 
-**Live (demo data):** https://dbc-38b8f0fd-7cd5.cloud.databricks.com/sql/dashboardsv3/01f1db16c4d811588d4df6a43f9d2aea/published
+**Live:** https://dbc-38b8f0fd-7cd5.cloud.databricks.com/sql/dashboardsv3/01f1db16c4d811588d4df6a43f9d2aea/published
 
 ## What it shows
-
-- Items per day by bin (cans / organics / waste) and share by bin
-- Contamination rate by item — where people sort wrong
-- Daily payout-outcome mix: Paid vs. the anti-abuse gates (low confidence, cameras disagree, not reward-eligible)
-- Per-user table and recent-events table (with tx signature)
-- Filters page: date range, bin, item
+- KPIs: items sorted (daily sparkline), share of recognised drops, devnet SOL paid, paid value in CAD (at the rate used for each payout)
+- Items per day by bin (cans / organics / waste); recognised vs unrecognised drops per day
+- SOL and CAD paid per day; payout status mix (paid / held / paying / failed / no reward)
+- Activity per bin location; top sorters by pseudonym; recent drops with tx signature
+- Filters page: date range, bin location, item
 
 ## Files
 | File | Purpose |
 |---|---|
-| `build_dashboard.py` | Generates `cashcan_dashboard.lvdash.json` (one dataset, measures, widgets, theme) |
+| `build_dashboard.py` | Generates `cashcan_dashboard.lvdash.json` (one dataset over `city_activity`, measures, widgets, theme) |
 | `deploy.py` | Creates (or `--id` updates) the dashboard via the Lakeview REST API and publishes it |
-| `seed_demo.sql` | Builds `workspace.cashcan_demo.activity_log`: same schema, ~1,400 synthetic events over 14 days |
-| `dbsql.py` | Small SQL Statement API runner used to seed and test queries |
-
-## Demo data vs. the real table
-The dashboard currently reads **`workspace.cashcan_demo.activity_log` (synthetic)**. The real
-`workspace.cashcan` schema is owned by another teammate, and at build time this account had no
-`USE SCHEMA` on it. Once the schema owner runs:
-
-```sql
-GRANT USE SCHEMA, SELECT ON SCHEMA workspace.cashcan TO `imjunaid.mkhan@gmail.com`;
-```
-
-point the same dashboard at real data:
+| `dbsql.py` | Small SQL Statement API runner (`-f file.sql` runs a migration statement by statement) |
+| `seed_demo.sql` | Old synthetic `activity_log` demo data (no longer used by the dashboard) |
 
 ```bash
-python deploy.py --schema cashcan --id 01f1db16c4d811588d4df6a43f9d2aea
+python build_dashboard.py
+python deploy.py --schema cashcan_app --id 01f1db16c4d811588d4df6a43f9d2aea
 ```
 
-Do not present the demo numbers as real bin results.
+Contamination is not detected by the product, so the dashboard has no contamination widgets.
