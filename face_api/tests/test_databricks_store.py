@@ -240,3 +240,58 @@ def test_cli_without_databricks_variables_says_what_to_set_instead_of_a_tracebac
     assert ds.main(["--db", str(tmp_path / "x.db"), "status"]) == 2
     err = capsys.readouterr().err
     assert "export DATABRICKS_HOST" in err and "read -s DATABRICKS_TOKEN" in err and "Traceback" not in err
+
+
+class _Order:
+    """Records statements in order and answers the queries replace_templates needs."""
+
+    def __init__(self, old_ids):
+        self.stmts, self.syncs, self.old = [], 0, old_ids
+
+    def handler(self, req):
+        body = json.loads(req.content) if req.content else {}
+        if req.url.path == "/api/2.0/sql/statements":
+            st, params = body["statement"], {p["name"]: p["value"] for p in body.get("parameters", [])}
+            self.stmts.append((st.split()[0] + " " + ("face_templates" if "face_templates" in st else "users"), params))
+            data = [["1"]] if st.startswith("SELECT 1") else [[i, json.dumps([0.0] * 512)] for i in self.old] if "SELECT template_id" in st else []
+            return httpx.Response(200, json={"status": {"state": "SUCCEEDED"}, "result": {"data_array": data}})
+        self.syncs += req.url.path.endswith("/sync")
+        return httpx.Response(200, json={})
+
+
+def test_replace_templates_writes_new_first_deletes_old_second_and_syncs_once():
+    fake = _Order(["old1", "old2", "old3"])
+    d = DatabricksFaces("https://x.example", "tok", "wh", transport=httpx.MockTransport(fake.handler))
+    assert d.replace_templates("alice", [vec(1)]) == (3, 1)
+    kinds = [k for k, _ in fake.stmts]
+    assert kinds.index("INSERT face_templates") < kinds.index("DELETE face_templates")        # never a moment with no templates
+    delete = [p for k, p in fake.stmts if k == "DELETE face_templates"][0]
+    assert delete == {"u": "alice", "d0": "old1", "d1": "old2", "d2": "old3"} and fake.syncs == 1
+
+
+def test_replace_templates_can_keep_some_old_ones_and_refuses_nothing_or_unknown_people():
+    import pytest
+
+    fake = _Order(["a", "b", "c"])
+    d = DatabricksFaces("https://x.example", "tok", "wh", transport=httpx.MockTransport(fake.handler))
+    assert d.replace_templates("alice", [vec(2)], only_ids=["a"]) == (1, 1)
+    assert [p for k, p in fake.stmts if k == "DELETE face_templates"][0] == {"u": "alice", "d0": "a"}   # b and c are kept
+    with pytest.raises(DatabricksError, match="nothing"):
+        d.replace_templates("alice", [])
+    unknown = DatabricksFaces("https://x.example", "tok", "wh", transport=httpx.MockTransport(
+        lambda r: httpx.Response(200, json={"status": {"state": "SUCCEEDED"}, "result": {"data_array": []}})))
+    with pytest.raises(DatabricksError, match="not in Databricks"):
+        unknown.replace_templates("ghost", [vec(3)])
+
+
+def test_pull_refresh_replaces_local_copies_but_plain_pull_does_not(tmp_path):
+    from app.store import FaceStore
+    from tools.databricks_sync import pull_into
+
+    store = FaceStore(str(tmp_path / "r.db"))
+    store.add_user("alice", "W", [vec(1), vec(2)])
+    owners, mat = ["alice"], np.stack([vec(9)])
+    assert pull_into(store, owners, mat, {"alice": "W2"}) == [] and len(store.embeddings_for("alice")) == 2   # untouched
+    assert pull_into(store, owners, mat, {"alice": "W2"}, refresh=True) == ["alice"]
+    got = store.embeddings_for("alice")
+    assert len(got) == 1 and float(got[0] @ vec(9)) > 0.999 and store.wallet("alice") == "W2"

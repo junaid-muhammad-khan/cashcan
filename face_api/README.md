@@ -133,6 +133,9 @@ Workspace `dbc-38b8f0fd-7cd5.cloud.databricks.com`, schema `workspace.cashcan_fa
 `users` (wallet, consent time) and `face_templates` (512-d templates, Change Data Feed on), plus Vector Search endpoint
 `cashcan-faces` (standard; storage-optimised is not supported on this workspace) with Delta Sync index `face_templates_index`.
 Code: `app/databricks_store.py`, CLI: `python -m tools.databricks_sync` (see its docstring). Needs `DATABRICKS_HOST`,
+To swap someone's old photo for a new one without losing their wallet or consent record, `DatabricksFaces.replace_templates` writes the new template first and deletes the old
+ones second (so nobody is ever left with none) and can keep chosen old templates; after a change in Databricks run `python -m tools.databricks_sync pull --refresh` on each machine so its
+local copy matches. Delta keeps the table history, so a mistaken change can be undone with `RESTORE TABLE ... TO VERSION AS OF <n>`.
 Try the Vector Search lookup with one command and no files: `python -m tools.databricks_sync search --webcam` takes a photo from your camera and
 prints the closest people with a similarity percentage (use `--image <real JPG or PNG path>` for a file; HEIC is not supported).
 `DATABRICKS_TOKEN` (your personal access token, never committed) and `DATABRICKS_WAREHOUSE_ID=9a5194b5eb7321ed`.

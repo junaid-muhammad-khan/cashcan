@@ -6,6 +6,7 @@
   python -m tools.databricks_sync push   --name junaid        # local enrollment -> Databricks (needs consent: you enrolled it)
   python -m tools.databricks_sync push   --name junaid --replace   # same person already there: replace with the local templates
   python -m tools.databricks_sync pull                         # Databricks -> local database (adds people missing locally)
+  python -m tools.databricks_sync pull --refresh               # ... and replaces the local copy of people changed in Databricks
   python -m tools.databricks_sync search --webcam              # take a photo from the camera, ask Databricks Vector Search who it is
   python -m tools.databricks_sync search --image me.jpg        # same, from a JPG or PNG file
   python -m tools.databricks_sync delete --name junaid         # removes the person from Databricks (not from the local file)
@@ -26,12 +27,15 @@ from app.store import FaceStore
 from tools.face_demo import PLACEHOLDER_WALLET
 
 
-def pull_into(store: FaceStore, owners: list[str], mat: np.ndarray, wallets: dict[str, str]) -> list[str]:
-    """Add every Databricks person missing from the local store. Returns the names added."""
+def pull_into(store: FaceStore, owners: list[str], mat: np.ndarray, wallets: dict[str, str], refresh: bool = False) -> list[str]:
+    """Add every Databricks person missing from the local store (refresh=True also replaces the local copy of people that exist
+    in both, so a change made in Databricks reaches this machine). Returns the names added or refreshed."""
     added = []
     for user in sorted(set(owners)):
         if store.user_exists(user):
-            continue
+            if not refresh:
+                continue
+            store.delete_user(user)
         store.add_user(user, wallets.get(user, "UNKNOWN"), [mat[i] for i, o in enumerate(owners) if o == user])
         added.append(user)
     return added
@@ -46,7 +50,8 @@ def main(argv=None) -> int:
     sub.add_parser("delete").add_argument("--name", required=True)
     s = sub.add_parser("search"); s.add_argument("--image"); s.add_argument("--webcam", action="store_true")
     s.add_argument("--camera", default="0"); s.add_argument("--k", type=int, default=3)
-    sub.add_parser("pull"); sub.add_parser("status")
+    pl = sub.add_parser("pull"); pl.add_argument("--refresh", action="store_true", help="also replace the local copy of people already here with the Databricks version")
+    sub.add_parser("status")
     a = ap.parse_args(argv)
 
     try:
@@ -86,8 +91,8 @@ def run(a, dbx, store) -> int:
               "(Vector Search sees them in ~2 min)")
     elif a.cmd == "pull":
         owners, mat, wallets = dbx.pull_all()
-        added = pull_into(store, owners, mat, wallets)
-        print(f"Databricks has {len(set(owners))} people / {len(owners)} templates; added locally: {added or 'none'}")
+        added = pull_into(store, owners, mat, wallets, refresh=a.refresh)
+        print(f"Databricks has {len(set(owners))} people / {len(owners)} templates; {'added or refreshed' if a.refresh else 'added'} locally: {added or 'none'}")
     elif a.cmd == "delete":
         print("deleted from Databricks" if dbx.delete_user(a.name) else f"'{a.name}' not found in Databricks")
     elif a.cmd == "status":

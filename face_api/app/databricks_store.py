@@ -137,6 +137,36 @@ class DatabricksFaces:
         self.sync_index()
         return n
 
+    def templates_of(self, user_id: str) -> tuple[list[str], np.ndarray]:
+        """(template ids, matrix) of one person's saved templates, oldest first."""
+        import json
+
+        rows = self.sql(f"SELECT template_id, embedding FROM {self.schema}.face_templates WHERE user_id = :u ORDER BY created_at, template_id", {"u": user_id})
+        mat = np.array([json.loads(r[1]) if isinstance(r[1], str) else r[1] for r in rows], np.float32)
+        return [r[0] for r in rows], mat.reshape(len(rows), 512)
+
+    def replace_templates(self, user_id: str, embeddings: list[np.ndarray], only_ids: list[str] | None = None,
+                          sync: bool = True) -> tuple[int, int]:
+        """Swap a person's templates for new ones, keeping their wallet, consent time and status. only_ids limits which old
+        templates are removed (default: all of them). The NEW templates are written first and the old ones deleted second, so a
+        failure part-way can never leave the person with none. Returns (removed, added); the index is refreshed at the end (sync=False to batch)."""
+        if not self.user_exists(user_id):
+            raise DatabricksError(f"'{user_id}' is not in Databricks.")
+        if not embeddings:
+            raise DatabricksError("Refusing to replace templates with nothing.")
+        old_ids = only_ids if only_ids is not None else self.templates_of(user_id)[0]
+        for emb in embeddings:
+            self.sql(f"INSERT INTO {self.schema}.face_templates VALUES (:t, :u, {_array_literal(emb)}, :m, current_timestamp())",
+                     {"t": uuid.uuid4().hex, "u": user_id, "m": MODEL_VERSION})
+        self.writes_done = True
+        if old_ids:
+            marks = ",".join(f":d{i}" for i in range(len(old_ids)))
+            self.sql(f"DELETE FROM {self.schema}.face_templates WHERE user_id = :u AND template_id IN ({marks})",
+                     {"u": user_id, **{f"d{i}": t for i, t in enumerate(old_ids)}})
+        if sync:
+            self.sync_index()
+        return len(old_ids), len(embeddings)
+
     def pull_all(self) -> tuple[list[str], np.ndarray, dict[str, str]]:
         """All active users' templates for local matching: (owners per template, matrix, wallets)."""
         rows = self.sql(f"SELECT t.user_id, t.embedding FROM {self.schema}.face_templates t "
