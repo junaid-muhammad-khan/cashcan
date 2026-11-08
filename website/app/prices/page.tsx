@@ -25,7 +25,6 @@ export default function PricesPage() {
         <h2>How rewards work</h2>
         <ul>
           <li><b>Face match first.</b> The reward goes to the person the bin recognises, so you need an account with face match set up.</li>
-          <li><b>Sort it clean.</b> Greasy or food-soiled items still go in the right bin, but earn a reduced reward.</li>
           <li><b>Only when the bin is sure.</b> If the bin is not confident about an item it goes to Waste and earns nothing.</li>
           <li><b>Prototype money.</b> Rewards are paid as Solana devnet test tokens, which have no cash value, and the amounts above are our current plan.</li>
         </ul>

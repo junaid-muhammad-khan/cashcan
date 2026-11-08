@@ -3,7 +3,7 @@ type Bin = "cans" | "organics" | "waste";
 const EVENTS: { item: string; detail: string; bin: Bin; pay: number }[] = [
   { item: "Aluminum can", detail: "Clean · wallet ••7Qx", bin: "cans", pay: 0.004 },
   { item: "Banana peel", detail: "Clean · organics", bin: "organics", pay: 0.001 },
-  { item: "Greasy plastic tray", detail: "Contaminated · 25% reward", bin: "cans", pay: 0.0005 },
+  { item: "Plastic bottle", detail: "Right bin · Return-It", bin: "cans", pay: 0.004 },
   { item: "Chip bag", detail: "Not reward-eligible", bin: "waste", pay: 0 },
 ];
 const SHORT: Record<Bin, string> = { cans: "CAN", organics: "ORG", waste: "WST" };

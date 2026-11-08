@@ -4,40 +4,60 @@ import { useRef, useState } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { useGSAP } from "@gsap/react";
-import { Coin, Drop, Pin } from "./icons";
+import { Coin, Pin } from "./icons";
 import "./ProblemStory.css";
 
 gsap.registerPlugin(ScrollTrigger, useGSAP);
 
+// The team's headline figure. Shown on the page as the team's working figure; cite a source before launch.
+const TONS_MILLION = 26.6;
+const BEARS = 27; // one polar-bear icon per ~1 million (26.6 rounds to 27 icons, the last one partly filled)
+
+const BinIcon = () => (
+  <svg width="22" height="22" viewBox="0 0 32 32" fill="none" stroke="#2C5F8A" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M7 9h18l-2 18H9z" /><path d="M5 9h22" /><path d="M12 9V6h8v3" /><path d="M13 15c1.5-1.5 4.5-1.5 6 0M16 14v8" />
+  </svg>
+);
+
 const CHAPTERS = [
   {
-    key: "rules",
-    title: "Your city's rules, not a material label",
-    body: "Every decision is looked up against a local rule table, so the bin says where an item really goes in Metro Vancouver, and why.",
+    key: "scale",
+    title: "26.6 million tons in the wrong bin",
+    body: "Recyclables keep landing in the trash, and trash in the recycling. Every misplaced item is material that never gets a second life.",
+    tile: "#E4EEF8",
+    Icon: BinIcon,
+  },
+  {
+    key: "track",
+    title: "A bin that tracks every item",
+    body: "Two cameras see what you're holding and your city's rules say which container it belongs in, so it goes in the right one, every time.",
     tile: "#E3F5EB",
     Icon: Pin,
   },
   {
-    key: "contamination",
-    title: "Catches contamination",
-    body: "A top camera and a front camera must agree. Food-soiled or greasy items are flagged and earn a reduced reward instead of slipping through.",
+    key: "cash",
+    title: "Cash back for getting it right",
+    body: "Recyclables sorted into the right container pay out instantly to your Solana wallet. The hauler that buys the sorted material funds the rewards.",
     tile: "#FBF1D8",
-    Icon: Drop,
-  },
-  {
-    key: "reward",
-    title: "A reason to get it right",
-    body: "Reward-eligible items pay out instantly to your Solana wallet. The hauler that buys the sorted material funds the rewards.",
-    tile: "#E4EEF8",
     Icon: Coin,
   },
 ];
 
+// A small polar bear facing right: body, head with snout and ear, four legs. Drawn in a 44x26 box.
+const BEAR_PATH =
+  "M3 15C3 9 8 6 15 6H26C29 6 31 5 33 4L36 3C38 3 39 4 40 5L42 8C43 9 43 10 42 11L40 11.5L37 12L35 13V22H32V17H30V22H27V16H18V22H15V17H13V22H10V17H8V22H5V17C3.5 16.5 3 16 3 15Z";
+const Bear = ({ fill, clip }: { fill: string; clip?: string }) => (
+  <g clipPath={clip}>
+    <path d={BEAR_PATH} fill={fill} />
+    <circle cx="36.5" cy="3.2" r="1.6" fill={fill} />
+  </g>
+);
+
 /**
- * "The problem" as interactive storytelling: on desktop the section pins and scroll scrubs
- * through three scenes (city rules -> contamination -> reward). Cards fill as you go and
- * clicking one jumps to its scene. Phones and reduced-motion get a static stacked layout
- * with every scene in its finished state.
+ * "The problem" as interactive storytelling. Desktop: the section pins and scroll scrubs
+ * three scenes (the scale of misplaced recycling -> a bin that tracks each item -> cash back).
+ * Cards fill as you go; clicking one jumps to its scene. Phones, reduced motion and no-JS
+ * get a static stacked layout with every scene in its finished state.
  */
 export default function ProblemStory() {
   const root = useRef<HTMLElement>(null);
@@ -54,38 +74,47 @@ export default function ProblemStory() {
         const scenes = q<HTMLElement>(".ps-scene");
         gsap.set(scenes.slice(1), { autoAlpha: 0, y: 30 });
 
-        // Initial (pre-animation) states, all reversible because the timeline is scrubbed.
-        gsap.set(q(".ps-stamp"), { autoAlpha: 0, scale: 2.2, rotate: -22 });
-        gsap.set(q(".ps-rule"), { autoAlpha: 0, x: -30 });
-        gsap.set(q(".ps-tag-old"), { opacity: 1 });
-        gsap.set(q(".ps-scanline"), { y: 0 });
-        gsap.set(q(".ps-spot"), { fill: "#E9E3D6", scale: 0.6, transformOrigin: "50% 50%" });
-        gsap.set(q(".ps-camframe"), { opacity: 0.35 });
-        gsap.set(q(".ps-flag"), { autoAlpha: 0, y: 14 });
+        // Scene 1 start state
+        const bears = q<SVGElement>(".ps-bear");
+        gsap.set(bears, { autoAlpha: 0.12, scale: 0.7, transformOrigin: "50% 50%" });
+        gsap.set(q(".ps-bear-fill"), { autoAlpha: 0.12 });
+        gsap.set(q(".ps-weigh"), { autoAlpha: 0, y: 10 });
+        const tons = q<HTMLElement>(".ps-tons")[0];
+        const t = { v: 0 };
+        if (tons) tons.textContent = "0.0";
+        // Scene 2 start state
+        gsap.set(q(".ps-item2"), { x: -120, y: -40, autoAlpha: 0 });
+        gsap.set(q(".ps-track"), { x: -120, y: -40, autoAlpha: 0 });
+        gsap.set(q(".ps-binhl"), { autoAlpha: 0 });
+        gsap.set(q(".ps-verdict"), { autoAlpha: 0, y: 12 });
+        // Scene 3 start state
         gsap.set(q(".ps-item"), { y: -90, autoAlpha: 0 });
         gsap.set(q(".ps-coin"), { autoAlpha: 0, x: 0, y: 0, scale: 0.6 });
         gsap.set(q(".ps-fund"), { autoAlpha: 0, y: 12 });
         gsap.set(q(".ps-bar i"), { scaleX: 0 });
-
         const amount = q<HTMLElement>(".ps-amount")[0];
-        const counter = { v: 0 };
+        const cash = { v: 0 };
         if (amount) amount.textContent = "+0.0000";
 
         const tl = gsap.timeline({ defaults: { ease: "none" } });
-        // ---- scene 1: the label lies, the stamp tells the truth
+        // ---- scene 1: the number climbs, the bears fill in, one per million tons
         tl.to(q(".ps-bar i")[0], { scaleX: 1, duration: 1 }, 0)
-          .to(q(".ps-stamp"), { autoAlpha: 1, scale: 1, rotate: -8, ease: "back.out(2)", duration: 0.3 }, 0.25)
-          .to(q(".ps-tag-old"), { opacity: 0.35, duration: 0.2 }, 0.35)
-          .to(q(".ps-rule"), { autoAlpha: 1, x: 0, stagger: 0.12, ease: "power2.out", duration: 0.3 }, 0.55)
-          // ---- to scene 2
+          .to(t, { v: TONS_MILLION, duration: 0.6, onUpdate: () => { if (tons) tons.textContent = t.v.toFixed(1); } }, 0.08)
+          .to(bears.slice(0, BEARS - 1), { autoAlpha: 1, scale: 1, stagger: 0.02, ease: "back.out(2)", duration: 0.1 }, 0.1)
+          .to(bears[BEARS - 1], { autoAlpha: 1, scale: 1, duration: 0.1 }, 0.62)
+          .to(q(".ps-bear-fill"), { autoAlpha: 1, duration: 0.05 }, 0.66)
+          .to(q(".ps-weigh"), { autoAlpha: 1, y: 0, ease: "power2.out", duration: 0.2 }, 0.7)
+          // ---- to scene 2: the item is tracked to the right container
           .to(scenes[0], { autoAlpha: 0, y: -30, duration: 0.15 }, 0.92)
           .to(scenes[1], { autoAlpha: 1, y: 0, duration: 0.15 }, 1.0)
           .to(q(".ps-bar i")[1], { scaleX: 1, duration: 1 }, 1)
-          .to(q(".ps-camframe"), { opacity: 1, stagger: 0.08, duration: 0.15 }, 1.1)
-          .to(q(".ps-scanline"), { y: 170, ease: "sine.inOut", duration: 0.45 }, 1.2)
-          .to(q(".ps-spot"), { fill: "#E3B23C", scale: 1, stagger: 0.05, ease: "back.out(2)", duration: 0.2 }, 1.4)
-          .to(q(".ps-flag"), { autoAlpha: 1, y: 0, ease: "power2.out", duration: 0.2 }, 1.7)
-          // ---- to scene 3
+          .to([q(".ps-item2"), q(".ps-track")], { autoAlpha: 1, duration: 0.08 }, 1.1)
+          .to([q(".ps-item2"), q(".ps-track")], { x: 0, y: 0, ease: "power1.inOut", duration: 0.35 }, 1.12)
+          .to(q(".ps-binhl"), { autoAlpha: 1, duration: 0.1 }, 1.45)
+          .to(q(".ps-item2"), { y: 70, autoAlpha: 0, ease: "power2.in", duration: 0.2 }, 1.55)
+          .to(q(".ps-track"), { autoAlpha: 0, duration: 0.1 }, 1.55)
+          .to(q(".ps-verdict"), { autoAlpha: 1, y: 0, ease: "power2.out", duration: 0.2 }, 1.68)
+          // ---- to scene 3: cash back
           .to(scenes[1], { autoAlpha: 0, y: -30, duration: 0.15 }, 1.92)
           .to(scenes[2], { autoAlpha: 1, y: 0, duration: 0.15 }, 2.0)
           .to(q(".ps-bar i")[2], { scaleX: 1, duration: 1 }, 2)
@@ -94,10 +123,7 @@ export default function ProblemStory() {
           .to(q(".ps-coin"), { x: 200, ease: "power1.inOut", duration: 0.35 }, 2.38)
           .to(q(".ps-coin"), { keyframes: { y: [0, -110, 4], ease: "sine.inOut" }, duration: 0.35 }, 2.38)
           .to(q(".ps-coin"), { scale: 0.4, autoAlpha: 0, duration: 0.06 }, 2.72)
-          .to(counter, {
-            v: 0.004, duration: 0.25,
-            onUpdate: () => { if (amount) amount.textContent = `+${counter.v.toFixed(4)}`; },
-          }, 2.7)
+          .to(cash, { v: 0.004, duration: 0.25, onUpdate: () => { if (amount) amount.textContent = `+${cash.v.toFixed(4)}`; } }, 2.7)
           .to(q(".ps-wallet"), { scale: 1.04, yoyo: true, repeat: 1, duration: 0.06 }, 2.72)
           .to(q(".ps-fund"), { autoAlpha: 1, y: 0, ease: "power2.out", duration: 0.2 }, 2.78);
 
@@ -112,7 +138,7 @@ export default function ProblemStory() {
         });
         stRef.current = st;
 
-        // Ambient: the background blobs drift on their own, and the stage leans toward the pointer.
+        // Ambient: drifting background blobs and a slight pointer tilt on the stage.
         q<HTMLElement>(".ps-blob").forEach((b, i) =>
           gsap.to(b, { x: i ? -60 : 70, y: i ? 40 : -50, scale: 1.15, duration: 9 + i * 3, ease: "sine.inOut", repeat: -1, yoyo: true }),
         );
@@ -136,7 +162,6 @@ export default function ProblemStory() {
         };
       });
 
-      // Phones / reduced motion: no pin, no scrub. Just reveal each chapter as it arrives.
       mm.add("(max-width: 999px) and (prefers-reduced-motion: no-preference)", () => {
         q<HTMLElement>(".ps-chapter-mobile").forEach((el) =>
           gsap.from(el, { y: 30, autoAlpha: 0, duration: 0.7, ease: "power3.out", scrollTrigger: { trigger: el, start: "top 88%", once: true } }),
@@ -148,15 +173,15 @@ export default function ProblemStory() {
     { scope: root },
   );
 
-  // Clicking a card scrolls to the middle of its chapter (desktop) so its scene plays.
   const goTo = (i: number) => {
     const st = stRef.current;
     setActive(i);
     if (!st) return;
-    const y = st.start + ((i + 0.55) / 3) * (st.end - st.start);
+    const y = st.start + ((i + 0.6) / 3) * (st.end - st.start);
     window.scrollTo({ top: y, behavior: "smooth" });
   };
 
+  const cols = 9;
   return (
     <section className="section ps" id="rules" ref={root} aria-labelledby="ps-h">
       <div aria-hidden="true" className="ps-blob ps-blob-a" />
@@ -164,10 +189,10 @@ export default function ProblemStory() {
       <div className="container ps-grid">
         <div className="ps-copy">
           <div className="eyebrow">The problem</div>
-          <h2 id="ps-h">One greasy container can ruin a whole batch of recycling.</h2>
+          <h2 id="ps-h">26.6 million tons of recycling end up in the wrong bin.</h2>
           <p className="section-lede">
-            Sorting rules are local and confusing, smart bins classify material instead of what your city accepts,
-            and there is little reason for anyone to get it right. CashCan fixes all three at the bin.
+            That&apos;s heavier than 26.6 million polar bears. CashCan is a smart bin that tracks what you throw away,
+            shows you the right container, and pays you cash back when you get it right.
           </p>
           <ol className="ps-cards">
             {CHAPTERS.map((c, i) => (
@@ -188,66 +213,84 @@ export default function ProblemStory() {
         <div className="ps-stage" aria-hidden="true">
           <div className="ps-stage-card">
             <div className="ps-stage-top">
-              <span>{["01 · Local rules", "02 · Contamination", "03 · Reward"][active]}</span>
+              <span>{["01 · The scale", "02 · Tracked to the right bin", "03 · Cash back"][active]}</span>
               <span className="ps-dots">{[0, 1, 2].map((i) => <i key={i} className={i <= active ? "on" : undefined} />)}</span>
             </div>
 
-            {/* scene 1: compostable cup, stamped by the local rule */}
+            {/* scene 1: 26.6 million tons, one polar bear per million */}
             <div className="ps-scene ps-chapter-mobile">
-              <span className="ps-mobile-label">01 · Local rules</span>
+              <span className="ps-mobile-label">01 · The scale</span>
               <svg viewBox="0 0 420 300" className="ps-svg">
-                <ellipse cx="150" cy="262" rx="70" ry="8" fill="#0F1F17" opacity=".08" />
-                <path d="M100 70h100l-14 190h-72z" fill="#F7F3EA" stroke="#C9C1AE" strokeWidth="2" />
-                <rect x="92" y="56" width="116" height="18" rx="6" fill="#E9E3D6" stroke="#C9C1AE" strokeWidth="2" />
-                <path d="M118 120c10 18 54 18 64 0" fill="none" stroke="#C9C1AE" strokeWidth="3" strokeLinecap="round" />
-                <g className="ps-tag-old">
-                  <rect x="104" y="150" width="92" height="30" rx="6" fill="#2BB673" />
-                  <text x="150" y="170" textAnchor="middle" fontSize="12" fontWeight="700" fill="#fff" letterSpacing="1">COMPOSTABLE</text>
+                <text x="30" y="70" fontSize="52" fontWeight="800" fill="#0F1F17" letterSpacing="-2" fontFamily="var(--font-display)">
+                  <tspan className="ps-tons">26.6</tspan><tspan fontSize="30" dx="4">M tons</tspan>
+                </text>
+                <text x="32" y="96" fontSize="13" fill="#4A5A51">of recyclable material in the wrong bin</text>
+                <g>
+                  {Array.from({ length: BEARS }, (_, i) => {
+                    const x = 30 + (i % cols) * 40, y = 120 + Math.floor(i / cols) * 34;
+                    const last = i === BEARS - 1;
+                    return (
+                      <g key={i} transform={`translate(${x} ${y})`}>
+                        <g className="ps-bear" transform="scale(0.86)">
+                          {last ? (
+                            <>
+                              <defs><clipPath id="ps-bear-clip"><rect x="0" y="0" width={44 * 0.6} height="26" /></clipPath></defs>
+                              <Bear fill="#DCE4DD" />
+                              <g className="ps-bear-fill"><Bear fill="#8CC6E8" clip="url(#ps-bear-clip)" /></g>
+                            </>
+                          ) : (
+                            <Bear fill="#8CC6E8" />
+                          )}
+                        </g>
+                      </g>
+                    );
+                  })}
                 </g>
-                <g className="ps-stamp" style={{ transformOrigin: "160px 168px" }}>
-                  <rect x="74" y="140" width="172" height="56" rx="8" fill="none" stroke="#B4321F" strokeWidth="4" />
-                  <text x="160" y="166" textAnchor="middle" fontSize="15" fontWeight="800" fill="#B4321F" letterSpacing="1.5">GARBAGE</text>
-                  <text x="160" y="185" textAnchor="middle" fontSize="10" fontWeight="700" fill="#B4321F" letterSpacing="1">IN VANCOUVER</text>
-                </g>
-                <g fontSize="11" fill="#33433A">
-                  <g className="ps-rule"><rect x="240" y="96" width="172" height="34" rx="8" fill="#fff" stroke="#DCE4DD" /><text x="254" y="117">Label says: compostable</text></g>
-                  <g className="ps-rule"><rect x="240" y="140" width="172" height="34" rx="8" fill="#fff" stroke="#DCE4DD" /><text x="254" y="161">Local rule: garbage</text></g>
-                  <g className="ps-rule"><rect x="240" y="184" width="172" height="34" rx="8" fill="#E3F5EB" stroke="#9BD9B6" /><text x="254" y="205" fill="#0E5A33" fontWeight="700">Bin: Waste, and why</text></g>
+                <g className="ps-weigh">
+                  <rect x="30" y="232" width="360" height="40" rx="12" fill="#E4EEF8" />
+                  <text x="46" y="257" fontSize="12.5" fill="#2C5F8A" fontWeight="700">Heavier than 26.6 million polar bears</text>
+                  <text x="374" y="257" fontSize="11" fill="#2C5F8A" textAnchor="end">1 bear ≈ 1M</text>
                 </g>
               </svg>
             </div>
 
-            {/* scene 2: two cameras scan a greasy tray */}
+            {/* scene 2: the bin tracks the item and points it to the right container */}
             <div className="ps-scene ps-chapter-mobile">
-              <span className="ps-mobile-label">02 · Contamination</span>
+              <span className="ps-mobile-label">02 · Tracked to the right bin</span>
               <svg viewBox="0 0 420 300" className="ps-svg">
-                <defs>
-                  <clipPath id="ps-scan-clip"><rect x="60" y="40" width="300" height="200" rx="14" /></clipPath>
-                </defs>
-                <rect x="60" y="40" width="300" height="200" rx="14" fill="#14211A" />
-                <g className="ps-camframe"><rect x="72" y="52" width="80" height="20" rx="5" fill="#24402F" /><text x="112" y="66" textAnchor="middle" fontSize="10" fill="#8FB5A0" letterSpacing="1">TOP CAM</text></g>
-                <g className="ps-camframe"><rect x="268" y="52" width="80" height="20" rx="5" fill="#24402F" /><text x="308" y="66" textAnchor="middle" fontSize="10" fill="#8FB5A0" letterSpacing="1">FRONT CAM</text></g>
-                <path d="M120 120h180l-18 82H138z" fill="#F7F3EA" stroke="#C9C1AE" strokeWidth="2" />
-                <path d="M112 116h196" stroke="#C9C1AE" strokeWidth="6" strokeLinecap="round" />
-                <circle className="ps-spot" cx="168" cy="150" r="10" />
-                <circle className="ps-spot" cx="210" cy="172" r="14" />
-                <circle className="ps-spot" cx="252" cy="148" r="8" />
-                <circle className="ps-spot" cx="236" cy="186" r="6" />
-                <g clipPath="url(#ps-scan-clip)">
-                  <g className="ps-scanline"><rect x="60" y="54" width="300" height="2" fill="#5FD79A" /><rect x="60" y="38" width="300" height="18" fill="#5FD79A" opacity=".12" /></g>
+                {/* camera bar */}
+                <rect x="60" y="22" width="300" height="26" rx="13" fill="#0F1F17" />
+                <circle cx="78" cy="35" r="6" fill="#5FD79A" /><circle cx="342" cy="35" r="6" fill="#5FD79A" />
+                <text x="210" y="39" textAnchor="middle" fontSize="10" fill="#8FB5A0" letterSpacing="1">TOP + FRONT CAMERA</text>
+                {/* three containers */}
+                {[
+                  { x: 50, label: "Cans", color: "#157A46" },
+                  { x: 165, label: "Organics", color: "#A06E00" },
+                  { x: 280, label: "Waste", color: "#5C6B62" },
+                ].map((b) => (
+                  <g key={b.label}>
+                    <path d={`M${b.x} 170h90l-10 100h-70z`} fill={b.color} opacity={b.label === "Cans" ? 1 : 0.35} />
+                    <rect x={b.x - 6} y="160" width="102" height="12" rx="6" fill={b.color} opacity={b.label === "Cans" ? 1 : 0.35} />
+                    <text x={b.x + 45} y="230" textAnchor="middle" fontSize="12" fontWeight="700" fill="#fff">{b.label}</text>
+                  </g>
+                ))}
+                <rect className="ps-binhl" x="40" y="152" width="122" height="126" rx="14" fill="none" stroke="#5FD79A" strokeWidth="4" />
+                {/* the item, travelling toward Cans, with its tracking box */}
+                <g className="ps-item2"><rect x="80" y="86" width="30" height="40" rx="5" fill="#C7D3CC" /><rect x="80" y="86" width="30" height="8" rx="3" fill="#E6EEE9" /></g>
+                <g className="ps-track">
+                  <rect x="70" y="76" width="50" height="60" rx="6" fill="none" stroke="#5FD79A" strokeWidth="2" strokeDasharray="5 4" />
+                  <rect x="70" y="60" width="78" height="14" rx="4" fill="#5FD79A" /><text x="75" y="70.5" fontSize="9" fontWeight="700" fill="#0F1F17">CAN · 0.94</text>
                 </g>
-                <rect x="132" y="108" width="158" height="102" rx="6" fill="none" stroke="#5FD79A" strokeWidth="2" strokeDasharray="6 5" />
-                <g className="ps-flag">
-                  <rect x="100" y="250" width="220" height="36" rx="18" fill="#FBF1D8" />
-                  <circle cx="122" cy="268" r="5" fill="#E3B23C" />
-                  <text x="136" y="272" fontSize="12" fontWeight="700" fill="#7A4F00">Contaminated · reward 25%</text>
+                <g className="ps-verdict">
+                  <rect x="186" y="96" width="196" height="40" rx="12" fill="#E3F5EB" />
+                  <text x="200" y="121" fontSize="12.5" fill="#0E5A33" fontWeight="700">Aluminum can → Cans ✓</text>
                 </g>
               </svg>
             </div>
 
             {/* scene 3: item in, coin out to the wallet */}
             <div className="ps-scene ps-chapter-mobile">
-              <span className="ps-mobile-label">03 · Reward</span>
+              <span className="ps-mobile-label">03 · Cash back</span>
               <svg viewBox="0 0 420 300" className="ps-svg">
                 <g>
                   <path d="M60 120h110l-12 140H72z" fill="#157A46" />
@@ -272,7 +315,7 @@ export default function ProblemStory() {
               </svg>
             </div>
           </div>
-          <p className="ps-note">Illustration. Local rules are examples and must be checked against your city&apos;s program.</p>
+          <p className="ps-note">Illustration. 26.6 million tons is our working figure; each polar bear stands for about 1 million tons.</p>
         </div>
       </div>
     </section>

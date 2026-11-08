@@ -23,8 +23,8 @@ export default function Home() {
           <div>
             <h1 data-intro>It says compostable.<br /><em>In Vancouver, it still goes in the garbage.</em></h1>
             <p className="lede" data-intro>
-              CashCan tells you the truth about what&apos;s recyclable in your city, catches contamination
-              before it ruins the batch, and pays you real SOL the moment you get it right.
+              CashCan tells you the truth about what&apos;s recyclable in your city, tracks every item into the
+              right container, and pays you cash back in SOL the moment you get it right.
             </p>
             <div className="cta-row" data-intro>
               <Link href="/signup" className="btn btn-primary">Create free account</Link>
@@ -32,7 +32,7 @@ export default function Home() {
             </div>
             <div className="checks" data-intro>
               <span><Check />Local-rule aware</span>
-              <span><Check />Contamination aware</span>
+              <span><Check />Tracks every item</span>
               <span><Check />Opt-in face match</span>
             </div>
           </div>
@@ -50,12 +50,12 @@ export default function Home() {
             </div>
             <div className="float float-contam">
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ fontSize: 12, fontWeight: 600, color: "#8A5A00" }}>Contaminated</span>
-                <span style={{ fontSize: 11, color: "#5C6B62" }}>front cam</span>
+                <span style={{ fontSize: 12, fontWeight: 600, color: "#157A46" }}>Right bin</span>
+                <span style={{ fontSize: 11, color: "#5C6B62" }}>tracked</span>
               </div>
-              <div style={{ fontSize: 14, fontWeight: 600, marginTop: 6 }}>Greasy plastic tray</div>
-              <div className="meter"><i /></div>
-              <div style={{ fontSize: 12, color: "#5C6B62", marginTop: 6 }}>Reward reduced to 25%</div>
+              <div style={{ fontSize: 14, fontWeight: 600, marginTop: 6 }}>Plastic bottle → Cans</div>
+              <div className="meter"><i style={{ width: "100%", background: "#2BB673" }} /></div>
+              <div style={{ fontSize: 12, color: "#5C6B62", marginTop: 6 }}>Cash back: +0.004 SOL</div>
             </div>
             <div className="float float-face"><Person />Face matched · Maya R.</div>
           </div>

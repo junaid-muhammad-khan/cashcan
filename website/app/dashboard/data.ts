@@ -28,16 +28,16 @@ export interface Detection {
 export const DETECTIONS: Detection[] = [
   { id: 1, icon: "cup", item: "Paper cup", note: "Coating uncertain", route: "Hold · check local rules", kind: "review", time: "14:42",
     detail: "Some paper cups have a plastic lining. The front camera couldn't tell, so this one is held until the local rule is checked." },
-  { id: 2, icon: "box", item: "Takeout container", note: "Food residue detected", route: "Pause · remove residue", kind: "flagged", time: "14:38",
-    detail: "Both cameras saw food residue. Scrape or rinse it, then drop it again for a clean sort." },
-  { id: 3, icon: "can", item: "Aluminum can", note: "No residue flagged", route: "Recycling · sample route", kind: "confirmed", time: "14:31",
+  { id: 2, icon: "box", item: "Plastic bottle", note: "Headed for the wrong bin", route: "Redirected · Waste → Cans", kind: "flagged", time: "14:38",
+    detail: "The cameras saw a recyclable bottle going toward Waste, so the bin lit up the Cans opening instead. One less recyclable lost." },
+  { id: 3, icon: "can", item: "Aluminum can", note: "Right bin first time", route: "Cans · sample route", kind: "confirmed", time: "14:31",
     detail: "Top and front cameras agreed (0.94 confidence). Routed to recycling." },
   { id: 4, icon: "peel", item: "Banana peel", note: "Organic item detected", route: "Organics · sample route", kind: "confirmed", time: "14:25",
-    detail: "Organic item, routed to organics. No contamination check needed." },
+    detail: "Organic item, routed to organics." },
 ];
 
 export const OUTCOMES: { key: Outcome; label: string; status: string; color: string }[] = [
   { key: "confirmed", label: "Confirmed", status: "Confirmed", color: "#2D4D3E" },
-  { key: "flagged", label: "Flagged", status: "Flagged", color: "#C49A5A" },
+  { key: "flagged", label: "Redirected", status: "Redirected", color: "#C49A5A" },
   { key: "review", label: "To review", status: "Needs review", color: "#D3D8C8" },
 ];

@@ -86,7 +86,7 @@ export default function DashboardView({ firstName, walletAddress, onSaveWallet, 
   const kpis = [
     { label: "Items detected", value: R.total, sub: `Across ${R.days}`, icon: null },
     { label: "Confirmed sorts", value: R.confirmed, sub: `${pct}% of detections`, icon: "check" },
-    { label: "Contamination flags", value: R.flagged, sub: "Review before disposal", icon: "warn" },
+    { label: "Wrong-bin saves", value: R.flagged, sub: "Steered to the right container", icon: "warn" },
     { label: "Awaiting review", value: R.review, sub: "Local rules or item unclear", icon: "clip" },
   ] as const;
 
@@ -247,7 +247,7 @@ export default function DashboardView({ firstName, walletAddress, onSaveWallet, 
                           <span>{t}</span><i />
                         </div>
                       ))}
-                      <div className="db-bars" role="group" aria-label={`Sorting outcomes: ${R.confirmed} confirmed, ${R.flagged} flagged, ${R.review} to review`}>
+                      <div className="db-bars" role="group" aria-label={`Sorting outcomes: ${R.confirmed} confirmed, ${R.flagged} redirected, ${R.review} to review`}>
                         {OUTCOMES.map((o) => {
                           const v = values[o.key];
                           const on = !filter || filter === o.key;

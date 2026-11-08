@@ -10,7 +10,7 @@ const spaceGrotesk = Space_Grotesk({ subsets: ["latin"], variable: "--font-space
 export const metadata: Metadata = {
   title: "CashCan — Smart bins that pay you to sort right",
   description:
-    "A smart bin that knows Metro Vancouver's sorting rules, catches contaminated items with two cameras, and pays you in SOL for sorting correctly.",
+    "A smart bin that tracks what you throw away, shows you the right container by Metro Vancouver's rules, and pays you cash back in SOL for recycling correctly.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
