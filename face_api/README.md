@@ -260,8 +260,12 @@ Tables: `../databricks/app_schema.sql`, then `../databricks/002_interactions_pay
 Settings: see `.env.example` (`AUTH0_*`, `BIN_API_KEYS`, `DATABRICKS_*`, `PAYOUT_URL`, `PAYOUT_SECRET`, `MIN_CONFIDENCE`, `PAYOUT_COOLDOWN_SECONDS`,
 `CRON_SECRET`, retry tuning). Tested with an in-memory ledger (`tests/test_payouts.py`) and against the real Databricks tables (`../scripts/e2e_devnet.py local`).
 
-**Known limit:** bin sessions (`app/sessions.py`) live in the memory of one server instance. On Vercel, `/match` and `/interactions` can land on
-different instances, and then the drop is recorded as `not_recognised` (no reward). This is unchanged by the payout work.
+**Bin sessions are signed tokens** (`app/sessions.py`): `s1.<payload>.<HMAC-SHA256>` with the user, expiry, liveness time, issue time and a
+random id, signed with `SESSION_SECRET`. Any instance with the same secret verifies them, so `/match`, `/liveness/.../frame` and `/interactions`
+may land on different Vercel instances. Each interaction stores the random id, never the token. Revoking a user's sessions (face deleted or replaced)
+only takes effect on the instance that handled it; elsewhere their token lasts until it expires (`SESSION_TTL_SECONDS`, 60 s).
+Liveness *challenges* are still held in one instance's memory, so a challenge started on one instance and answered on another fails as
+`unknown_or_expired` and the bin starts a new one.
 
 ## For bins that identify people on the device
 `GET /gallery` (X-Bin-Key) returns every person's face templates (float16, base64) with an `ETag` version; `If-None-Match` gets a 304 when nothing changed. `POST /interactions`

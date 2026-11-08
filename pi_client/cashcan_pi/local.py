@@ -101,7 +101,8 @@ class LocalApi:
         m = _face_api_modules()
         self._m, self.gallery, self._clock = m, gallery, clock
         self.engine = engine or m["LeanEngine"]()
-        self.sessions = m["SessionManager"](clock=clock)
+        # Sessions never leave this device, so a per-process signing key is right here (the server uses SESSION_SECRET).
+        self.sessions = m["SessionManager"](clock=clock, secret=__import__("secrets").token_urlsafe(32))
         self.liveness = m["LivenessManager"](clock=clock)
         self.smoother = m["EmbeddingSmoother"](size=smooth, clock=clock)
         self.require_liveness = m["config"].REQUIRE_LIVENESS if require_liveness is None else require_liveness

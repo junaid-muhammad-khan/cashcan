@@ -139,8 +139,8 @@ Each folder has its own README with setup and commands.
 
 ## What's left
 
-1. **Bin sessions across server instances.** Bin sessions live in one face API instance's memory; on Vercel, `/match` and `/interactions` can reach
-   different instances, and the drop is then recorded as unrecognised (no reward). A shared session store (or a signed session token) fixes it.
+1. **Liveness challenges across server instances.** Bin sessions are signed tokens now (any instance accepts them, `SESSION_SECRET`), but a
+   head-turn challenge still lives in the memory of the instance that issued it; if the answer reaches another instance the bin has to start over.
 2. **Remaining anti-abuse checks:** reject repeated identical items, and tell a hand from an item.
 3. **Real hardware:** lid actuators (`--lids lids.json` maps each bin to shell commands) and the bin camera, then tune the item region and thresholds on them.
 
@@ -151,7 +151,7 @@ Each folder has its own README with setup and commands.
 2. **Treasury:** `cd backend && npm install && npm run init-treasury`, fund the printed address with devnet SOL at https://faucet.solana.com
    (a person has to; the RPC faucet is closed), then `npm run cli -- export-secret` for the next step.
 3. **Vercel env vars** (project-wide, Production and Preview): `TREASURY_SECRET_KEY`, `SOLANA_RPC_URL=https://api.devnet.solana.com`,
-   `PAYOUT_URL=https://cashcan.biz/api/payout`, `PAYOUT_SECRET` and `CRON_SECRET` (two long random strings), `BIN_API_KEYS="bin-1:<key>"`, plus the
+   `PAYOUT_URL=https://cashcan.biz/api/payout`, `PAYOUT_SECRET`, `CRON_SECRET` and `SESSION_SECRET` (long random strings), `BIN_API_KEYS="bin-1:<key>"`, plus the
    existing `DATABRICKS_*` and `AUTH0_*`. See `face_api/.env.example` and `website/.env.example`. Redeploy.
 4. **Check the money path:** `python scripts/e2e_devnet.py deployed --base-url https://cashcan.biz --bin-key <key> --session-token <live bin session>
    --auth0-token <test user's access token>` (or `local` mode against `npm run dev`; see the script's header).

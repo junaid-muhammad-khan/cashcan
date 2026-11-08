@@ -30,6 +30,8 @@ ID_MIN_SHARPNESS = 25.0
 
 # Bin session: after one successful match, items in this window pay out to that user
 SESSION_TTL_SECONDS = int(os.environ.get("SESSION_TTL_SECONDS", "60"))
+# Signs bin session tokens (app/sessions.py) so every server instance can verify them. Long random string; changing it ends all sessions.
+SESSION_SECRET = os.environ.get("SESSION_SECRET", "")
 
 # Liveness (random head-turn challenge, issued only after a face is recognised)
 REQUIRE_LIVENESS = os.environ.get("CASHCAN_LIVENESS", "on").lower() not in ("off", "0", "false")

@@ -378,7 +378,8 @@ def create_app(engine: FaceEngine | None = None, store: FaceStore | None = None,
         claimed = str(body.get("user_id") or "").strip()   # a bin that identifies people itself (local identity) names them; the bin key vouches for it
         if user_id is None and claimed and state["store"].user_exists(claimed):
             user_id = claimed
-        row, created = need_payouts().record(iid, bin_id, item, body.get("confidence"), user_id, token and str(token)[:8])
+        row, created = need_payouts().record(iid, bin_id, item, body.get("confidence"), user_id,
+                                            state["sessions"].session_id(str(token)) if token else None)
         return {**public(row), "duplicate": not created}
 
     def check_cron(authorization: str | None):
