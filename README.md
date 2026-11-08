@@ -3,7 +3,7 @@
 **Canada sent a record 26.6 million tonnes of waste to disposal in 2022. Plenty of it could have been recycled. CashCan is a smart bin that pays you to recycle right.**
 
 > Hackathon project (24 hours, HackCamp 2026). Theme: solve a problem in this world.
-> **Status: in progress.** Built: the website (live at cashcan.biz), face enrollment and match (`face_api/`), the bin controller that identifies the person, classifies the item and opens the right lid (`pi_client/ --classify`, tested on a laptop webcam), the end-to-end payout (the face API decides the reward and the website's `/api/payout` sends devnet SOL, with retries), the user dashboard and the city dashboard on real data (`dashboard/`). **Not done yet:** the local rule table and the real bin hardware (lids, camera). Nothing has run on the real bin yet.
+> **Status: in progress.** Built: the website (live at cashcan.biz), face enrollment and match (`face_api/`), the bin controller that identifies the person, classifies the item and opens the right lid (`pi_client/ --classify`, tested on a laptop webcam), the end-to-end payout (the face API decides the reward and the website's `/api/payout` sends devnet SOL, with retries), the user dashboard and the city dashboard on real data (`dashboard/`), "Sort It!", a sorting game for kids with a leaderboard (`/play`), and servo lid scripts (`pi_client/SERVO.md`; `canwatch` opens the lid when the camera sees a can). **Not done yet:** the local rule table, and running anything on the real bin (servo, lids, camera are untested on hardware).
 
 ---
 
@@ -92,25 +92,35 @@ One table, on the server (`face_api/app/rewards.py`, served at `GET /face-api/re
 
 ```
 cashcan/
-├── README.md        this file: problem, solution, status, plan
-├── backend/         operator CLI for the devnet treasury (payouts run in website/app/api/payout)
-├── ml/              garbage classifier (3 bins): training, results, model comparison, RKNN conversion scripts
-├── face_api/        Python face recognition: API + enrollment page, matching, liveness,
-│   │                SQLite and Databricks face stores, tools, measured results
-│   ├── app/         FastAPI app (main.py), face_engine, matching, liveness, sessions, stores
-│   ├── tools/       face_demo (enroll, identify, selftest), databricks_sync (push, pull, search),
-│   │                evaluation, robustness and training experiments
+├── README.md          this file: problem, solution, status, plan
+├── BACKEND_PROMPT.md  the brief for the full backend (what connects to what)
+├── vercel.json        one Vercel project, two services: website (/) and face_api (/face-api/*), plus the daily reconcile cron
+├── website/           Next.js 15 + GSAP site (cashcan.biz)
+│   ├── app/           pages: home, login, signup, enroll, dashboard, play (Sort It! game), prices, account, how-it-works,
+│   │                  local-rules, privacy, terms; api/ = payout, balance, rate routes
+│   ├── components/    shared UI (nav, footer, app chrome, scroll story, game art, "database paused" screen)
+│   ├── lib/           face API client, payout handler, Solana helpers, prices, game logic, content
+│   └── tests/         vitest
+├── face_api/          Python FastAPI service: face enrollment and match, liveness, rewards, ledger and payouts, accounts, game scores
+│   ├── app/           main.py (all endpoints), face_engine, matching, liveness, sessions, rewards, ledger, payouts, accounts,
+│   │                  game, databricks_store (503 when the database is unavailable), SQLite store for local runs
+│   ├── tools/         face_demo, databricks_sync, evaluation and training experiments
 │   ├── tests/
 │   └── EVAL.md, ENROLLMENT.md, ROBUSTNESS.md, TRAINING.md, DATABRICKS_CHECK.md    measured results
-├── pi_client/       bin controller: camera -> face match + liveness (who) and item classifier (what)
-│                    -> opens the right lid -> records the interaction (Python/OpenCV; Pi, Radxa or a Mac)
-├── dashboard/       Databricks AI/BI city dashboard over workspace.cashcan_app.city_activity
-├── databricks/      SQL for the app tables (users, bins, interactions), migrations 002/003, views
-└── website/         Next.js + GSAP site (cashcan.biz): home with the scroll story, sign-up / log-in (Auth0),
-                     face enrollment, dashboard, profile + wallet, prices and info pages
+├── pi_client/         bin controller (Python/OpenCV; Radxa ROCK 5C Lite, Raspberry Pi or a Mac)
+│   ├── cashcan_pi/    loop (who), classifier + itemgate (what), controller, lid and servo (open the right lid),
+│   │                  canwatch (servo opens when the camera sees a can)
+│   ├── tests/
+│   └── README.md, SERVO.md      setup, wiring and commands
+├── ml/                garbage classifier (3 bins): training, results, model comparison, RKNN conversion scripts
+├── backend/           operator CLI for the devnet treasury (payouts themselves run in website/app/api/payout)
+├── databricks/        SQL, run in this order: 001_faces, app_schema, 002_interactions_payouts, website_users, 004_game_scores
+│                      (003_retire_activity_log is for the old workspace owner only)
+├── dashboard/         Databricks AI/BI city dashboard over workspace.cashcan_app.city_activity
+└── scripts/           e2e_devnet.py: checks the money path end to end
 ```
 
-Each folder has its own README with setup and commands.
+Each folder has its own README or notes with setup and commands.
 
 ---
 
@@ -121,6 +131,7 @@ Each folder has its own README with setup and commands.
 - [x] **Bin controller:** `pi_client --classify` uses one camera for both the face match and the item, opens the item's lid and records the interaction with a retry outbox. Unit-tested and tried on a laptop webcam with `--show`; lids are simulated until the hardware is chosen.
 - [x] **Payout path:** the face API decides the reward and pays it at once through the website's `/api/payout` (devnet, memo per interaction), holds rewards until a wallet exists, and a cron retries failures. Runs end to end in **demo mode** (simulated transfer, verified 7/7 against the real Databricks tables and the real route); real devnet transfers need a funded treasury and `PAYOUT_MODE=devnet`.
 - [ ] Local rule lookup table (item -> correct bin + reason)
+- [x] **Servo lid scripts:** `pi_client/cashcan_pi/servo.py` (hardware PWM through `/sys/class/pwm`), `--servos` in the bin controller, and `canwatch` (a can opens the lid, no can leaves it shut). Tested on a fake PWM folder only.
 - [ ] Real lid hardware and bin camera; tune the item region and thresholds on them
 - [x] **Reward table:** one server-side table (`face_api/app/rewards.py`): 5¢ CAD per can (half the BC deposit), converted to SOL at the live rate when paid; confidence gate and per-user cooldown on the server.
 - [x] **Face registration and match:** the website's enroll page and `face_api/` enroll from 1 to 3 photos behind a consent screen (mandatory before using the dashboard; a face already registered to another account is refused) and store only numeric templates, never photos (locally and in Databricks Delta + Vector Search). They also run a head-turn liveness check and offer a delete endpoint. Recognised 99.0% / 97.8% / 93.6% of enrolled people on public photos with 3 / 2 / 1 enrollment photos (0 wrong names), and 7 of 7 on a real laptop webcam with four people. **Not yet tested on the bin hardware.**
@@ -129,6 +140,7 @@ Each folder has its own README with setup and commands.
 - [ ] Gemini API: plain-language "why this bin" text and auto-labeling of photos
 
 ### Nice to have
+- [x] **Sort It! game** for kids (`/play`): three bins, three lives, server-checked scores, weekly and all-time leaderboard with nicknames only
 - [ ] Account page with payout history
 - [ ] Short in-app walkthrough
 
@@ -142,12 +154,14 @@ Each folder has its own README with setup and commands.
 1. **Liveness challenges across server instances.** Bin sessions are signed tokens now (any instance accepts them, `SESSION_SECRET`), but a
    head-turn challenge still lives in the memory of the instance that issued it; if the answer reaches another instance the bin has to start over.
 2. **Remaining anti-abuse checks:** reject repeated identical items, and tell a hand from an item.
-3. **Real hardware:** lid actuators (`--lids lids.json` maps each bin to shell commands) and the bin camera, then tune the item region and thresholds on them.
+3. **Real hardware:** try the servo scripts on the bin (`pi_client/SERVO.md`) and the bin camera, then tune the item region, angles and thresholds.
+4. **Databricks Free Edition has a daily limit.** When it is used up the warehouse stops and the site shows a "database paused" message (HTTP 503) instead of failing. Plan for it on demo day (see below).
 
 ## How to run the demo
 
-1. **Database** (once): run `databricks/002_interactions_payouts.sql` in a SQL warehouse (`cd dashboard && python dbsql.py -f ../databricks/002_interactions_payouts.sql`).
-   The owner of `workspace.cashcan` runs `databricks/003_retire_activity_log.sql`. Add each bin to `workspace.cashcan_app.bins`.
+1. **Database** (once, per Databricks workspace): run the files in `databricks/` in order, `001_faces.sql`, `app_schema.sql`, `002_interactions_payouts.sql`, `website_users.sql`, `004_game_scores.sql`, in a SQL warehouse
+   (`cd dashboard && python dbsql.py -f ../databricks/001_faces.sql`, and so on). Only the owner of the old `workspace.cashcan` runs `003_retire_activity_log.sql`. Add each bin to `workspace.cashcan_app.bins`.
+   Then set `DATABRICKS_HOST`, `DATABRICKS_TOKEN` and `DATABRICKS_WAREHOUSE_ID` in Vercel and redeploy. A new workspace starts empty, so people sign up and enroll again.
 2. **Payouts: demo or real.** For a demo, skip the treasury: with `PAYOUT_MODE=demo` (or no `TREASURY_SECRET_KEY`) payouts are simulated
    (status `paid`, placeholder signature `demo_...`, no SOL moves). For real devnet transfers: `cd backend && npm install && npm run init-treasury`,
    fund the printed address at https://faucet.solana.com (a person has to; the RPC faucet is closed), set `TREASURY_SECRET_KEY`
