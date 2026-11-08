@@ -46,6 +46,7 @@ class FaceReport:
     size_px: int = 0
     sharpness: float = 0.0
     turn: float | None = None
+    threshold: float = config.MATCH_THRESHOLD  # the threshold actually used for this decision
 
     @property
     def label(self) -> str:
@@ -81,7 +82,7 @@ def describe(r: "FaceReport") -> str:
             f"sharpness {r.sharpness:.0f} (min {config.MIN_SHARPNESS:.0f}) | turn {turn}")
     if not r.usable:
         return head + f" -> SKIPPED, {short_gate(r)}"
-    return head + f" -> {r.label}  [need {pct(config.MATCH_THRESHOLD)} to match]"
+    return head + f" -> {r.label}  [need {pct(r.threshold)} to match]"
 
 
 def ranking(emb: np.ndarray, owners: list[str], gallery: np.ndarray) -> list[tuple[str, float]]:
@@ -93,7 +94,7 @@ def ranking(emb: np.ndarray, owners: list[str], gallery: np.ndarray) -> list[tup
 
 def report_for(face: FaceResult, owners, gallery, threshold, margin) -> FaceReport:
     m = dict(det_score=face.det_score, size_px=min(face.box[2] - face.box[0], face.box[3] - face.box[1]),
-             sharpness=face.sharpness, turn=face.turn)
+             sharpness=face.sharpness, turn=face.turn, threshold=threshold)
     try:
         check_quality(face)
     except QualityError as e:

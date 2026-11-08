@@ -150,3 +150,15 @@ def test_store_add_embeddings_has_a_cap(tmp_path):
         store.add_embeddings("me", [np.ones(512, np.float32)] * 20)
     with pytest.raises(KeyError):
         store.add_embeddings("ghost", [np.ones(512, np.float32)])
+
+
+def test_debug_line_shows_the_threshold_that_was_actually_used():
+    from app.face_engine import FaceResult
+    emb = np.zeros(512, np.float32)
+    emb[0] = 1.0
+    owners, gal = ["me"], emb[None, :].copy()
+    face = FaceResult(emb * 0.6 + np.eye(512, dtype=np.float32)[1] * 0.8, 0.99, (0, 0, 200, 200), 500.0, 0.0)  # 60% similar
+    lenient = fd.report_for(face, owners, gal, 0.45, 0.05)
+    strict = fd.report_for(face, owners, gal, 0.90, 0.05)
+    assert lenient.matched and "need 45% to match" in fd.describe(lenient)
+    assert not strict.matched and "need 90% to match" in fd.describe(strict)     # used to say 45% here
