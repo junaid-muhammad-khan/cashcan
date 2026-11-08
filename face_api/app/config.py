@@ -40,3 +40,9 @@ LIVENESS_ID_THRESHOLD = float(os.environ.get("LIVENESS_ID_THRESHOLD", "0.35"))  
 LIVENESS_MAX_STRIKES = 3     # frames that fail the identity check before the challenge fails
 LIVENESS_VALID_SECONDS = float(os.environ.get("LIVENESS_VALID_SECONDS", "120"))  # a live session may be refreshed by face re-check this long
 LIVENESS_MAX_OPEN = 200      # cap on simultaneously open challenges
+
+# Auth0 (website login). When AUTH0_DOMAIN is set, account endpoints require a valid Auth0 access token.
+AUTH0_DOMAIN = os.environ.get("AUTH0_DOMAIN", "")        # e.g. cashcoin.ca.auth0.com
+AUTH0_AUDIENCE = os.environ.get("AUTH0_AUDIENCE", "")    # the API identifier configured in Auth0
+# Bins authenticate with a per-bin key, sent as X-Bin-Key. Comma-separated "bin_id:key" pairs.
+BIN_API_KEYS = os.environ.get("BIN_API_KEYS", "")

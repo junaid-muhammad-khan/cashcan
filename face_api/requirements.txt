@@ -7,3 +7,4 @@ numpy>=1.26
 opencv-python-headless>=4.9
 onnxruntime>=1.17
 httpx>=0.27
+PyJWT[crypto]>=2.8

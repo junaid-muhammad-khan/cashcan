@@ -69,7 +69,8 @@ class DatabricksFaces:
         body = {"warehouse_id": self.warehouse_id, "statement": statement, "wait_timeout": "50s",
                 "on_wait_timeout": "CONTINUE"}
         if params:
-            body["parameters"] = [{"name": k, "value": v, "type": "STRING"} for k, v in params.items()]
+            body["parameters"] = [{"name": k, "type": "STRING"} if v is None else {"name": k, "value": v, "type": "STRING"}
+                                  for k, v in params.items()]
         r = self._json("POST", "/api/2.0/sql/statements", body)
         import time
 

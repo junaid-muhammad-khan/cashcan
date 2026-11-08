@@ -13,10 +13,11 @@ import re
 
 from pathlib import Path
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import Body, FastAPI, File, Form, Header, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
 from . import config
+from .auth import TokenVerifier, bearer, bin_for_key
 from .face_engine import FaceEngine, InsightFaceEngine, QualityError, check_quality, decode_image, pick_face
 from .liveness import LivenessManager
 from .matching import match
@@ -45,11 +46,38 @@ def make_store():
     return FaceStore(config.DB_PATH)
 
 
+def make_accounts():
+    """Accounts in Databricks when configured, else None (the account endpoints then answer 503)."""
+    if config.STORE != "databricks":
+        return None
+    from .accounts import Accounts
+    from .databricks_store import DatabricksFaces
+
+    return Accounts(DatabricksFaces())
+
+
+def make_verifier():
+    return TokenVerifier(config.AUTH0_DOMAIN, config.AUTH0_AUDIENCE) if config.AUTH0_DOMAIN and config.AUTH0_AUDIENCE else None
+
+
 def create_app(engine: FaceEngine | None = None, store: FaceStore | None = None,
-               sessions: SessionManager | None = None, liveness: LivenessManager | None = None) -> FastAPI:
+               sessions: SessionManager | None = None, liveness: LivenessManager | None = None,
+               accounts=None, verifier=None) -> FastAPI:
     app = FastAPI(title="CashCan face API")
     state = {"engine": engine, "store": store or make_store(),
-             "sessions": sessions or SessionManager(), "liveness": liveness or LivenessManager()}
+             "sessions": sessions or SessionManager(), "liveness": liveness or LivenessManager(),
+             "accounts": accounts or make_accounts(), "verifier": verifier or make_verifier()}
+
+    def need_accounts():
+        if state["accounts"] is None:
+            raise HTTPException(503, "Accounts are not configured (needs the Databricks store).")
+        return state["accounts"]
+
+    def current_user(token: str) -> dict:
+        """The signed-in user from an Auth0 access token (created on first login)."""
+        if state["verifier"] is None:
+            raise HTTPException(503, "Login is not configured (set AUTH0_DOMAIN and AUTH0_AUDIENCE).")
+        return need_accounts().get_or_create_user(state["verifier"].sub(token))
 
     def get_engine() -> FaceEngine:
         if state["engine"] is None:  # lazy: model load is slow
@@ -65,8 +93,15 @@ def create_app(engine: FaceEngine | None = None, store: FaceStore | None = None,
         return {"ok": True}
 
     @app.post("/enroll")
-    async def enroll(user_id: str = Form(...), wallet: str = Form(...), consent: bool = Form(False),
-                     frames: list[UploadFile] = File(...)):
+    async def enroll(user_id: str = Form(""), wallet: str = Form(""), consent: bool = Form(False),
+                     frames: list[UploadFile] = File(...), authorization: str | None = Header(None)):
+        if state["verifier"] is not None:  # signed-in mode: identity comes from the token, never from the form
+            user = current_user(bearer(authorization))
+            user_id, wallet = user["user_id"], user["sol_wallet"] or ""
+            if not wallet:
+                raise HTTPException(400, "Set your Solana wallet in your profile before enrolling a face.")
+        elif not user_id or not wallet:
+            raise HTTPException(400, "user_id and wallet are required.")
         if not consent:
             raise HTTPException(400, "Consent is required to store a face embedding.")
         if not USER_ID_RE.match(user_id):
@@ -153,6 +188,55 @@ def create_app(engine: FaceEngine | None = None, store: FaceStore | None = None,
             raise HTTPException(404, "No such user.")
         state["sessions"].close_user(user_id)
         return {"deleted": True}
+
+    # ---- accounts (Auth0 login) -------------------------------------------------------------
+    @app.get("/me")
+    def me(authorization: str | None = Header(None)):
+        u = current_user(bearer(authorization))
+        return {**u, "face_enrolled": state["store"].user_exists(u["user_id"])}
+
+    @app.put("/me")
+    def update_me(body: dict = Body(...), authorization: str | None = Header(None)):
+        u = current_user(bearer(authorization))
+        try:
+            need_accounts().update_profile(u["user_id"], body.get("username"), body.get("pseudonym"), body.get("sol_wallet"))
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from e
+        return need_accounts().user_by_sub(u["auth0_sub"])
+
+    @app.get("/leaderboard")
+    def leaderboard(limit: int = 20):
+        return {"leaderboard": need_accounts().leaderboard(max(1, min(limit, 100)))}
+
+    # ---- bin -> server (authenticated by X-Bin-Key) ----------------------------------------
+    def bin_id_of(key: str | None) -> str:
+        found = bin_for_key(key)
+        if not found:
+            raise HTTPException(401, "Missing or invalid X-Bin-Key.")
+        return found
+
+    @app.post("/interactions")
+    def new_interaction(body: dict = Body(...), x_bin_key: str | None = Header(None)):
+        """One sorted item. `interaction_id` is chosen by the bin and makes retries safe: the same id is stored once.
+        The user comes from the live bin session (face already checked), so no face data is sent or kept per item."""
+        bin_id = bin_id_of(x_bin_key)
+        iid, item = str(body.get("interaction_id", "")).strip(), str(body.get("item_class", "")).strip()
+        if not iid or not item:
+            raise HTTPException(400, "interaction_id and item_class are required.")
+        token = body.get("session_token")
+        user_id = state["sessions"].user_for(token) if token else None
+        created = need_accounts().record_interaction(iid, user_id, token and str(token)[:8], bin_id, item,
+                                                     body.get("confidence"), int(body.get("reward_lamports", 0)))
+        return {"interaction_id": iid, "duplicate": not created, "user_id": user_id}
+
+    @app.post("/interactions/{interaction_id}/payout")
+    def payout_result(interaction_id: str, body: dict = Body(...), x_bin_key: str | None = Header(None)):
+        bin_id_of(x_bin_key)
+        try:
+            changed = need_accounts().set_payout(interaction_id, str(body.get("status", "")), body.get("tx_signature"))
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from e
+        return {"interaction_id": interaction_id, "updated": changed}
 
     return app
 

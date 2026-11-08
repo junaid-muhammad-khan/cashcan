@@ -222,3 +222,20 @@ The API stores templates in Databricks (`workspace.cashcan_faces`) whenever `DAT
 are set (or `CASHCAN_STORE=databricks`). Without them it falls back to the local SQLite file (`CASHCAN_STORE=sqlite` forces that). Matching still
 runs in the API process on a copy of the templates cached for 30 s and refreshed after every enroll/delete; the Vector Search index is not synced
 per request (run `python -m tools.databricks_sync status`). On Vercel, set the three variables in the project settings; the SQLite file is not persistent there.
+
+## Accounts, bins and interactions (Databricks + Auth0)
+Tables are defined in `../databricks/app_schema.sql` (schema `workspace.cashcan_app`: `users`, `bins`, `interactions`, and a `leaderboard` view). Delta does not
+enforce unique keys, so the code does: users are created with `MERGE` on `auth0_sub`, interactions with `MERGE` on `interaction_id`, and a payout can only move
+`pending -> paid|failed` once.
+
+| Endpoint | Auth | What |
+|---|---|---|
+| `GET/PUT /me` | Auth0 access token | profile (created on first login); pseudonym and Solana wallet |
+| `POST /enroll` | Auth0 access token | with Auth0 on, user and wallet come from the token and profile, never the form |
+| `POST /interactions` | `X-Bin-Key` | one sorted item; `interaction_id` makes retries safe; user comes from the live bin session, no face data is sent |
+| `POST /interactions/{id}/payout` | `X-Bin-Key` | payout result (`paid` + `tx_signature`, or `failed`), applied once |
+| `GET /leaderboard` | none | pseudonym and SOL earned, from paid interactions only |
+
+Settings: `AUTH0_DOMAIN` + `AUTH0_AUDIENCE` (Auth0 API identifier), `BIN_API_KEYS="bin-1:key,bin-2:key"`, plus the three `DATABRICKS_*` variables.
+Not built yet: the website calling these endpoints, an Auth0 "API" for the audience, the bin client sending `/interactions`, and a retry queue (only needed if the bin goes offline).
+Tested against a fake database, not yet against the real workspace.
