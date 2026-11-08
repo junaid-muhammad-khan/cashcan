@@ -41,8 +41,11 @@ async function call<T>(path: string, init: RequestInit, token?: string): Promise
 
 export const getMe = (token: string) => call<Me>("/me", { method: "GET" }, token);
 
+/** What saving a wallet did to rewards held for lack of one (they are paid right away; the rest by the retry job). */
+export interface HeldRelease { held_queued?: number; held_paid?: number; held_error?: string }
+
 export const saveWallet = (token: string, wallet: string) =>
-  call<Me>("/me", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sol_wallet: wallet }) }, token);
+  call<Me & HeldRelease>("/me", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sol_wallet: wallet }) }, token);
 
 export interface PoseResult { found: boolean; pose?: "front" | "left" | "right" | "between" | "profile"; turn?: number; hint?: string }
 

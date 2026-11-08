@@ -2,7 +2,9 @@
 
 import { useAuth0 } from "@auth0/auth0-react";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useEffect } from "react";
+import { Suspense, useCallback, useEffect } from "react";
+import { getActivity, type RangeKey } from "@/lib/activity";
+import { demoActivity } from "./data";
 import RequireFace from "@/components/RequireFace";
 import DashboardView from "./DashboardView";
 import "./dashboard.css";
@@ -33,7 +35,7 @@ function DashboardPageInner() {
     }
   }, [preview, isLoading, isAuthenticated, loginWithRedirect]);
 
-  if (preview) return <DashboardView firstName="Preview" walletAddress={null} welcome={false} />;
+  if (preview) return <DashboardView firstName="Preview" walletAddress={null} welcome={false} demo load={demoLoad} />;
 
   if (isLoading || !isAuthenticated || !user) return null;
 
@@ -41,7 +43,18 @@ function DashboardPageInner() {
 
   return (
     <RequireFace>
-      {({ me, setWallet }) => <DashboardView firstName={firstName} walletAddress={me?.sol_wallet ?? null} onSaveWallet={setWallet} welcome={welcome} />}
+      {({ me, setWallet, getToken }) => <LiveDashboard firstName={firstName} wallet={me?.sol_wallet ?? null} setWallet={setWallet} getToken={getToken} welcome={welcome} />}
     </RequireFace>
   );
+}
+
+const demoLoad = async (range: RangeKey) => demoActivity(range);
+
+// Real data: GET /face-api/me/activity with the user's Auth0 access token.
+function LiveDashboard({ firstName, wallet, setWallet, getToken, welcome }: {
+  firstName: string; wallet: string | null; welcome: boolean;
+  setWallet: React.ComponentProps<typeof DashboardView>["onSaveWallet"]; getToken: () => Promise<string>;
+}) {
+  const load = useCallback(async (range: RangeKey) => getActivity(await getToken(), range), [getToken]);
+  return <DashboardView firstName={firstName} walletAddress={wallet} onSaveWallet={setWallet} welcome={welcome} load={load} />;
 }
