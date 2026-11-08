@@ -77,6 +77,9 @@ Code: `app/databricks_store.py`, CLI: `python -m tools.databricks_sync` (see its
 
 Checked live with synthetic (random) templates, no real faces: Vector Search cosine matched the local cosine to 0.00005 and
 put the right person first 5/5; push, pull (exact round trip) and delete worked; test rows were removed afterwards.
+- **100-photo check** ([`DATABRICKS_CHECK.md`](DATABRICKS_CHECK.md), `python -m tools.databricks_check`): 30 enrolled + 70 strangers,
+  all different people. Local and Vector Search agreed on 100/100; 29/30 enrolled recognised (the miss scored 0.37, below 0.45),
+  0 wrong names, 0/70 strangers accepted; Vector Search query ~250 ms; index caught up 123 s after a bulk push.
 - **Matching stays local** after `pull`. A Vector Search lookup takes a couple of seconds and a new person only appears ~2 min
   after a push (TRIGGERED sync); deletes leave the table at once but the index drops them only after its next sync.
 - **Cost:** the standard endpoint bills while it exists. Delete it when you are not using it.
