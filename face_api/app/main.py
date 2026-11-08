@@ -119,9 +119,9 @@ def create_app(engine: FaceEngine | None = None, store: FaceStore | None = None,
                      authorization: str | None = Header(None)):
         if state["verifier"] is not None:  # signed-in mode: identity comes from the token, never from the form
             user = current_user(bearer(authorization))
+            # The wallet is optional here: it can be added on the profile page afterwards, which also
+            # copies it into the face store (see the profile update below), so enrollment is not blocked on it.
             user_id, wallet = user["user_id"], user["sol_wallet"] or ""
-            if not wallet:
-                raise HTTPException(400, "Set your Solana wallet in your profile before enrolling a face.")
         elif state["accounts"] is not None:  # production (Databricks accounts on) but login not configured: never enroll anonymously
             raise HTTPException(503, "Login is not configured (set AUTH0_DOMAIN and AUTH0_AUDIENCE), so enrollment is closed.")
         elif not user_id or not wallet:
@@ -131,7 +131,7 @@ def create_app(engine: FaceEngine | None = None, store: FaceStore | None = None,
         if not USER_ID_RE.match(user_id):
             raise HTTPException(400, "user_id must be 1-64 letters, digits, '.', '_' or '-'.")
         wallet = wallet.strip()
-        if not SOLANA_ADDR_RE.match(wallet):
+        if wallet and not SOLANA_ADDR_RE.match(wallet):
             raise HTTPException(400, "That does not look like a Solana wallet address.")
         if state["store"].user_exists(user_id):
             raise HTTPException(409, "User already enrolled. Delete first to re-enroll.")
