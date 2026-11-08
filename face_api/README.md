@@ -134,17 +134,17 @@ put the right person first 5/5; push, pull (exact round trip) and delete worked;
 - **Who can read the face tables:** no grants beyond the owner exist, but Trevor Lau is also a workspace admin, and admins can read
   everything. Treat the tables as readable by both of you. Biometric data: consent, deletion on request, no photos stored.
 
-## Measured accuracy (LFW, 2026-11-07)
+## Measured accuracy (LFW, re-run 2026-11-08 with the current blur gate)
 Full tables in [`EVAL.md`](EVAL.md); regenerate with `python -m tools.eval_lfw --data <dir>` (see its docstring).
 Real pipeline, threshold 0.45, 150 enrolled people (3 photos each), 757 later photos of them, 831 photos of 600 strangers:
 
 | What | Result |
 |---|---|
-| Enrolled person recognised | **99.2%** (6 of 757 not recognised, all scored 0.24-0.44) |
-| Wrong person named | **0 of 757** |
-| Strangers accepted | 1 of 831 at 0.45; on inspection that photo shows an enrolled person (Jimmy Carter) next to the labelled one, so it is a labelling artefact, i.e. 0 real false accepts (95% upper bound still ~0.7%) |
-| Photos rejected by quality gates | ~3% (mostly face too small, then blur) |
-| 1:1 verification (2,057 pairs) | AUC 0.997, EER 0.88%, 99.56% accuracy at the best threshold; 95.3% at 0.45, because single-photo-vs-single-photo is stricter than matching against 3 enrolled photos |
+| Enrolled person recognised | **99.2%** (6 of 759 not recognised) |
+| Wrong person named | **0 of 759** |
+| Strangers accepted | 1 of 837 at 0.45; on inspection that photo shows an enrolled person (Jimmy Carter) next to the labelled one, so it is a labelling artefact, i.e. 0 real false accepts (95% upper bound still ~0.7%) |
+| Photos rejected by quality gates | ~2.5% (mostly face too small, 1.7-2.0%; blur 0.5-0.6%) |
+| 1:1 verification (2,082 pairs) | AUC 0.996, EER 0.96%, 99.52% accuracy at the best threshold; 95.2% at 0.45, because single-photo-vs-single-photo is stricter than matching against 3 enrolled photos |
 | Liveness turn measure vs InsightFace yaw (4,400 faces) | correlation 0.93; faces within 10 degrees of frontal pass "facing camera" 95-100% and "turned" 0%; faces 30+ degrees pass "turned" 98-100%, 20-30 degrees only 47% |
 
 This is celebrity press photos, a gallery of 150, and no spoof attempts. It says the model is sound, not that the bin

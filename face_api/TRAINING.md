@@ -54,3 +54,5 @@ saturated for this data: with ~1,000 identities there is no generalisable signal
 ## Conclusion
 Not adopted. No adapter is shipped and the pipeline is unchanged. Improving accuracy at the bin needs photos from the bin's own
 camera and lighting (a different distribution from LFW), not more training on LFW.
+
+_Note: this experiment ran under the earlier blur gate (raw crop, limit 40), which changed on 2026-11-08. It compares two models on the same photos, so the gate only affects which ~0.5% of images are included; it has not been re-run._
