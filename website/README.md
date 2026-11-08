@@ -23,6 +23,7 @@ for local dev, `https://cashcan.biz` in production) or login/logout will fail wi
 | `/` | Home page with scroll-triggered reveals, untilting hero mockup, floating cards, live drop feed, drifting gradient background, count-up numbers, pinned five-step "how it works" story, and a dashboard preview that expands on scroll |
 | `/signup` | Two-panel signup design; the right panel (`components/AuthPanel.tsx`) has "Continue with Google" / "Continue with email", both redirecting to Auth0 Universal Login with `screen_hint: signup` |
 | `/login` | Two-panel login design, same `AuthPanel`; `?next=/path` returns you where you were after login |
+| `/enroll` | Face match setup, where sign-up lands. Consent (+ Solana wallet if the profile has none, saved with `PUT /me`), live webcam with an oval guide, three auto-captured angles (straight, left, right), `POST /enroll` to the face API, then a one-frame `POST /match` test showing the similarity score. Handles camera blocked/missing, unclear frames (per-angle tips from the API's quality checks) and already-enrolled (409). Skippable |
 | `/dashboard` | Signed-in only (client-side redirect to Auth0 if not); where login and signup land. Recent detections (click to expand), rewards card (pending configuration), four summary cards and the sorting-outcomes chart. The date-range menu updates every number; clicking a bar filters the detections. **All figures are demo data** (`app/dashboard/data.ts`) until drops are linked to accounts |
 | `/account` | Signed-in only (client-side redirect to `/login` if not); shows name, email, a link back to the dashboard and a log-out button ("Profile" in the dashboard header) |
 
@@ -51,6 +52,19 @@ without JavaScript, and everything that moves is skipped when the visitor has re
   the ID token server-side with `jose` + Auth0's JWKS endpoint in an API route — Databricks, set up in
   `../databricks/website_users.sql` for the previous password-based accounts, would work for this too), plus
   linking that to the face-enrollment flow in `face_api/`.
+
+## Face match setup (`/enroll`)
+- Talks to the face API in `../face_api` through `/face-api/*` (`lib/faceApi.ts`). Vercel routes that path to the
+  face service (`../vercel.json`); for local dev, start the API (`uvicorn app.main:app_factory --factory --port 8000`
+  in `face_api/`) and set `FACE_API_ORIGIN=http://localhost:8000` so `next.config.mjs` proxies it.
+- Identity: with `NEXT_PUBLIC_AUTH0_AUDIENCE` set (same value as the face API's `AUTH0_AUDIENCE`), the page sends an
+  Auth0 access token and the API takes the user and wallet from the account. Without it, the API must run without
+  Auth0 and the page sends a user id derived from the Auth0 `sub` plus the wallet typed on the page.
+- The API stores 512-number embeddings only; the page never uploads anything but the three JPEG frames and one test frame.
+- Not verified end to end in production: whether Vercel's `/face-api` rewrite strips the prefix before it reaches FastAPI
+  (if it doesn't, the API's routes need a `/face-api` root path), and the Auth0 API/audience setup.
+- Tested locally against the real face API (SQLite store, Auth0 off) with a fake webcam: enroll, match test,
+  re-enroll refused (409) and a no-face scan (per-angle tips) all behave as described.
 
 ## Sample data
 The hero's live feed and the dashboard preview use sample values and are labelled "sample data" / "Demo data" in the UI.

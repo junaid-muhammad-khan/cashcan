@@ -21,6 +21,8 @@ export default function Auth0ProviderWithNavigate({ children }: { children: Reac
       clientId={clientId}
       authorizationParams={{
         redirect_uri: typeof window !== "undefined" ? window.location.origin : undefined,
+        // Access tokens for the face API (face_api checks AUTH0_AUDIENCE). Optional for local dev.
+        ...(process.env.NEXT_PUBLIC_AUTH0_AUDIENCE ? { audience: process.env.NEXT_PUBLIC_AUTH0_AUDIENCE } : {}),
       }}
       onRedirectCallback={onRedirectCallback}
     >

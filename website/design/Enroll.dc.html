@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>CashCan — Set up face match</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Space+Grotesk:wght@500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#F4F6F1}
+a{color:#157A46}a:hover{color:#0E5A33}
+.blob{position:absolute;border-radius:50%;filter:blur(70px);pointer-events:none}
+.b1{animation:drift1 16s ease-in-out infinite}
+.b2{animation:drift2 20s ease-in-out infinite}
+@keyframes drift1{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(80px,-40px) scale(1.15)}}
+@keyframes drift2{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(-70px,50px) scale(1.2)}}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:48px;padding:0 22px;border-radius:999px;border:1px solid transparent;font:600 15px Inter,system-ui,sans-serif;cursor:pointer;text-decoration:none}
+.btn-primary{background:#157A46;color:#FFFFFF}.btn-primary:hover{background:#0E5A33;color:#FFFFFF}
+.btn-ghost{background:#FFFFFF;color:#0F1F17;border-color:#DCE4DD}.btn-ghost:hover{border-color:#B9C6BD;color:#0F1F17}
+.btn[disabled]{opacity:.55;cursor:not-allowed}
+.scan{animation:scan 2.2s ease-in-out infinite}
+@keyframes scan{0%,100%{top:14%}50%{top:82%}}
+.ring{transition:stroke-dashoffset .5s cubic-bezier(.2,.8,.2,1),stroke .3s ease}
+.fade{animation:fade .45s cubic-bezier(.2,.7,.2,1) both}
+@keyframes fade{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+.nudge-l{animation:nl 1.4s ease-in-out infinite}
+.nudge-r{animation:nr 1.4s ease-in-out infinite}
+.nudge-u{animation:nu 1.4s ease-in-out infinite}
+.nudge-i{animation:ni 1.4s ease-in-out infinite}
+@keyframes nl{0%,100%{transform:translateX(0)}50%{transform:translateX(-10px)}}
+@keyframes nr{0%,100%{transform:translateX(0)}50%{transform:translateX(10px)}}
+@keyframes nu{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+@keyframes ni{0%,100%{transform:scale(1)}50%{transform:scale(1.12)}}
+.pop{animation:pop .5s cubic-bezier(.3,1.5,.5,1) both}
+@keyframes pop{from{opacity:0;transform:scale(.6)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion: reduce){.b1,.b2,.scan,.fade,.nudge-l,.nudge-r,.nudge-u,.nudge-i,.pop{animation:none}.ring{transition:none}}
+@media (max-width: 900px){.aside{display:none !important}.mobile-logo{display:flex !important}.split{grid-template-columns:minmax(0,1fr) !important}}
+</style>
+</helmet>
+<div class="split" style="min-height: 100vh; display: grid; grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr); font-family: Inter, system-ui, sans-serif; color: #0F1F17">
+
+  <!-- ===== ASIDE ===== -->
+  <aside class="aside" style="position: relative; overflow: hidden; background: #0F1F17; color: #E6EEE9; padding: 40px 48px; display: flex; flex-direction: column">
+    <div aria-hidden="true" class="blob b1" style="width: 420px; height: 420px; background: #2BB673; opacity: .3; left: -120px; top: -80px"></div>
+    <div aria-hidden="true" class="blob b2" style="width: 360px; height: 360px; background: #E3B23C; opacity: .2; right: -100px; bottom: -80px"></div>
+    <a href="Main.dc.html" style="position: relative; display: flex; align-items: center; gap: 10px; color: #FFFFFF; text-decoration: none">
+      <svg aria-hidden="true" width="30" height="30" viewBox="0 0 32 32" fill="none" stroke="#5FD79A" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 9h18l-2 18H9z"></path><path d="M5 9h22"></path><path d="M12 9V6h8v3"></path><path d="M13 15c1.5-1.5 4.5-1.5 6 0M16 14v8"></path></svg>
+      <span style="font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 22px; letter-spacing: -0.02em">cashcan</span>
+    </a>
+    <div style="position: relative; margin: auto 0; max-width: 440px">
+      <h2 style="font-family: 'Space Grotesk', sans-serif; font-size: 40px; line-height: 1.08; letter-spacing: -0.03em; margin: 0; color: #FFFFFF">Your face is your bin card.</h2>
+      <p style="font-size: 16px; line-height: 1.6; color: #B9C7BF; margin: 16px 0 0">Step up to any CashCan bin and it knows who to credit. No phone, no card, no app.</p>
+      <ol style="list-style: none; margin: 32px 0 0; padding: 0; display: flex; flex-direction: column; gap: 12px">
+        <sc-for list="{{journey}}" as="j" hint-placeholder-count="3">
+          <li style="display: flex; gap: 14px; align-items: center; background: {{j.bg}}; border: 1px solid {{j.border}}; border-radius: 14px; padding: 14px 16px">
+            <span style="width: 30px; height: 30px; border-radius: 50%; background: {{j.dot}}; color: {{j.dotText}}; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; flex-shrink: 0">{{j.mark}}</span>
+            <span><span style="display: block; font-size: 15px; font-weight: 600; color: #FFFFFF">{{j.title}}</span><span style="display: block; font-size: 13px; color: #8FB5A0">{{j.sub}}</span></span>
+          </li>
+        </sc-for>
+      </ol>
+    </div>
+    <p style="position: relative; font-size: 12px; color: #8FB5A0; margin: 0">Face matching runs on the bin and our face service. Payouts are Solana devnet test tokens.</p>
+  </aside>
+
+  <!-- ===== FLOW ===== -->
+  <main style="display: flex; align-items: center; justify-content: center; padding: 40px 24px; background: #F4F6F1">
+    <div style="width: 100%; max-width: 560px">
+      <a class="mobile-logo" href="Main.dc.html" style="display: none; align-items: center; gap: 10px; color: #0F1F17; text-decoration: none; margin-bottom: 24px">
+        <svg aria-hidden="true" width="28" height="28" viewBox="0 0 32 32" fill="none" stroke="#157A46" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 9h18l-2 18H9z"></path><path d="M5 9h22"></path><path d="M12 9V6h8v3"></path><path d="M13 15c1.5-1.5 4.5-1.5 6 0M16 14v8"></path></svg>
+        <span style="font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 21px">cashcan</span>
+      </a>
+
+      <!-- stepper -->
+      <div aria-label="{{stepAria}}" style="display: flex; align-items: center; gap: 8px; margin-bottom: 28px">
+        <sc-for list="{{stepper}}" as="st" hint-placeholder-count="4">
+          <div style="flex: 1; display: flex; flex-direction: column; gap: 8px">
+            <span style="height: 4px; border-radius: 99px; background: {{st.bar}}; transition: background-color .3s ease"></span>
+            <span style="font-size: 12px; font-weight: {{st.weight}}; color: {{st.color}}">{{st.label}}</span>
+          </div>
+        </sc-for>
+      </div>
+
+      <!-- ========== 1. CONSENT ========== -->
+      <sc-if value="{{isConsent}}" hint-placeholder-val="{{ true }}">
+        <div class="fade">
+          <h1 style="font-family: 'Space Grotesk', sans-serif; font-size: 34px; letter-spacing: -0.03em; margin: 0">Set up face match</h1>
+          <p style="font-size: 16px; color: #4A5A51; line-height: 1.55; margin: 10px 0 0">Takes about a minute. You can skip this and use your account without it, or enroll at a bin later.</p>
+          <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 24px">
+            <sc-for list="{{facts}}" as="f" hint-placeholder-count="3">
+              <div style="background: #FFFFFF; border: 1px solid #DCE4DD; border-radius: 16px; padding: 16px">
+                <span style="width: 36px; height: 36px; border-radius: 10px; background: #E3F5EB; color: #157A46; display: flex; align-items: center; justify-content: center; font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 14px">{{f.badge}}</span>
+                <div style="font-size: 14px; font-weight: 600; margin-top: 12px">{{f.title}}</div>
+                <div style="font-size: 13px; color: #4A5A51; line-height: 1.45; margin-top: 4px">{{f.body}}</div>
+              </div>
+            </sc-for>
+          </div>
+          <label style="display: flex; gap: 12px; align-items: flex-start; margin-top: 20px; background: #FFFFFF; border: 1px solid {{consentBorder}}; border-radius: 14px; padding: 14px 16px; font-size: 14px; line-height: 1.5; color: #33433A; cursor: pointer">
+            <input type="checkbox" checked="{{consent}}" onChange="{{toggleConsent}}" style="width: 20px; height: 20px; margin: 1px 0 0; accent-color: #157A46; flex-shrink: 0">
+            <span>I agree to CashCan creating a face template from my camera and using it to identify me at bins. I can delete it at any time from my account.</span>
+          </label>
+          <sc-if value="{{consentErr}}" hint-placeholder-val="{{ false }}">
+            <p style="color: #B4321F; font-size: 13px; margin: 8px 0 0">Tick the box to continue, or skip face match for now.</p>
+          </sc-if>
+          <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-top: 24px">
+            <button type="button" class="btn btn-primary" onClick="{{startCamera}}">Continue</button>
+            <a href="Dashboard.dc.html" class="btn btn-ghost">Skip for now</a>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ========== 2/3. CAMERA + SCAN ========== -->
+      <sc-if value="{{showCamera}}" hint-placeholder-val="{{ false }}">
+        <div class="fade">
+          <h1 style="font-family: 'Space Grotesk', sans-serif; font-size: 30px; letter-spacing: -0.03em; margin: 0">{{camTitle}}</h1>
+          <p style="font-size: 15px; color: #4A5A51; line-height: 1.55; margin: 8px 0 0">{{camSub}}</p>
+
+          <div style="position: relative; margin-top: 20px; aspect-ratio: 4 / 3; border-radius: 24px; overflow: hidden; background: radial-gradient(ellipse at 50% 40%, #2A3F34 0%, #14211A 70%)">
+            <!-- face oval + progress ring -->
+            <svg viewBox="0 0 400 300" aria-hidden="true" style="position: absolute; inset: 0; width: 100%; height: 100%">
+              <ellipse cx="200" cy="148" rx="92" ry="116" fill="none" stroke="rgba(255,255,255,.18)" stroke-width="3"></ellipse>
+              <ellipse class="ring" cx="200" cy="148" rx="92" ry="116" fill="none" stroke="{{ringColor}}" stroke-width="5" stroke-linecap="round" stroke-dasharray="660" stroke-dashoffset="{{ringOffset}}" transform="rotate(-90 200 148)"></ellipse>
+            </svg>
+            <!-- stylised face, moves with the pose -->
+            <div style="position: absolute; left: 50%; top: 49%; width: 120px; height: 150px; transform: translate(-50%, -50%) {{facePose}}; transition: transform .6s cubic-bezier(.2,.8,.2,1)">
+              <svg viewBox="0 0 120 150" aria-hidden="true" style="width: 100%; height: 100%">
+                <ellipse cx="60" cy="72" rx="44" ry="58" fill="#9FB3A8" opacity=".35"></ellipse>
+                <circle cx="44" cy="64" r="4" fill="#E6EEE9"></circle><circle cx="76" cy="64" r="4" fill="#E6EEE9"></circle>
+                <path d="M60 70v16l-6 4" stroke="#E6EEE9" stroke-width="3" fill="none" stroke-linecap="round"></path>
+                <path d="M46 102c8 6 20 6 28 0" stroke="#E6EEE9" stroke-width="3" fill="none" stroke-linecap="round"></path>
+              </svg>
+            </div>
+            <sc-if value="{{scanning}}" hint-placeholder-val="{{ false }}">
+              <div class="scan" aria-hidden="true" style="position: absolute; left: 30%; right: 30%; height: 2px; background: #5FD79A; box-shadow: 0 0 14px #5FD79A"></div>
+            </sc-if>
+            <!-- pose cue -->
+            <sc-if value="{{showCue}}" hint-placeholder-val="{{ false }}">
+              <div style="position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; background: rgba(15,31,23,.82); color: #FFFFFF; border-radius: 999px; padding: 10px 18px; font-size: 15px; font-weight: 600; white-space: nowrap">
+                <span class="{{cueAnim}}" style="display: inline-flex; color: #5FD79A">
+                  <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="transform: rotate({{cueRotate}})"><path d="M5 12h14M13 6l6 6-6 6"></path></svg>
+                </span>
+                {{cueText}}
+              </div>
+            </sc-if>
+            <!-- quality tag -->
+            <div style="position: absolute; left: 16px; top: 16px; display: flex; gap: 6px; flex-wrap: wrap">
+              <sc-for list="{{checks}}" as="c" hint-placeholder-count="3">
+                <span style="display: inline-flex; align-items: center; gap: 6px; background: rgba(15,31,23,.75); color: {{c.color}}; border-radius: 999px; padding: 5px 10px; font-size: 12px; font-weight: 600"><span style="width: 7px; height: 7px; border-radius: 50%; background: {{c.color}}"></span>{{c.label}}</span>
+              </sc-for>
+            </div>
+            <span style="position: absolute; right: 16px; top: 16px; background: rgba(15,31,23,.75); color: #CFE0D6; border-radius: 999px; padding: 5px 10px; font-size: 12px; font-weight: 600">{{frameCount}}</span>
+            <sc-if value="{{isCamera}}" hint-placeholder-val="{{ false }}">
+              <span style="position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); color: #8FB5A0; font-size: 12px; white-space: nowrap">Camera preview · the image never leaves this step</span>
+            </sc-if>
+          </div>
+
+          <!-- frame thumbnails -->
+          <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 14px">
+            <sc-for list="{{frames}}" as="fr" hint-placeholder-count="3">
+              <div style="border-radius: 12px; border: 1px solid {{fr.border}}; background: {{fr.bg}}; padding: 10px 6px; text-align: center; transition: background-color .3s ease, border-color .3s ease">
+                <span class="{{fr.anim}}" style="display: inline-flex; width: 26px; height: 26px; border-radius: 50%; align-items: center; justify-content: center; background: {{fr.dot}}; color: {{fr.dotText}}; font-size: 12px; font-weight: 700">{{fr.mark}}</span>
+                <span style="display: block; font-size: 11px; font-weight: 600; color: {{fr.text}}; margin-top: 6px">{{fr.label}}</span>
+              </div>
+            </sc-for>
+          </div>
+
+          <sc-if value="{{qualityMsg}}" hint-placeholder-val="{{ false }}">
+            <div role="status" style="margin-top: 14px; background: #FBF1D8; color: #7A4F00; border-radius: 12px; padding: 12px 14px; font-size: 14px">{{qualityMsg}}</div>
+          </sc-if>
+
+          <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-top: 20px">
+            <sc-if value="{{isCamera}}" hint-placeholder-val="{{ false }}">
+              <button type="button" class="btn btn-primary" onClick="{{startScan}}">Start scan</button>
+            </sc-if>
+            <sc-if value="{{scanning}}" hint-placeholder-val="{{ false }}">
+              <button type="button" class="btn btn-ghost" onClick="{{restart}}">Start over</button>
+            </sc-if>
+            <button type="button" class="btn btn-ghost" onClick="{{back}}" style="border-color: transparent; background: transparent">Back</button>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ========== 4. TEST ========== -->
+      <sc-if value="{{isTest}}" hint-placeholder-val="{{ false }}">
+        <div class="fade">
+          <h1 style="font-family: 'Space Grotesk', sans-serif; font-size: 30px; letter-spacing: -0.03em; margin: 0">{{testTitle}}</h1>
+          <p style="font-size: 15px; color: #4A5A51; line-height: 1.55; margin: 8px 0 0">{{testSub}}</p>
+          <div style="margin-top: 22px; background: #FFFFFF; border: 1px solid #DCE4DD; border-radius: 20px; padding: 24px; display: flex; gap: 24px; align-items: center; flex-wrap: wrap">
+            <div style="position: relative; width: 132px; height: 132px; flex-shrink: 0">
+              <svg viewBox="0 0 120 120" aria-hidden="true" style="width: 100%; height: 100%">
+                <circle cx="60" cy="60" r="50" fill="none" stroke="#EBF0EC" stroke-width="10"></circle>
+                <circle class="ring" cx="60" cy="60" r="50" fill="none" stroke="#157A46" stroke-width="10" stroke-linecap="round" stroke-dasharray="314" stroke-dashoffset="{{scoreOffset}}" transform="rotate(-90 60 60)"></circle>
+                <line x1="60" y1="6" x2="60" y2="18" stroke="#E3B23C" stroke-width="3" transform="rotate(162 60 60)"></line>
+              </svg>
+              <div style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center">
+                <span style="font-family: 'Space Grotesk', sans-serif; font-size: 30px; font-weight: 700">{{scoreText}}</span>
+                <span style="font-size: 11px; color: #5C6B62">similarity</span>
+              </div>
+            </div>
+            <div style="flex: 1; min-width: 220px; display: flex; flex-direction: column; gap: 10px">
+              <sc-for list="{{testRows}}" as="t" hint-placeholder-count="3">
+                <div style="display: flex; justify-content: space-between; gap: 12px; font-size: 14px; border-bottom: 1px solid #EBF0EC; padding-bottom: 8px">
+                  <span style="color: #4A5A51">{{t.k}}</span><span style="font-weight: 600; color: {{t.color}}">{{t.v}}</span>
+                </div>
+              </sc-for>
+              <p style="font-size: 12px; color: #5C6B62; margin: 2px 0 0">A bin accepts a match at 45% or higher. The gold mark on the dial shows that line.</p>
+            </div>
+          </div>
+          <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-top: 22px">
+            <button type="button" class="btn btn-primary" disabled="{{testBusy}}" onClick="{{finish}}">{{testCta}}</button>
+            <button type="button" class="btn btn-ghost" onClick="{{restart}}">Scan again</button>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ========== 5. DONE ========== -->
+      <sc-if value="{{isDone}}" hint-placeholder-val="{{ false }}">
+        <div class="fade" style="background: #FFFFFF; border: 1px solid #DCE4DD; border-radius: 24px; padding: 32px">
+          <span class="pop" style="width: 64px; height: 64px; border-radius: 50%; background: #E3F5EB; display: flex; align-items: center; justify-content: center"><svg aria-hidden="true" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#157A46" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"></path></svg></span>
+          <h1 style="font-family: 'Space Grotesk', sans-serif; font-size: 32px; letter-spacing: -0.03em; margin: 20px 0 0">Face match is ready</h1>
+          <p style="font-size: 15px; color: #4A5A51; line-height: 1.6; margin: 10px 0 0">Next time you're at a CashCan bin, look at the front camera. It will ask you to turn your head once so it knows you're really there, then credit every item you sort for the next two minutes.</p>
+          <ul style="list-style: none; margin: 20px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px">
+            <li style="display: flex; gap: 10px; align-items: center; font-size: 14px; color: #33433A"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#157A46" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"></path></svg>3 templates saved, no photos kept</li>
+            <li style="display: flex; gap: 10px; align-items: center; font-size: 14px; color: #33433A"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#157A46" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"></path></svg>Delete or redo it any time from Profile</li>
+            <li style="display: flex; gap: 10px; align-items: center; font-size: 14px; color: #33433A"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#157A46" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"></path></svg>Link a wallet so paid drops reach you</li>
+          </ul>
+          <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-top: 26px">
+            <a href="Dashboard.dc.html" class="btn btn-primary">Go to your dashboard</a>
+            <button type="button" class="btn btn-ghost" onClick="{{restart}}">Redo scan</button>
+          </div>
+        </div>
+      </sc-if>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":960}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    // step: consent | camera | scan | test | done
+    this.state = { step: 'consent', consent: false, consentErr: false, captured: 0, warn: '', testDone: false };
+    this.POSES = [
+      { label: 'Straight', cue: 'Look straight at the camera', pose: 'none', anim: '', rot: '0deg' },
+      { label: 'Left', cue: 'Turn your head to your left', pose: 'translateX(-14px) rotateY(-28deg)', anim: 'nudge-l', rot: '180deg' },
+      { label: 'Right', cue: 'Now turn to your right', pose: 'translateX(14px) rotateY(28deg)', anim: 'nudge-r', rot: '0deg' }
+    ];
+  }
+  componentWillUnmount() { this.clear(); }
+  clear() { clearTimeout(this.t1); clearTimeout(this.t2); clearTimeout(this.t3); }
+  runScan() {
+    var self = this;
+    this.clear();
+    var tick = function () {
+      var n = self.state.captured;
+      if (self.state.step !== 'scan') return;
+      if (n >= 3) { self.setState({ step: 'test', testDone: false }); self.t3 = setTimeout(function () { self.setState({ testDone: true }); }, 1600); return; }
+      // the last frame shows one quality warning first, like the real enrollment gate
+      if (n === 2 && !self.warned) {
+        self.warned = true;
+        self.setState({ warn: 'Face too small for enrollment (72 px, needs 80 px). Move a little closer.' });
+        self.t2 = setTimeout(function () { self.setState({ warn: '' }); tick(); }, 1700);
+        return;
+      }
+      self.setState({ captured: n + 1 });
+      self.t1 = setTimeout(tick, 1500);
+    };
+    this.t1 = setTimeout(tick, 1200);
+  }
+  renderVals() {
+    var s = this.state, self = this, P = this.POSES;
+    var order = ['consent', 'camera', 'scan', 'test', 'done'];
+    var idx = order.indexOf(s.step);
+    var stepIdx = idx <= 0 ? 0 : (idx <= 2 ? 1 : (idx === 3 ? 2 : 3));
+    var stepper = ['Consent', 'Scan', 'Test', 'Done'].map(function (l, i) {
+      return { label: l, bar: i <= stepIdx ? '#157A46' : '#DCE4DD', color: i <= stepIdx ? '#0F1F17' : '#5C6B62', weight: i === stepIdx ? '700' : '500' };
+    });
+    var faceDone = s.step === 'done';
+    var journey = [
+      { title: 'Create your account', sub: 'Done', on: true },
+      { title: 'Set up face match', sub: faceDone ? 'Ready to use at any bin' : 'In progress, about a minute', on: faceDone, active: !faceDone },
+      { title: 'Link a Solana wallet', sub: 'Next, from your dashboard', on: false }
+    ].map(function (j, i) {
+      return Object.assign({}, j, {
+        mark: j.on ? '✓' : String(i + 1),
+        bg: j.on ? '#1D3828' : (j.active ? '#15291F' : '#15291F'), border: j.on || j.active ? '#5FD79A' : '#24402F',
+        dot: j.on ? '#5FD79A' : (j.active ? '#24402F' : '#24402F'), dotText: j.on ? '#0F1F17' : '#B9C7BF'
+      });
+    });
+    var cur = Math.min(s.captured, 2);
+    var scanning = s.step === 'scan';
+    var frames = P.map(function (p, i) {
+      var done = i < s.captured, active = scanning && i === s.captured;
+      return {
+        label: p.label, mark: done ? '✓' : String(i + 1), anim: done ? 'pop' : '',
+        bg: done ? '#E3F5EB' : (active ? '#FFFFFF' : '#FFFFFF'), border: done ? '#9BD9B6' : (active ? '#157A46' : '#DCE4DD'),
+        dot: done ? '#157A46' : (active ? '#0F1F17' : '#EEF1EF'), dotText: done || active ? '#FFFFFF' : '#5C6B62',
+        text: done || active ? '#0F1F17' : '#5C6B62'
+      };
+    });
+    var lightOk = true, distOk = !(s.warn), centred = true;
+    var checks = [
+      { label: 'Good light', color: lightOk ? '#5FD79A' : '#E3B23C' },
+      { label: distOk ? 'Distance OK' : 'Move closer', color: distOk ? '#5FD79A' : '#E3B23C' },
+      { label: 'Face centred', color: centred ? '#5FD79A' : '#E3B23C' }
+    ];
+    var score = 78;
+    return {
+      stepper: stepper, stepAria: 'Step ' + (stepIdx + 1) + ' of 4', journey: journey,
+      isConsent: s.step === 'consent', showCamera: s.step === 'camera' || s.step === 'scan',
+      isCamera: s.step === 'camera', scanning: scanning, isTest: s.step === 'test', isDone: s.step === 'done',
+      facts: [
+        { badge: '512', title: 'Numbers, not photos', body: 'Your face becomes a 512-number template. Camera frames are thrown away.' },
+        { badge: '3', title: 'Three quick angles', body: 'Straight, then a little left and right, so any bin can find you.' },
+        { badge: '✕', title: 'Yours to delete', body: 'Remove the template from Profile and it stops working everywhere at once.' }
+      ],
+      consent: s.consent, consentErr: s.consentErr, consentBorder: s.consentErr ? '#B4321F' : '#DCE4DD',
+      toggleConsent: function (e) { self.setState({ consent: e.target.checked, consentErr: false }); },
+      startCamera: function () { if (!self.state.consent) { self.setState({ consentErr: true }); return; } self.setState({ step: 'camera' }); },
+      camTitle: scanning ? (s.captured >= 3 ? 'Saving your templates…' : P[cur].cue) : 'Check your camera',
+      camSub: scanning ? 'Hold each position until the ring fills. We capture automatically.' : 'Fit your face inside the oval, in even light, about an arm’s length away. Glasses are fine; hats and masks are not.',
+      ringColor: s.warn ? '#E3B23C' : '#5FD79A',
+      ringOffset: String(Math.round(660 - 660 * (s.captured / 3))),
+      facePose: scanning ? P[cur].pose : 'none',
+      showCue: scanning && s.captured < 3 && !s.warn,
+      cueText: P[cur].label === 'Straight' ? 'Look straight ahead' : P[cur].cue,
+      cueAnim: P[cur].anim, cueRotate: P[cur].rot,
+      checks: checks,
+      frameCount: s.captured + ' of 3 captured',
+      frames: frames, qualityMsg: s.warn,
+      startScan: function () { self.warned = false; self.setState({ step: 'scan', captured: 0, warn: '' }); self.runScan(); },
+      restart: function () { self.clear(); self.warned = false; self.setState({ step: 'camera', captured: 0, warn: '', testDone: false }); },
+      back: function () { self.clear(); self.setState({ step: 'consent', captured: 0, warn: '' }); },
+      testTitle: s.testDone ? 'It recognises you' : 'Checking it works…',
+      testSub: s.testDone ? 'We matched one fresh camera frame against your new templates, the same way a bin will.' : 'Look at the camera for one more frame.',
+      scoreOffset: String(Math.round(314 - 314 * (s.testDone ? score / 100 : 0))),
+      scoreText: s.testDone ? score + '%' : '…',
+      testRows: [
+        { k: 'Match', v: s.testDone ? 'You (78%)' : 'Checking', color: s.testDone ? '#157A46' : '#5C6B62' },
+        { k: 'Next closest person', v: s.testDone ? '21%' : '—', color: '#0F1F17' },
+        { k: 'Templates saved', v: '3 of 3', color: '#0F1F17' }
+      ],
+      testBusy: !s.testDone, testCta: s.testDone ? 'Finish setup' : 'Checking…',
+      finish: function () { self.setState({ step: 'done' }); }
+    };
+  }
+}
+</script>
+</body>
+</html>

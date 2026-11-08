@@ -44,7 +44,7 @@ export default function SignupPage() {
       body="Three steps and the next CashCan bin knows where to send your rewards."
       aside={<Journey />}
     >
-      <AuthPanel mode="signup" returnTo="/dashboard?welcome=1" />
+      <AuthPanel mode="signup" returnTo="/enroll" />
     </AuthShell>
   );
 }

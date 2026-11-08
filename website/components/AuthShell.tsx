@@ -29,11 +29,13 @@ export default function AuthShell({
   heading,
   body,
   aside,
+  wide,
   children,
 }: {
   heading: React.ReactNode;
   body: string;
   aside?: React.ReactNode;
+  wide?: boolean;
   children: React.ReactNode;
 }) {
   const root = useRef<HTMLDivElement>(null);
@@ -69,7 +71,7 @@ export default function AuthShell({
         </div>
       </aside>
       <main className="auth-main">
-        <div className="auth-card">
+        <div className={wide ? "auth-card wide" : "auth-card"}>
           <Link href="/" className="logo auth-top"><Logo /><span>cashcan</span></Link>
           {children}
         </div>
