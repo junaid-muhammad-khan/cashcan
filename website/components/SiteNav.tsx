@@ -18,9 +18,10 @@ export default function SiteNav() {
         <span>cashcan</span>
       </Link>
       <div className="nav-links">
-        <a href="/#how">How it works</a>
-        <a href="/#rules">Local rules</a>
-        <a href="/#privacy">Privacy</a>
+        <Link href="/how-it-works">How it works</Link>
+        <Link href="/local-rules">Local rules</Link>
+        <Link href="/prices">Prices</Link>
+        <Link href="/privacy">Privacy</Link>
       </div>
       <div className="nav-actions">
         {isLoading ? null : (

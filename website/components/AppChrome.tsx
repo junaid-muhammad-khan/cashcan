@@ -26,6 +26,7 @@ export function AppHeader({ current }: { current: "home" | "dashboard" | "profil
         <Link href="/" className={`app-pill${current === "home" ? " is-current" : ""}`} {...cur("home")}>Home</Link>
         <Link href="/dashboard" className={`app-pill${current === "dashboard" ? " is-current" : ""}`} {...cur("dashboard")}>Dashboard</Link>
         {current === "dashboard" && <a href="#redeem" className="app-pill">Redeem</a>}
+        <Link href="/prices" className="app-pill">Prices</Link>
         <Link href="/account" className={`app-pill${current === "profile" ? " is-current" : ""}`} {...cur("profile")}>Profile</Link>
         <button type="button" className="app-pill" onClick={() => logout({ logoutParams: { returnTo: window.location.origin } })}>Log out</button>
       </nav>

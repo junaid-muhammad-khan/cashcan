@@ -10,7 +10,9 @@ export default function SiteFooter() {
           <Link href="/" className="logo footer-logo"><LogoMark size={24} /><span>cashcan</span></Link>
           <span className="footer-note">a HackCamp 2026 prototype. Payouts use Solana devnet test tokens only.</span>
         </span>
-        <nav aria-label="Footer"><a href="/#privacy">Privacy</a><a href="/#how">How it works</a><Link href="/login">Log in</Link></nav>
+        <nav aria-label="Footer">
+          <Link href="/how-it-works">How it works</Link><Link href="/prices">Prices</Link><Link href="/privacy">Privacy</Link><Link href="/terms">Terms</Link><Link href="/login">Log in</Link>
+        </nav>
       </div>
     </footer>
   );
