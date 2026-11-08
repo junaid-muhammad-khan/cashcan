@@ -5,6 +5,7 @@ import { getConnection, loadOrCreateTreasury, airdropIfLow } from "./treasury.js
 import { computeRewardSol } from "./rewardTable.js";
 import { payUser, PayoutRejected } from "./payout.js";
 import { logActivity } from "./activityLog.js";
+import { classifyImage } from "./classify.js";
 
 const program = new Command();
 const minConfidence = Number(process.env.MIN_CONFIDENCE ?? "0.75");
@@ -95,6 +96,67 @@ program
       } else {
         console.log(`Explorer: https://explorer.solana.com/tx/${result}?cluster=${cluster}`);
       }
+      await logActivity({ ...activityBase, rewardEligible: true, payoutSol: rewardSol, payoutTxSig: result });
+    } catch (err) {
+      if (err instanceof PayoutRejected) {
+        console.log(`No payout: ${err.message}`);
+        if (!opts.dryRun) {
+          await logActivity({ ...activityBase, rewardEligible: false, payoutSol: 0 });
+        }
+        return;
+      }
+      throw err;
+    }
+  });
+
+program
+  .command("classify-and-pay")
+  .description("Classify a photo (ml/scripts/predict.py), decide if it's SOL-eligible, and pay if so")
+  .requiredOption("--user <pubkey>", "recipient's Solana wallet address")
+  .requiredOption("--image <path>", "path to a photo of the item")
+  .option("--contaminated", "mark the item as contaminated", false)
+  .option("--dry-run", "build and validate the payout but never hit the network", false)
+  .action(async (opts) => {
+    const prediction = await classifyImage(opts.image);
+    console.log(
+      `Classified as: ${prediction.bin} (${(prediction.confidence * 100).toFixed(1)}% confidence)`,
+    );
+
+    const connection = getConnection();
+    const treasury = loadOrCreateTreasury();
+    const contaminated = Boolean(opts.contaminated);
+    const rewardSol = computeRewardSol(
+      { itemClass: prediction.bin, contaminated, confidence: prediction.confidence },
+      minConfidence,
+    );
+
+    if (rewardSol <= 0) {
+      console.log(`Not eligible to exchange for SOL: "${prediction.bin}" has no reward, or confidence is below the ${minConfidence} threshold.`);
+    }
+
+    const activityBase = {
+      userId: opts.user,
+      itemLabel: prediction.bin,
+      binDecision: prediction.bin,
+      contaminated,
+      classifierConfidence: prediction.confidence,
+    };
+
+    try {
+      const result = await payUser(
+        connection,
+        treasury,
+        opts.user,
+        rewardSol,
+        cooldownSeconds,
+        Boolean(opts.dryRun),
+      );
+      if (opts.dryRun) {
+        console.log(result);
+        return;
+      }
+      console.log(`Paid ${rewardSol} SOL to ${opts.user}`);
+      console.log(`Signature: ${result}`);
       await logActivity({ ...activityBase, rewardEligible: true, payoutSol: rewardSol, payoutTxSig: result });
     } catch (err) {
       if (err instanceof PayoutRejected) {
