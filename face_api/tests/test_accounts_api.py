@@ -155,3 +155,23 @@ def test_changing_wallet_also_updates_the_wallet_the_bin_pays_to(env):
     assert c.store.wallet(uid) == WALLET
     c.put("/me", json={"sol_wallet": other}, headers=auth())
     assert c.store.wallet(uid) == other
+
+
+def test_production_mode_never_enrolls_or_deletes_anonymously(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "REQUIRE_LIVENESS", False)
+    store = FaceStore(str(tmp_path / "f.db"))
+    store.add_user("victim", WALLET, [__import__("numpy").ones(512, "float32") / 22.6])
+    c = TestClient(create_app(engine=FakeEngine(), store=store, accounts=Accounts(FakeDB()), verifier=None))  # accounts on, Auth0 off
+    files = [("frames", ("f.png", png(7), "image/png"))]
+    assert c.post("/enroll", data={"consent": "true", "user_id": "x", "wallet": WALLET}, files=files).status_code == 503
+    assert c.delete("/users/victim").status_code == 503 and store.user_exists("victim")
+
+
+def test_delete_only_your_own_face(env):
+    c, _, _ = env
+    c.put("/me", json={"sol_wallet": WALLET}, headers=auth())
+    c.post("/enroll", data={"consent": "true"}, files=[("frames", ("f.png", png(7), "image/png"))], headers=auth())
+    uid = c.get("/me", headers=auth()).json()["user_id"]
+    assert c.delete(f"/users/{uid}").status_code == 401                              # no token
+    assert c.delete(f"/users/{uid}", headers=auth(sub="auth0|someone-else")).status_code == 403
+    assert c.delete(f"/users/{uid}", headers=auth()).json() == {"deleted": True}

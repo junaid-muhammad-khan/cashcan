@@ -111,6 +111,8 @@ def create_app(engine: FaceEngine | None = None, store: FaceStore | None = None,
             user_id, wallet = user["user_id"], user["sol_wallet"] or ""
             if not wallet:
                 raise HTTPException(400, "Set your Solana wallet in your profile before enrolling a face.")
+        elif state["accounts"] is not None:  # production (Databricks accounts on) but login not configured: never enroll anonymously
+            raise HTTPException(503, "Login is not configured (set AUTH0_DOMAIN and AUTH0_AUDIENCE), so enrollment is closed.")
         elif not user_id or not wallet:
             raise HTTPException(400, "user_id and wallet are required.")
         if not consent:
@@ -212,7 +214,12 @@ def create_app(engine: FaceEngine | None = None, store: FaceStore | None = None,
         return {"user_id": user_id, "wallet": state["store"].wallet(user_id)}
 
     @app.delete("/users/{user_id}")
-    def delete_user(user_id: str):
+    def delete_user(user_id: str, authorization: str | None = Header(None)):
+        if state["accounts"] is not None:  # production: only the signed-in owner may delete their own face data
+            if state["verifier"] is None:
+                raise HTTPException(503, "Login is not configured, so deletion is closed.")
+            if current_user(bearer(authorization))["user_id"] != user_id:
+                raise HTTPException(403, "You can only delete your own face data.")
         if not state["store"].delete_user(user_id):
             raise HTTPException(404, "No such user.")
         state["sessions"].close_user(user_id)
