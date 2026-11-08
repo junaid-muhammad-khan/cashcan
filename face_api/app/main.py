@@ -4,24 +4,31 @@ GET    /                  enrollment web page
 POST   /enroll            consent + 3-8 face frames + wallet -> stores embeddings only
 POST   /match             one frame from the bin camera -> user + (challenge | session token)
 POST   /liveness/{id}/frame  frames answering a head-turn challenge -> session token when passed
-GET    /session/{token}   which user a live session belongs to (used by the payout step)
+GET    /session/{token}   which user a live session belongs to
 DELETE /users/{user_id}   delete all biometric data for a user
+GET    /rewards           the reward table (cents per item class), read-only
+GET/PUT /me, GET /me/activity   signed-in profile and the user's drops (Auth0)
+POST   /interactions      one sorted item from a bin (X-Bin-Key); the server decides the reward and pays it
+GET    /cron/reconcile    retries failed payouts and resolves stuck ones (Vercel cron, CRON_SECRET)
 """
 from __future__ import annotations
 
 import logging
 import re
+import secrets
 
 from pathlib import Path
 
 from fastapi import Body, FastAPI, File, Form, Header, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
-from . import config
+from . import config, rewards
+from .activity import RANGES, summarise, window, zone
 from .auth import TokenVerifier, bearer, bin_for_key
 from .face_engine import FaceEngine, InsightFaceEngine, QualityError, check_quality, decode_image, pick_face
 from .liveness import POSE_HINTS, LivenessManager, enroll_pose
 from .matching import match
+from .payouts import public
 import numpy as np
 from .sessions import SessionManager
 from .store import FaceStore
@@ -61,13 +68,23 @@ def make_accounts():
     return Accounts(DatabricksFaces())
 
 
+def make_payouts(accounts):
+    """The payout service over the same Databricks connection as the accounts, else None."""
+    if accounts is None:
+        return None
+    from .ledger import Ledger
+    from .payouts import Payouts
+
+    return Payouts(Ledger(accounts.db))
+
+
 def make_verifier():
     return TokenVerifier(config.AUTH0_DOMAIN, config.AUTH0_AUDIENCE) if config.AUTH0_DOMAIN and config.AUTH0_AUDIENCE else None
 
 
 def create_app(engine: FaceEngine | None = None, store: FaceStore | None = None,
                sessions: SessionManager | None = None, liveness: LivenessManager | None = None,
-               accounts=None, verifier=None) -> FastAPI:
+               accounts=None, verifier=None, payouts=None) -> FastAPI:
     app = FastAPI(title="CashCan face API")
 
     @app.middleware("http")
@@ -82,6 +99,12 @@ def create_app(engine: FaceEngine | None = None, store: FaceStore | None = None,
     state = {"engine": engine, "store": store or make_store(),
              "sessions": sessions or SessionManager(), "liveness": liveness or LivenessManager(),
              "accounts": accounts or make_accounts(), "verifier": verifier or make_verifier()}
+    state["payouts"] = payouts or make_payouts(state["accounts"])
+
+    def need_payouts():
+        if state["payouts"] is None:
+            raise HTTPException(503, "Interactions are not configured (needs the Databricks store).")
+        return state["payouts"]
 
     def need_accounts():
         if state["accounts"] is None:
@@ -288,7 +311,28 @@ def create_app(engine: FaceEngine | None = None, store: FaceStore | None = None,
         wallet = body.get("sol_wallet")
         if wallet and state["store"].user_exists(u["user_id"]):  # keep the wallet the bin pays to in step with the profile
             state["store"].set_wallet(u["user_id"], wallet.strip())
-        return need_accounts().user_by_sub(u["auth0_sub"])
+        out = dict(need_accounts().user_by_sub(u["auth0_sub"]))
+        if wallet and state["payouts"] is not None:  # rewards held for lack of a wallet are paid now (the cron finishes any left)
+            try:
+                out.update(state["payouts"].release_held(u["user_id"]))
+            except Exception as e:  # the wallet is saved either way; held rows stay held and are released on the next save
+                log.warning("release_held user=%s failed: %s", u["user_id"], type(e).__name__)
+                out.update({"held_queued": 0, "held_paid": 0, "held_error": "Your wallet is saved, but held rewards could not be released yet."})
+        return out
+
+    @app.get("/me/activity")
+    def my_activity(range: str = "week", tz: str = "", authorization: str | None = Header(None)):
+        if range not in RANGES:
+            raise HTTPException(400, f"range must be one of {', '.join(RANGES)}.")
+        u = current_user(bearer(authorization))
+        zi = zone(tz)
+        start, _, _ = window(range, zi)
+        rows = need_payouts().ledger.rows_for_user(u["user_id"], start)
+        return summarise(rows, range, zi)
+
+    @app.get("/rewards")
+    def reward_table():
+        return rewards.table()
 
     @app.get("/leaderboard")
     def leaderboard(limit: int = 20):
@@ -303,26 +347,31 @@ def create_app(engine: FaceEngine | None = None, store: FaceStore | None = None,
 
     @app.post("/interactions")
     def new_interaction(body: dict = Body(...), x_bin_key: str | None = Header(None)):
-        """One sorted item. `interaction_id` is chosen by the bin and makes retries safe: the same id is stored once.
-        The user comes from the live bin session (face already checked), so no face data is sent or kept per item."""
+        """One sorted item. `interaction_id` is chosen by the bin and makes retries safe: the same id is stored once and paid
+        at most once. The user comes from the live bin session (face already checked), so no face data is sent or kept per item.
+        The reward is decided here from the item class (app/rewards.py); any amount the bin sends is ignored."""
         bin_id = bin_id_of(x_bin_key)
-        iid, item = str(body.get("interaction_id", "")).strip(), str(body.get("item_class", "")).strip()
+        iid, item = str(body.get("interaction_id", "")).strip(), str(body.get("item_class", "")).strip().lower()
         if not iid or not item:
             raise HTTPException(400, "interaction_id and item_class are required.")
+        if len(iid) > 128:
+            raise HTTPException(400, "interaction_id is too long.")
         token = body.get("session_token")
-        user_id = state["sessions"].user_for(token) if token else None
-        created = need_accounts().record_interaction(iid, user_id, token and str(token)[:8], bin_id, item,
-                                                     body.get("confidence"), int(body.get("reward_lamports", 0)))
-        return {"interaction_id": iid, "duplicate": not created, "user_id": user_id}
+        user_id = state["sessions"].user_for(str(token)) if token else None
+        row, created = need_payouts().record(iid, bin_id, item, body.get("confidence"), user_id, token and str(token)[:8])
+        return {**public(row), "duplicate": not created}
 
-    @app.post("/interactions/{interaction_id}/payout")
-    def payout_result(interaction_id: str, body: dict = Body(...), x_bin_key: str | None = Header(None)):
-        bin_id_of(x_bin_key)
-        try:
-            changed = need_accounts().set_payout(interaction_id, str(body.get("status", "")), body.get("tx_signature"))
-        except ValueError as e:
-            raise HTTPException(400, str(e)) from e
-        return {"interaction_id": interaction_id, "updated": changed}
+    def check_cron(authorization: str | None):
+        if not config.CRON_SECRET:
+            raise HTTPException(503, "CRON_SECRET is not set.")
+        if not authorization or not secrets.compare_digest(authorization.encode(), f"Bearer {config.CRON_SECRET}".encode()):
+            raise HTTPException(401, "Bad cron secret.")
+
+    @app.get("/cron/reconcile")
+    def reconcile(authorization: str | None = Header(None)):
+        """Vercel cron (vercel.json, every minute). Safe to overlap with itself and with live requests."""
+        check_cron(authorization)
+        return need_payouts().reconcile()
 
     return app
 

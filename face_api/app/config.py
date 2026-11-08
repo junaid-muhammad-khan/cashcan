@@ -47,6 +47,17 @@ AUTH0_AUDIENCE = os.environ.get("AUTH0_AUDIENCE", "")    # the API identifier co
 # Bins authenticate with a per-bin key, sent as X-Bin-Key. Comma-separated "bin_id:key" pairs.
 BIN_API_KEYS = os.environ.get("BIN_API_KEYS", "")
 
+# Rewards and payouts (see app/rewards.py and app/payouts.py)
+MIN_CONFIDENCE = float(os.environ.get("MIN_CONFIDENCE", "0.75"))                    # classifier confidence needed for a reward
+PAYOUT_COOLDOWN_SECONDS = int(os.environ.get("PAYOUT_COOLDOWN_SECONDS", "30"))      # one paying drop per user per window
+PAYOUT_URL = os.environ.get("PAYOUT_URL", "")            # the website's /api/payout (Node route that signs the devnet transfer)
+PAYOUT_SECRET = os.environ.get("PAYOUT_SECRET", "")      # shared secret, sent as "Authorization: Bearer ..."
+PAYOUT_TIMEOUT_SECONDS = float(os.environ.get("PAYOUT_TIMEOUT_SECONDS", "8"))
+PAYOUT_MAX_ATTEMPTS = int(os.environ.get("PAYOUT_MAX_ATTEMPTS", "5"))               # failed payouts are retried up to this many sends
+PAYOUT_RETRY_BASE_SECONDS = int(os.environ.get("PAYOUT_RETRY_BASE_SECONDS", "30"))  # backoff: 30 s, 60 s, 120 s, ...
+PAYOUT_STUCK_SECONDS = int(os.environ.get("PAYOUT_STUCK_SECONDS", "180"))           # a "sending" row older than this is resolved by memo lookup
+CRON_SECRET = os.environ.get("CRON_SECRET", "")          # Vercel cron sends "Authorization: Bearer $CRON_SECRET"
+
 # Where the API is mounted behind the website (vercel.json rewrites /face-api/* to it). Requests with this prefix are accepted too.
 MOUNT_PREFIX = os.environ.get("MOUNT_PREFIX", "/face-api")
 

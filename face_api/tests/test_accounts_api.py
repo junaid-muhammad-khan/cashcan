@@ -74,8 +74,11 @@ def env(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "REQUIRE_LIVENESS", False)
     db, sessions = FakeDB(), SessionManager()
     store = FaceStore(str(tmp_path / "f.db"))
+    from app.payouts import Payouts
+    from tests.fakes import FakePayoutClient, MemoryLedger
     app = create_app(engine=FakeEngine(), store=store, sessions=sessions,
-                     accounts=Accounts(db), verifier=TokenVerifier(DOMAIN, AUD, key_resolver=Resolver()))
+                     accounts=Accounts(db), verifier=TokenVerifier(DOMAIN, AUD, key_resolver=Resolver()),
+                     payouts=Payouts(MemoryLedger(), FakePayoutClient()))
     client = TestClient(app)
     client.store = store
     return client, db, sessions
@@ -122,28 +125,11 @@ def test_enroll_takes_identity_from_token_not_form(env):
     assert c.post("/enroll", data={"consent": "true"}, files=files).status_code == 401
 
 
-def test_interaction_is_idempotent_and_payout_moves_once(env):
-    c, db, sessions = env
-    uid = c.get("/me", headers=auth()).json()["user_id"]
-    tok, _ = sessions.open(uid)
-    h = {"X-Bin-Key": "secretkey"}
-    body = {"interaction_id": "i-1", "session_token": tok, "item_class": "cans", "confidence": 0.93, "reward_lamports": 5000}
-    assert c.post("/interactions", json=body).status_code == 401
-    assert c.post("/interactions", json=body, headers={"X-Bin-Key": "wrong"}).status_code == 401
-    first = c.post("/interactions", json=body, headers=h).json()
-    again = c.post("/interactions", json=body, headers=h).json()          # bin retried after a timeout
-    assert first["duplicate"] is False and again["duplicate"] is True and len(db.inter) == 1
-    assert db.inter["i-1"]["user"] == uid and db.inter["i-1"]["status"] == "pending"
-    assert c.post("/interactions/i-1/payout", json={"status": "paid", "tx_signature": "sig"}, headers=h).json()["updated"]
-    assert c.post("/interactions/i-1/payout", json={"status": "paid", "tx_signature": "sig2"}, headers=h).json()["updated"] is False
-    assert c.post("/interactions/i-1/payout", json={"status": "weird"}, headers=h).status_code == 400
-
-
-def test_unmatched_item_keeps_no_identity_and_no_payout(env):
-    c, db, _ = env
-    r = c.post("/interactions", json={"interaction_id": "i-2", "item_class": "waste", "reward_lamports": 5000},
-               headers={"X-Bin-Key": "secretkey"}).json()
-    assert r["user_id"] is None and db.inter["i-2"] == {"user": None, "r": 5000, "status": "none"}
+def test_bins_can_no_longer_report_their_own_payouts(env):
+    """The server pays now (app/payouts.py); a bin claiming 'paid' with a signature of its choice is not an endpoint any more."""
+    c, _, _ = env
+    r = c.post("/interactions/i-1/payout", json={"status": "paid", "tx_signature": "sig"}, headers={"X-Bin-Key": "secretkey"})
+    assert r.status_code in (404, 405)
 
 
 def test_leaderboard_and_bin_keys(env):

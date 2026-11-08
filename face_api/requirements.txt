@@ -8,3 +8,4 @@ opencv-python-headless>=4.9
 onnxruntime>=1.17
 httpx>=0.27
 PyJWT[crypto]>=2.8
+tzdata>=2024.1   # time zones for /me/activity buckets (the serverless image may not ship /usr/share/zoneinfo)

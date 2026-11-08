@@ -1,8 +1,6 @@
-"""Accounts, bins and interactions in Databricks (schema workspace.cashcan_app, see databricks/app_schema.sql).
+"""Accounts in Databricks (schema workspace.cashcan_app, see databricks/app_schema.sql). Interactions and payouts: app/ledger.py.
 
-Delta cannot enforce unique keys, so uniqueness lives in the statements: users are created with MERGE on auth0_sub and
-interactions with MERGE on interaction_id. A retried request therefore inserts nothing a second time, and a payout can
-only move forward (pending -> paid / failed), so it cannot be applied twice.
+Delta cannot enforce unique keys, so uniqueness lives in the statements: users are created with MERGE on auth0_sub.
 """
 from __future__ import annotations
 
@@ -15,7 +13,6 @@ from .databricks_store import DatabricksFaces
 APP_SCHEMA = "workspace.cashcan_app"
 SOLANA_ADDR_RE = re.compile(r"^[1-9A-HJ-NP-Za-km-z]{32,44}$")
 USER_COLS = "user_id, auth0_sub, username, pseudonym, sol_wallet"
-PAYOUT_FINAL = ("paid", "failed")
 
 
 PROFILE_TTL_SECONDS = 20.0  # a profile is reused this long per server instance; any write forgets it
@@ -75,28 +72,6 @@ class Accounts:
             if val is not None:
                 self.db.sql(f"UPDATE {self.t}.users SET {col} = :v WHERE user_id = :u", {"v": val.strip(), "u": user_id})
         self.forget(user_id)
-
-    def record_interaction(self, interaction_id: str, user_id: str | None, session_id: str | None, bin_id: str,
-                           item_class: str, confidence: float | None, reward_lamports: int) -> bool:
-        """Insert once. Returns False when interaction_id already existed (a retry): nothing changes and nothing is paid twice."""
-        status = "pending" if user_id and reward_lamports > 0 else "none"
-        rows = self.db.sql(
-            f"MERGE INTO {self.t}.interactions t USING (SELECT :i AS interaction_id) s ON t.interaction_id = s.interaction_id "
-            f"WHEN NOT MATCHED THEN INSERT (interaction_id, user_id, session_id, bin_id, item_class, confidence, reward_lamports, "
-            f"payout_status, created_at) VALUES (:i, :u, :s, :b, :c, CAST(:conf AS DOUBLE), CAST(:r AS BIGINT), :st, current_timestamp())",
-            {"i": interaction_id, "u": user_id, "s": session_id, "b": bin_id, "c": item_class,
-             "conf": None if confidence is None else str(confidence), "r": str(int(reward_lamports)), "st": status})
-        # MERGE returns [num_affected_rows, num_updated, num_deleted, num_inserted]
-        return bool(rows) and int(rows[0][-1]) > 0
-
-    def set_payout(self, interaction_id: str, status: str, tx_signature: str | None) -> bool:
-        """pending -> paid | failed, once. False if it was not pending (already settled, unknown, or no payout due)."""
-        if status not in PAYOUT_FINAL:
-            raise ValueError("status must be 'paid' or 'failed'")
-        rows = self.db.sql(
-            f"UPDATE {self.t}.interactions SET payout_status = :st, tx_signature = :tx "
-            f"WHERE interaction_id = :i AND payout_status = 'pending'", {"st": status, "tx": tx_signature, "i": interaction_id})
-        return bool(rows) and int(rows[0][0]) > 0
 
     def leaderboard(self, limit: int = 20) -> list[dict]:
         rows = self.db.sql(f"SELECT display_name, sol_earned, items FROM {self.t}.leaderboard LIMIT {int(limit)}")
