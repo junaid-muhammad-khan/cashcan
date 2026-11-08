@@ -99,7 +99,7 @@ The classifier detects the item, then a lookup table decides whether it earns a 
 ## Scope
 
 ### Must have (MVP)
-- [ ] Classifier covering about 12 tricky Metro Vancouver items, clean and contaminated
+- [x] Classifier — scope changed from "12 material classes" to **3 physical bins** (organics / cans / waste, matching the hardware's 3 openings — see `ml/class_map.yaml` for why). MobileNetV2, trained on public datasets (TrashNet, GD, RealWaste) plus real photos of actual items after live-webcam testing exposed gaps. 92%+ on a held-out test set; live-tested with a webcam (`ml/scripts/live_predict.py`), not yet on the real bin hardware/cameras
 - [ ] Local rule lookup table (item -> correct bin + reason)
 - [ ] Two cameras (top and front) + Raspberry Pi capturing each item
 - [ ] Bin indicator (LEDs or display) showing the correct bin and why
@@ -122,7 +122,7 @@ The classifier detects the item, then a lookup table decides whether it earns a 
 | Area | Proposed |
 |---|---|
 | Face recognition | InsightFace `buffalo_s` (face detector + MobileFaceNet/ArcFace 512-number embeddings), embeddings only, never photos — see `face_api/`. The pretrained weights are **non-commercial research only**; a commercial product needs a different licence |
-| Vision model | MobileNetV2 classifier into 3 bins (organics / cans / waste) — see `ml/README.md` for the current results (94.1% on a held-out 40% of RealWaste after moving 60% of it into training; not comparable to the earlier 72.1%) and the model comparison. Needs photos from the real camera. RKNN conversion script is in `ml/scripts/`, not yet verified on the board |
+| Vision model | MobileNetV2 classifier into 3 bins (organics / cans / waste) — see `ml/` (92%+ on a held-out dataset). Compared against YOLO11n-cls (same ballpark, ~92-94% either way — confirms the model wasn't the bottleneck, training-data coverage was) and kept MobileNetV2 since it matches the RK3582's official RKNN conversion example. Patched twice with real photos after live-webcam testing found gaps: a tall/slim can shape the public datasets don't show, and general live-camera conditions (lighting, clutter) vs. the datasets' clean photos — both documented in `ml/class_map.yaml` with before/after numbers. RKNN conversion script is in `ml/scripts/`, not yet verified on the board |
 | Edge device | Radxa ROCK 5C Lite (RK3582, NPU) per `ml/README.md`; earlier plan was a Raspberry Pi. The bin client `pi_client/` is plain Python/OpenCV and runs on either. Camera layout: see Open questions |
 | Backend | Two services: Node/TypeScript payout (`backend/`) and Python face recognition API (`face_api/`) |
 | Website | Next.js 15 + GSAP, see `website/` (sign-up, log-in, account; prototype auth). Its sign-up form has an opt-in face-enrollment checkbox that is not connected to `face_api/` yet |
@@ -169,13 +169,16 @@ python -m tools.face_demo identify --webcam
 python -m tools.face_demo selftest --outsider
 ```
 
-## Data plan (the bottleneck, start first)
+## Data plan (what actually happened)
 
-- Choose about 12 tricky local items (coffee cup, compostable cutlery, food-soiled paper, greasy container, chip bag, and similar).
-- Photograph about 30 examples of each, clean and contaminated, in varied lighting.
-- Keep a **held-out test set** we never train on.
-- Report accuracy on that test set honestly, including failures.
-- Verify rules against the current Recycle BC and Metro Vancouver accepted-materials lists before hard-coding anything. **Not yet verified.**
+The original plan below (photograph ~12 items ourselves) didn't happen — public datasets turned out
+to be the faster path, with our own photos used surgically to patch specific gaps instead of as the
+primary data source:
+
+- Trained on three public datasets (TrashNet, GD, RealWaste — credited with licenses in `ml/README.md`), collapsed onto the 3-bin scheme.
+- Kept a genuine **held-out test set** (a slice of RealWaste never trained on) and reported honest accuracy, including early failures (one iteration scored 63% before a fix — see `ml/class_map.yaml`'s notes).
+- When live-webcam testing found specific gaps (a tall can shape, general webcam lighting/clutter conditions), took a *small* number of our own photos (20-40) targeting exactly those gaps, rather than a large from-scratch shoot — much faster, and the before/after is documented in `ml/class_map.yaml`.
+- Verify rules against the current Recycle BC and Metro Vancouver accepted-materials lists before hard-coding anything. **Not yet verified** — `ml/rules.yaml` still has all values as TODO on purpose.
 
 ---
 
