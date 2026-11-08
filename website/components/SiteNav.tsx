@@ -3,9 +3,13 @@
 import Link from "next/link";
 import { useAuth0 } from "@auth0/auth0-react";
 import { LogoMark } from "./icons";
+import { AppHeader } from "./AppChrome";
 
 export default function SiteNav() {
-  const { isAuthenticated, isLoading, logout } = useAuth0();
+  const { isAuthenticated, isLoading } = useAuth0();
+
+  // Signed in: the same header as the dashboard and profile pages, so it does not change from page to page.
+  if (!isLoading && isAuthenticated) return <AppHeader current="home" />;
 
   return (
     <nav className="nav container" aria-label="Main">
@@ -19,18 +23,8 @@ export default function SiteNav() {
         <a href="/#privacy">Privacy</a>
       </div>
       <div className="nav-actions">
-        {isLoading ? null : isAuthenticated ? (
-          <>
-            <Link href="/dashboard" className="btn btn-dark">Dashboard</Link>
-            <button
-              type="button"
-              className="text-link"
-              onClick={() => logout({ logoutParams: { returnTo: window.location.origin } })}
-            >
-              Log out
-            </button>
-          </>
-        ) : (
+        {isLoading ? null : (
+
           <>
             <Link href="/login" className="text-link">Log in</Link>
             <Link href="/signup" className="btn btn-dark">Sign up</Link>

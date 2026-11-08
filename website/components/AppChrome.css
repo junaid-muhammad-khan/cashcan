@@ -1,0 +1,15 @@
+/* Signed-in header: the same bar on every page (home, dashboard, profile). Self-contained, so it needs no wrapper. */
+.app-top {
+  --app-ink: #1f3b2e; --app-line: #e6e5dd;
+  position: relative; z-index: 5; background: #fff; border-bottom: 1px solid var(--app-line); padding: 16px 28px;
+  display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+  font-family: var(--font-inter), system-ui, sans-serif; color: var(--app-ink);
+}
+.app-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; font-weight: 700; font-size: 22px; letter-spacing: -0.03em; color: var(--app-ink); }
+.app-logo-mark { width: 32px; height: 32px; border-radius: 8px; background: #157a46; display: flex; align-items: center; justify-content: center; }
+.app-links { display: flex; gap: 8px; flex-wrap: wrap; }
+.app-pill { display: inline-flex; align-items: center; min-height: 36px; padding: 0 14px; border-radius: 10px; border: 1px solid #deddd5; background: #fff; color: var(--app-ink); font: 600 13px var(--font-inter), sans-serif; text-decoration: none; cursor: pointer; }
+.app-pill:hover { border-color: #b9bbae; }
+.app-pill.is-current { background: var(--app-ink); border-color: var(--app-ink); color: #fff; }
+/* On the home page the header sits inside .hero, which has 24px side padding: let the bar run edge to edge like on the other pages. */
+.hero > .app-top { margin-left: -24px; margin-right: -24px; }
