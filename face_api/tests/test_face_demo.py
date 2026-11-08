@@ -100,11 +100,11 @@ def test_percent_is_a_similarity_not_a_probability_and_never_negative():
 
 def test_skipped_frame_says_which_gate_failed_and_by_how_much():
     blurry = _report(sharp=12.0)
-    assert not blurry.usable and "blurry" in blurry.label and f"12 < {config.MIN_SHARPNESS:.0f}" in blurry.label
-    small = _report(box=(0, 0, 60, 70))
-    assert "too small" in small.label and "60px < 80px" in small.label
-    unclear = _report(det=0.4)
-    assert "unclear" in unclear.label and "0.40 < 0.60" in unclear.label
+    assert not blurry.usable and "blurry" in blurry.label and f"12 < {config.ID_MIN_SHARPNESS:.0f}" in blurry.label
+    small = _report(box=(0, 0, 30, 40))
+    assert "too small" in small.label and f"30px < {config.ID_MIN_FACE_PX}px" in small.label
+    unclear = _report(det=0.3)
+    assert "unclear" in unclear.label and f"0.30 < {config.ID_MIN_DET_SCORE:.2f}" in unclear.label
     assert fd.short_gate(blurry) == "blurry" and "SKIPPED, blurry" in fd.describe(blurry)
 
 
@@ -181,3 +181,31 @@ def test_add_checks_for_room_before_capturing_anything(tmp_path, capsys):
     assert fd.cmd_enroll(a, Boom(), store) == 1 and not cam_used
     err = capsys.readouterr().err
     assert "room for 10 more but this needs 13" in err and "--max-templates" in err
+
+
+def test_identification_is_more_lenient_than_enrollment():
+    """A small, softish, dim-detected face is fine to RECOGNISE but not good enough to SAVE as a template."""
+    from app.face_engine import FaceResult, QualityError, check_quality
+    import pytest
+
+    f = FaceResult(np.ones(512, np.float32), det_score=0.5, box=(0, 0, 60, 60), sharpness=40.0, turn=0.0)
+    check_quality(f, identification=True)                   # passes the lenient tier
+    with pytest.raises(QualityError):
+        check_quality(f)                                    # rejected by the strict tier (det 0.5 < 0.6, 60px < 80, sharp 40 < 60)
+    assert config.ID_MIN_DET_SCORE < config.MIN_DET_SCORE and config.ID_MIN_FACE_PX < config.MIN_FACE_PX
+    assert config.ID_MIN_SHARPNESS < config.MIN_SHARPNESS
+
+
+def test_enrollment_images_use_the_strict_tier_and_identification_photos_the_lenient_one(tmp_path):
+    from app.face_engine import FaceResult
+
+    class Soft:
+        def analyse(self, img):  # a faint but usable face: fine to recognise, too soft to enroll from
+            return [FaceResult(np.ones(512, np.float32) / 22.6, 0.99, (0, 0, 200, 200), 40.0, 0.0)]
+
+    folder = write(tmp_path, "soft", "s.png", 1)
+    from app.store import FaceStore
+    store = FaceStore(str(tmp_path / "t.db"))
+    assert fd.cmd_enroll(args(tmp_path, images=[str(folder)]), Soft(), store) == 1          # strict: 40 < 60, nothing saved
+    assert not store.user_exists("me")
+    assert fd.largest_usable(Soft(), np.zeros((50, 50, 3), np.uint8), identification=True)   # lenient: 40 >= 25

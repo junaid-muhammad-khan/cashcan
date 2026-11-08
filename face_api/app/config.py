@@ -11,12 +11,18 @@ DB_PATH = os.environ.get("CASHCAN_DB", "cashcan_faces.db")
 MATCH_THRESHOLD = float(os.environ.get("MATCH_THRESHOLD", "0.45"))  # cosine similarity
 AMBIGUITY_MARGIN = float(os.environ.get("AMBIGUITY_MARGIN", "0.05"))  # best user must beat runner-up by this
 
-# Enrollment quality gates
+# Quality gates come in two tiers.
+# ENROLLMENT is strict: a bad frame would be saved as a bad template.
 MIN_ENROLL_FRAMES = 3
 MAX_ENROLL_FRAMES = 8
 MIN_DET_SCORE = 0.60
 MIN_FACE_PX = 80  # shortest side of the face box
-MIN_SHARPNESS = 30.0  # Laplacian variance of the face crop resized to 112x112 (size-independent); rejects ~1% of LFW
+MIN_SHARPNESS = 60.0  # contrast-normalised Laplacian variance of the face at 112x112 (lighting- and size-independent); rejects ~3% of LFW
+# IDENTIFICATION is lenient: a weak frame can only fail to match, and the match threshold (not these gates) is what keeps strangers out.
+# Measured: letting in the photos these gates used to reject gave 93% recognised and 0 wrong names on LFW (see ROBUSTNESS.md).
+ID_MIN_DET_SCORE = 0.45
+ID_MIN_FACE_PX = 60  # with real webcam noise + JPEG the model alone gets 86% at 60 px, 72% at 45 px, 40% at 35 px (ROBUSTNESS.md)
+ID_MIN_SHARPNESS = 25.0
 
 # Bin session: after one successful match, items in this window pay out to that user
 SESSION_TTL_SECONDS = int(os.environ.get("SESSION_TTL_SECONDS", "60"))

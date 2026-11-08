@@ -66,12 +66,12 @@ def pct(cosine: float) -> str:
 
 def explain_gate(r: "FaceReport") -> str:
     """Which quality gate rejected the frame, with the measured value against the limit (same order as check_quality)."""
-    if r.det_score < config.MIN_DET_SCORE:
-        return f"unclear: detector confidence {r.det_score:.2f} < {config.MIN_DET_SCORE:.2f} (more light, face the camera)"
-    if r.size_px < config.MIN_FACE_PX:
-        return f"too small: face {r.size_px}px < {config.MIN_FACE_PX}px (move closer)"
-    if r.sharpness < config.MIN_SHARPNESS:
-        return f"blurry: sharpness {r.sharpness:.0f} < {config.MIN_SHARPNESS:.0f} (hold still, more light, clean the lens)"
+    if r.det_score < config.ID_MIN_DET_SCORE:
+        return f"unclear: detector confidence {r.det_score:.2f} < {config.ID_MIN_DET_SCORE:.2f} (more light, face the camera)"
+    if r.size_px < config.ID_MIN_FACE_PX:
+        return f"too small: face {r.size_px}px < {config.ID_MIN_FACE_PX}px (move closer)"
+    if r.sharpness < config.ID_MIN_SHARPNESS:
+        return f"blurry: sharpness {r.sharpness:.0f} < {config.ID_MIN_SHARPNESS:.0f} (hold still, clean the lens)"
     return r.message or "quality gate"
 
 
@@ -82,8 +82,8 @@ def short_gate(r: "FaceReport") -> str:
 def describe(r: "FaceReport") -> str:
     """One line with every number, for --debug."""
     turn = "n/a" if r.turn is None else f"{r.turn:+.2f}"
-    head = (f"face {r.size_px}px (min {config.MIN_FACE_PX}) | detector {r.det_score:.2f} (min {config.MIN_DET_SCORE:.2f}) | "
-            f"sharpness {r.sharpness:.0f} (min {config.MIN_SHARPNESS:.0f}) | turn {turn}")
+    head = (f"face {r.size_px}px (min {config.ID_MIN_FACE_PX}) | detector {r.det_score:.2f} (min {config.ID_MIN_DET_SCORE:.2f}) | "
+            f"sharpness {r.sharpness:.0f} (min {config.ID_MIN_SHARPNESS:.0f}) | turn {turn}")
     if not r.usable:
         return head + f" -> SKIPPED, {short_gate(r)}"
     return head + f" -> {r.label}  [need {pct(r.threshold)} to match]"
@@ -100,7 +100,7 @@ def report_for(face: FaceResult, owners, gallery, threshold, margin) -> FaceRepo
     m = dict(det_score=face.det_score, size_px=min(face.box[2] - face.box[0], face.box[3] - face.box[1]),
              sharpness=face.sharpness, turn=face.turn, threshold=threshold)
     try:
-        check_quality(face)
+        check_quality(face, identification=True)
     except QualityError as e:
         return FaceReport(face.box, False, str(e), **m)
     r = match(face.embedding, owners, gallery, threshold=threshold, margin=margin)
@@ -152,10 +152,12 @@ def annotate(img: np.ndarray, reports: list[FaceReport], debug: bool = False) ->
 
 def apply_gate_overrides(a) -> None:
     """Let the user relax the quality gates (a laptop webcam is often softer than test photos)."""
-    for arg, name in (("min_sharpness", "MIN_SHARPNESS"), ("min_face", "MIN_FACE_PX"), ("min_det", "MIN_DET_SCORE")):
+    for arg, names in (("min_sharpness", ("MIN_SHARPNESS", "ID_MIN_SHARPNESS")), ("min_face", ("MIN_FACE_PX", "ID_MIN_FACE_PX")),
+                       ("min_det", ("MIN_DET_SCORE", "ID_MIN_DET_SCORE"))):
         value = getattr(a, arg, None)
         if value is not None:
-            setattr(config, name, value)
+            for name in names:
+                setattr(config, name, value)
 
 
 def list_images(paths: list[str]) -> list[Path]:
@@ -165,9 +167,9 @@ def list_images(paths: list[str]) -> list[Path]:
     return found
 
 
-def largest_usable(engine: FaceEngine, img: np.ndarray) -> FaceResult:
+def largest_usable(engine: FaceEngine, img: np.ndarray, identification: bool = False) -> FaceResult:
     face = pick_face(engine.analyse(img))  # raises QualityError("No face found...")
-    check_quality(face)
+    check_quality(face, identification=identification)
     return face
 
 
@@ -478,7 +480,7 @@ def cmd_evaluate(a, engine, store) -> int:
     for kind, paths in (("mine", a.mine), ("others", a.others)):
         for p in list_images(paths or []):
             try:
-                face = largest_usable(engine, decode_image(p.read_bytes()))
+                face = largest_usable(engine, decode_image(p.read_bytes()), identification=True)
             except QualityError as e:
                 unusable[kind] += 1
                 rows.append((kind, p.name, f"unusable: {e}"))
@@ -545,9 +547,9 @@ def main(argv=None) -> int:
     ap.add_argument("--db", default=config.DB_PATH)
     ap.add_argument("--threshold", type=float, default=config.MATCH_THRESHOLD)
     ap.add_argument("--margin", type=float, default=config.AMBIGUITY_MARGIN)
-    ap.add_argument("--min-sharpness", type=float, help=f"relax the blur gate (default {config.MIN_SHARPNESS:g}); try 15 for a soft webcam")
-    ap.add_argument("--min-face", type=int, help=f"smallest face in pixels (default {config.MIN_FACE_PX})")
-    ap.add_argument("--min-det", type=float, help=f"detector confidence gate (default {config.MIN_DET_SCORE})")
+    ap.add_argument("--min-sharpness", type=float, help=f"override the blur gate for this run (identification default {config.ID_MIN_SHARPNESS:g}, enrollment {config.MIN_SHARPNESS:g})")
+    ap.add_argument("--min-face", type=int, help=f"smallest face in pixels (identification default {config.ID_MIN_FACE_PX}, enrollment {config.MIN_FACE_PX})")
+    ap.add_argument("--min-det", type=float, help=f"detector confidence gate (identification default {config.ID_MIN_DET_SCORE}, enrollment {config.MIN_DET_SCORE})")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     e = sub.add_parser("enroll"); e.add_argument("--name", required=True)

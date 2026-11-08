@@ -53,7 +53,7 @@ def cmd_capture(a) -> int:
         msg, colour = "no face", (0, 0, 255)
         try:
             face = pick_face(engine.analyse(frame))
-            check_quality(face)
+            check_quality(face, identification=a.tag != "enroll")  # probes use the lenient tier, the enroll set the strict one
             msg, colour = "ok", (0, 200, 0)
             if time.time() - last >= a.interval:
                 got.append(face.embedding)
@@ -84,7 +84,7 @@ def cmd_ingest(a) -> int:
     for img in sorted(Path(a.dir).iterdir()):
         try:
             face = pick_face(engine.analyse(decode_image(img.read_bytes())))
-            check_quality(face)
+            check_quality(face, identification=a.tag != "enroll")  # probes use the lenient tier, the enroll set the strict one
             got.append(face.embedding)
         except QualityError as e:
             print(f"skip {img.name}: {e}")

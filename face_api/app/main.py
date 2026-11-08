@@ -67,7 +67,7 @@ def create_app(engine: FaceEngine | None = None, store: FaceStore | None = None,
         for i, f in enumerate(frames):
             try:
                 face = pick_face(get_engine().analyse(decode_image(await f.read())))
-                check_quality(face)
+                check_quality(face)  # strict tier: bad frames must not become templates
                 embeddings.append(face.embedding)
             except QualityError as e:
                 problems.append(f"frame {i + 1}: {e}")
@@ -84,7 +84,7 @@ def create_app(engine: FaceEngine | None = None, store: FaceStore | None = None,
         lets the same person refresh without a new challenge, for LIVENESS_VALID_SECONDS only."""
         try:
             face = pick_face(get_engine().analyse(decode_image(await frame.read())))
-            check_quality(face)
+            check_quality(face, identification=True)  # lenient tier
         except QualityError as e:
             return {"matched": False, "reason": "bad_frame", "message": str(e)}
         owners, gallery = state["store"].all_embeddings()
@@ -113,7 +113,7 @@ def create_app(engine: FaceEngine | None = None, store: FaceStore | None = None,
             return {"status": "failed", "reason": "unknown_or_expired"}
         try:
             face = pick_face(get_engine().analyse(decode_image(await frame.read())))
-            check_quality(face)
+            check_quality(face, identification=True)
         except QualityError as e:  # unusable frame: not evidence either way
             return {"status": "pending", "hint": str(e)}
         gallery = state["store"].embeddings_for(user_id)

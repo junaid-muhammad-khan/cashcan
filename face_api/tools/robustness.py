@@ -48,9 +48,28 @@ def warm_dim(im):  # tungsten lamp, dim: red up, blue down
     return np.clip(im.astype(np.float32) * np.array([0.6, 0.85, 1.0]) * 0.55, 0, 255).astype(np.uint8)  # BGR
 
 
+def webcamify(sigma=6.0, quality=50, seed=0):
+    """Sensor noise plus JPEG compression: what a real far-away webcam face looks like, unlike a clean shrunk photo."""
+    def fn(im):
+        noisy = np.clip(im.astype(np.float32) + np.random.default_rng(seed).normal(0, sigma, im.shape), 0, 255).astype(np.uint8)
+        ok, buf = cv2.imencode(".jpg", noisy, [cv2.IMWRITE_JPEG_QUALITY, quality])
+        return cv2.imdecode(buf, cv2.IMREAD_COLOR)
+    return fn
+
+
+def chain(*fns):
+    def fn(im):
+        for f in fns:
+            im = f(im)
+        return im
+    return fn
+
+
 CONDITIONS = {
     "clean": lambda im: im,
     "face ~80 px": scale(0.7), "face ~60 px": scale(0.5), "face ~45 px": scale(0.4), "face ~35 px": scale(0.3),
+    "face ~60 px + noise/JPEG": chain(scale(0.5), webcamify()), "face ~45 px + noise/JPEG": chain(scale(0.4), webcamify()),
+    "face ~35 px + noise/JPEG": chain(scale(0.3), webcamify()), "face ~25 px + noise/JPEG": chain(scale(0.22), webcamify()),
     "dim (x0.5)": gain(0.5, 3), "dark (x0.25)": gain(0.25, 4), "side light": side_light,
     "over-exposed (x1.8)": gain(1.8), "warm dim lamp": warm_dim,
 }
@@ -76,14 +95,14 @@ FIXES = {"none": lambda im: im, "CLAHE": clahe, "auto-gamma": auto_gamma, "gamma
          "upscale 2x": lambda im: cv2.resize(im, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)}
 
 
-def embed(engine, img):
-    """-> (embedding or None, gate status 0 ok/1 no face/2 unclear/3 small/4 blurry)"""
+def embed(engine, img, identification=False):
+    """-> (embedding or None, gate status 0 ok/1 no face/2 unclear/3 small/4 blurry); strict tier unless identification=True"""
     faces = engine.analyse(img)
     if not faces:
         return None, 1
     f = pick_face(faces)
     try:
-        check_quality(f)
+        check_quality(f, identification=identification)
         return f.embedding, 0
     except QualityError as e:
         m = str(e)
@@ -97,7 +116,7 @@ def run(engine, imgs, cond, fix, cache, tag):
     out = []
     for im in imgs:
         d = FIXES[fix](CONDITIONS[cond](im))
-        out.append(embed(engine, d))
+        out.append(embed(engine, d, identification=True))  # probes and strangers are only looked up: lenient tier
     cache[key] = out
     print(f"  done {tag} | {cond} | {fix}", file=sys.stderr, flush=True)
     return out
@@ -110,6 +129,7 @@ def main(argv=None) -> int:
     ap.add_argument("--probes", type=int, default=400)
     ap.add_argument("--strangers", type=int, default=400)
     ap.add_argument("--threshold", type=float, default=0.50)
+    ap.add_argument("--only", help="semicolon-separated condition names: run just these (no fixes)")
     a = ap.parse_args(argv)
     engine = InsightFaceEngine(modules=["detection", "recognition"])
     blobs, person, role, _ = read_people(Path(a.data) / "data.parquet", 150, 8, 600, 1, 0)
@@ -165,14 +185,17 @@ def main(argv=None) -> int:
                     wrong=wrong / n, fa=fa, ns=ns, sim=float(np.mean(sims)) if sims else 0.0)
 
     rows = []
-    for cond in CONDITIONS:
+    if a.only:
+        for cond in a.only.split(";"):
+            rows.append((cond.strip(), "none", False, score(cond.strip(), "none")))
+    for cond in ([] if a.only else CONDITIONS):
         rows.append((cond, "none", False, score(cond, "none")))
-    for cond in ("dim (x0.5)", "dark (x0.25)", "side light", "over-exposed (x1.8)", "warm dim lamp"):
+    for cond in ([] if a.only else ("dim (x0.5)", "dark (x0.25)", "side light", "over-exposed (x1.8)", "warm dim lamp")):
         for fix in ("CLAHE", "auto-gamma", "gamma+CLAHE"):
             rows.append((cond, fix, False, score(cond, fix)))
-    for cond in ("face ~60 px", "face ~45 px", "face ~35 px"):
+    for cond in ([] if a.only else ("face ~60 px", "face ~45 px", "face ~35 px")):
         rows.append((cond, "upscale 2x", False, score(cond, "upscale 2x")))
-    for cond in ("dark (x0.25)", "side light", "face ~60 px", "face ~45 px", "face ~35 px", "warm dim lamp"):
+    for cond in ([] if a.only else ("dark (x0.25)", "side light", "face ~60 px", "face ~45 px", "face ~35 px", "warm dim lamp")):
         rows.append((cond, "none", True, score(cond, "none", diverse=True)))
 
     out = ["# Distance and lighting: how much they hurt, and what helps (simulated on LFW)\n"]

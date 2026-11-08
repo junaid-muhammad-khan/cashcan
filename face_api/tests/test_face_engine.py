@@ -38,3 +38,15 @@ def test_empty_or_degenerate_box_is_safe():
     img = textured_face(100)
     assert face_sharpness(img, (500, 500, 600, 600)) == 0.0
     assert face_sharpness(img, (-20, -20, 50, 50)) >= 0.0
+
+
+def test_sharpness_does_not_confuse_dim_light_with_blur():
+    img = textured_face(300)
+    box = (0, 0, 300, 300)
+    normal = face_sharpness(img, box)
+    dim = face_sharpness((img * 0.25).astype(np.uint8), box)
+    side = np.clip(img.astype(np.float32) * np.linspace(1.0, 0.15, 300, dtype=np.float32)[None, :, None], 0, 255).astype(np.uint8)
+    assert 0.6 < dim / normal < 1.6             # a quarter of the light is not a quarter of the sharpness
+    # a lighting GRADIENT (window on one side) cannot be fully normalised away, but it must not look like blur either
+    assert face_sharpness(side, box) / normal > 0.25
+    assert face_sharpness(cv2.GaussianBlur(img, (0, 0), 4), box) < 0.25 * normal   # real blur still reads as blurry

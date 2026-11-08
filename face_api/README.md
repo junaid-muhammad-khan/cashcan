@@ -102,16 +102,22 @@ face disappears or a different-looking face steps in, so nobody can borrow anoth
 `tform.estimate(lmk, dst)` seen in older versions was a harmless library warning, now silenced.
 
 **If it says "skipped":** the face was found but a quality gate rejected the frame, and the label says which one and by how much,
-e.g. `blurry: sharpness 19 < 30`. Add `--debug` to see every number (face size, detector confidence, sharpness, head turn, and
-your match score as a percentage with the percentage needed to match). Fixes: more light on your face, face the camera,
-move closer (face wider than 80 px), hold still, clean the lens. If your webcam is just soft, relax a gate for the test:
-`python -m tools.face_demo --min-sharpness 15 identify --webcam --debug` (also `--min-face`, `--min-det`). The percentage is
-a similarity score, not a probability of being right; 45% is the line.
+e.g. `too small: face 52px < 60px (move closer)`. Add `--debug` to see every number (face size, detector confidence, sharpness, head
+turn, and your match score as a percentage with the percentage needed to match). Fixes: more light on your face, face the camera, move
+closer (face at least 60 px wide), hold still, clean the lens. The percentage is a similarity score, not a probability of being right;
+the match line is 50%. To experiment, override a gate for one run: `python -m tools.face_demo --min-face 45 identify --webcam --debug`
+(also `--min-sharpness`, `--min-det`).
 
-**Sharpness gate (changed):** the blur number is now measured on the face resized to 112x112, so it no longer depends on how close you
-sit. The first version measured the raw crop and wrongly rejected close-up faces: the same sharp photo scored 1067 at a 100 px face
-and 27 at 453 px. The limit is 30, which rejects about 1% of LFW photos and genuine heavy blur, while the model still recognises
-moderately blurry faces (a sigma-4 blur still matched at 96%).
+**Two tiers of quality gates.** *Enrollment is strict* (face >= 80 px, detector >= 0.60, sharpness >= 60), because a bad frame would be saved
+as a bad template. *Identification is lenient* (face >= 60 px, detector >= 0.45, sharpness >= 25), because a weak frame can only fail to
+match: the match threshold, not these gates, keeps strangers out. Measured on LFW, letting in the 27 photos the strict gates rejected gave
+93% recognised and 0 wrong names, and strangers accepted did not change. Both the API (`/enroll` strict, `/match` lenient) and the tools use
+the split. In `ROBUSTNESS.md`, the strict gates rejected 54% of warm-lamp photos and 99% of 60 px faces that the model alone recognised 96-97% of the time.
+
+**Sharpness is measured at a fixed size and contrast.** The face is resized to 112x112 and its contrast standardised before the blur
+measure, because the raw crop confused two things with blur: a close face (the same sharp photo scored 1067 at a 100 px face and 27 at
+453 px) and dim light (the same photo scored 34 to 530 depending on lighting, and about 300-430 after the fix). Genuine blur still
+reads low (a sigma-4 blur drops it from 395 to 33).
 
 `evaluate` is the accuracy test: put photos of you in one folder (different light, angles, glasses, a different day)
 and photos of other people in another. It lists every photo as ok/ERR, your lowest score vs the others' highest, and

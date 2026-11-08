@@ -30,18 +30,21 @@ SHARPNESS_NORM_PX = 112  # the size the recognition model actually sees
 
 
 def face_sharpness(image_bgr: np.ndarray, box: tuple[int, int, int, int]) -> float:
-    """Variance of the Laplacian of the face crop, measured at a fixed 112x112 size.
+    """Variance of the Laplacian of the face crop, measured at a fixed 112x112 size and a fixed contrast.
 
     The raw variance depends on how many pixels the face covers: the same sharp photo scores ~1000 at a
     100 px face and ~15 at a 560 px face, so a fixed limit wrongly rejects close-up faces. Resizing to the
-    model's input size first makes the number comparable at any distance while still dropping with real blur."""
+    model's input size first makes the number comparable at any distance while still dropping with real blur.
+    Standardising the contrast stops dim or side-lit faces (low contrast, not blur) from reading as blurry: the same sharp photo
+    scored 34 to 530 under different lighting before, and about 300-430 after."""
     x1, y1, x2, y2 = box
     crop = image_bgr[max(y1, 0):max(y2, y1 + 1), max(x1, 0):max(x2, x1 + 1)]
     if crop.size == 0:
         return 0.0
     gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
-    gray = cv2.resize(gray, (SHARPNESS_NORM_PX, SHARPNESS_NORM_PX), interpolation=cv2.INTER_AREA)
-    return float(cv2.Laplacian(gray, cv2.CV_64F).var())
+    gray = cv2.resize(gray, (SHARPNESS_NORM_PX, SHARPNESS_NORM_PX), interpolation=cv2.INTER_AREA).astype(np.float32)
+    gray = (gray - gray.mean()) / (gray.std() + 1e-3) * 50.0 + 128.0   # same contrast whatever the lighting
+    return float(np.var(cv2.Laplacian(gray, cv2.CV_32F)))
 
 
 class QualityError(ValueError):
@@ -62,13 +65,18 @@ def pick_face(faces: list[FaceResult]) -> FaceResult:
     return max(faces, key=lambda f: (f.box[2] - f.box[0]) * (f.box[3] - f.box[1]))
 
 
-def check_quality(face: FaceResult) -> None:
+def check_quality(face: FaceResult, identification: bool = False) -> None:
+    """Raise QualityError if the frame is unusable. identification=False is the strict enrollment tier; True is the lenient
+    tier for recognising someone (see config for why they differ)."""
+    min_det = config.ID_MIN_DET_SCORE if identification else config.MIN_DET_SCORE
+    min_px = config.ID_MIN_FACE_PX if identification else config.MIN_FACE_PX
+    min_sharp = config.ID_MIN_SHARPNESS if identification else config.MIN_SHARPNESS
     w, h = face.box[2] - face.box[0], face.box[3] - face.box[1]
-    if face.det_score < config.MIN_DET_SCORE:
+    if face.det_score < min_det:
         raise QualityError("Face not clear enough. Improve the lighting.")
-    if min(w, h) < config.MIN_FACE_PX:
+    if min(w, h) < min_px:
         raise QualityError("Move closer to the camera.")
-    if face.sharpness < config.MIN_SHARPNESS:
+    if face.sharpness < min_sharp:
         raise QualityError("Image is blurry. Hold still.")
 
 

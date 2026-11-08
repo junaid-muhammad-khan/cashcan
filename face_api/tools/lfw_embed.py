@@ -43,7 +43,7 @@ def main(argv=None) -> int:
         st, emb = np.zeros(n, np.int8), np.zeros((n, 512), np.float32)
         for i, (lab, b) in enumerate(items):
             label[i], md5[i] = lab, hashlib.md5(b).hexdigest()
-            s, e, _, _ = classify(engine, b)
+            s, e, _, _, _ = classify(engine, b)
             st[i] = s
             if e is not None:
                 emb[i] = e

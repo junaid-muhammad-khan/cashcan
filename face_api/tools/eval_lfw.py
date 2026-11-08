@@ -32,34 +32,40 @@ REASONS = {0: "ok", 1: "no face detected", 2: "low detector confidence", 3: "fac
 
 
 def classify(engine, data: bytes):
-    """-> (status, embedding, turn, yaw). Mirrors the enrollment/bin path exactly."""
+    """-> (strict status, embedding, turn, yaw, identification status). The strict tier is what enrollment photos must pass; the
+    lenient identification tier is what photos that are only looked up must pass (same split the API uses)."""
     try:
         face = pick_face(engine.analyse(decode_image(data)))
     except QualityError as e:
-        return (5 if "read" in str(e) else 1), None, None, None
-    try:
-        check_quality(face)
-        status = 0
-    except QualityError as e:
-        m = str(e)
-        status = 2 if "clear enough" in m else 3 if "closer" in m else 4
-    return status, face.embedding, face.turn, face.yaw
+        code = 5 if "read" in str(e) else 1
+        return code, None, None, None, code
+
+    def status(identification):
+        try:
+            check_quality(face, identification=identification)
+            return 0
+        except QualityError as e:
+            m = str(e)
+            return 2 if "clear enough" in m else 3 if "closer" in m else 4
+
+    return status(False), face.embedding, face.turn, face.yaw, status(True)
 
 
 def extract(engine, blobs, label, every=250):
     n = len(blobs)
     st, emb = np.zeros(n, np.int8), np.zeros((n, 512), np.float32)
+    st_id = np.zeros(n, np.int8)
     turn, yaw = np.full(n, np.nan, np.float32), np.full(n, np.nan, np.float32)
     t0 = time.time()
     for i, b in enumerate(blobs):
-        s, e, tr, yw = classify(engine, b)
-        st[i] = s
+        s, e, tr, yw, sid = classify(engine, b)
+        st[i], st_id[i] = s, sid
         if e is not None:
             emb[i], turn[i], yaw[i] = e, tr, (np.nan if yw is None else yw)
         if (i + 1) % every == 0:
             r = (i + 1) / (time.time() - t0)
             print(f"  {label}: {i + 1}/{n}  {r:.1f} img/s  eta {(n - i - 1) / r / 60:.1f} min", file=sys.stderr, flush=True)
-    return st, emb, turn, yaw
+    return st, emb, turn, yaw, st_id
 
 
 # ------------------------------------------------------------------ stats helpers
@@ -135,16 +141,21 @@ def analyse(c, a) -> str:
 
     # ---- gates
     ps = np.concatenate([c["pair_st0"], c["pair_st1"]])
-    ids = c["id_st"]
+    psi = np.concatenate([c["pair_sti0"], c["pair_sti1"]])
+    ids, idi = c["id_st"], c["id_sti"]
     w("## 1. How often a photo is rejected before matching\n")
-    w("| Gate | Pairs images | Identification images |\n|---|---|---|")
+    w("Two tiers: **enrollment** (strict, because a bad frame would be saved as a template) and **identification** (lenient, because a weak "
+      f"frame can only fail to match). Strict: face >= {config.MIN_FACE_PX} px, detector >= {config.MIN_DET_SCORE}, sharpness >= {config.MIN_SHARPNESS:g}. "
+      f"Lenient: face >= {config.ID_MIN_FACE_PX} px, detector >= {config.ID_MIN_DET_SCORE}, sharpness >= {config.ID_MIN_SHARPNESS:g}.\n")
+    w("| Reason | Pairs images, enrollment tier | Pairs images, identification tier | Identification images, enrollment tier | Identification images, identification tier |\n|---|---|---|---|---|")
     for code, name in REASONS.items():
-        w(f"| {name} | {np.mean(ps == code):.1%} | {np.mean(ids == code):.1%} |")
-    w("\nRejected photos are not counted as wrong matches below. At the bin the person is just asked to retry.\n")
+        w(f"| {name} | {np.mean(ps == code):.1%} | {np.mean(psi == code):.1%} | {np.mean(ids == code):.1%} | {np.mean(idi == code):.1%} |")
+    w("\nGallery (enrolled) photos must pass the enrollment tier; every photo that is only looked up needs the identification tier. "
+      "Rejected photos are not counted as wrong matches below; at the bin the person is just asked to retry.\n")
 
     # ---- verification
     same = c["pair_same"]
-    good = (c["pair_st0"] == 0) & (c["pair_st1"] == 0)
+    good = (c["pair_sti0"] == 0) & (c["pair_sti1"] == 0)
     score = np.einsum("ij,ij->i", c["pair_e0"], c["pair_e1"])
     s, y = score[good], same[good]
     auc, eer, tar1, tar01, eer_thr = roc(s, y)
@@ -169,16 +180,22 @@ def analyse(c, a) -> str:
     person, role, st, emb = c["id_person"], c["id_role"], c["id_st"], c["id_emb"]
     owners, gal, probes = [], [], []
     skipped = 0
+    sti = c["id_sti"]
     for p in sorted(set(person[role == "enrolled"].tolist())):
-        idx = np.flatnonzero((person == p) & (role == "enrolled") & (st == 0))
-        if len(idx) < 3 + 1:
+        strict = np.flatnonzero((person == p) & (role == "enrolled") & (st == 0))           # enrollment tier
+        if len(strict) < 3:
             skipped += 1
             continue
-        for j in idx[:3]:
+        for j in strict[:3]:
             owners.append(str(p)); gal.append(emb[j])
-        probes += [(str(p), emb[j]) for j in idx[3:3 + a.max_probes]]
+        rest = [j for j in np.flatnonzero((person == p) & (role == "enrolled") & (sti == 0)) if j not in set(strict[:3].tolist())]
+        if not rest:
+            skipped += 1
+            owners, gal = owners[:-3], gal[:-3]
+            continue
+        probes += [(str(p), emb[j]) for j in rest[:a.max_probes]]                            # identification tier
     gal = np.stack(gal)
-    unk = [emb[j] for j in np.flatnonzero((role == "unknown") & (st == 0))]
+    unk = [emb[j] for j in np.flatnonzero((role == "unknown") & (sti == 0))]
     n_people = len(set(owners))
     w("## 3. Identification: the bin's real job\n")
     w(f"{n_people} people enrolled with 3 photos each ({skipped} skipped: too few usable photos). "
@@ -253,10 +270,10 @@ def main(argv=None) -> int:
         blobs, person, role, rows = read_people(d / "data.parquet", a.people, a.max_probes,
                                                 a.unknown_people, a.unknown_per_person, a.seed)
         print(f"pairs: {len(same)}  identification images: {len(blobs)}", file=sys.stderr)
-        s0, e0, t0, y0 = extract(engine, b0, "pairs[0]")
-        s1, e1, t1, y1 = extract(engine, b1, "pairs[1]")
-        si, ei, ti, yi = extract(engine, blobs, "identification")
-        c = dict(pair_same=same, pair_st0=s0, pair_st1=s1, pair_e0=e0, pair_e1=e1,
+        s0, e0, t0, y0, i0 = extract(engine, b0, "pairs[0]")
+        s1, e1, t1, y1, i1 = extract(engine, b1, "pairs[1]")
+        si, ei, ti, yi, ii = extract(engine, blobs, "identification")
+        c = dict(pair_same=same, pair_st0=s0, pair_st1=s1, pair_sti0=i0, pair_sti1=i1, id_sti=ii, pair_e0=e0, pair_e1=e1,
                  pair_turn=np.concatenate([t0, t1]), pair_yaw=np.concatenate([y0, y1]),
                  id_person=person, id_role=role, id_st=si, id_emb=ei, id_turn=ti, id_yaw=yi)
         np.savez_compressed(cache, **c)
