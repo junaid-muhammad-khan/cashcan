@@ -9,7 +9,6 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@auth0/auth0-react": "^2.30.0",
     "@gsap/react": "^2.1.2",
     "gsap": "^3.15.1",
     "next": "^15.5.29",

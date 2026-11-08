@@ -1,0 +1,80 @@
+"use client";
+
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useState } from "react";
+import Field from "@/components/Field";
+import { Person } from "@/components/icons";
+import { validateEmail, validatePassword } from "@/lib/validation";
+
+export default function LoginForm() {
+  const router = useRouter();
+  const params = useSearchParams();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [remember, setRemember] = useState(true);
+  const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
+  const [formError, setFormError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const wasReset = params.get("reset") === "1";
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const next = { email: validateEmail(email), password: validatePassword(password, false) };
+    setErrors(next);
+    if (next.email || next.password) return;
+    setBusy(true);
+    setFormError(null);
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password, remember }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setFormError(data.error ?? "We couldn't log you in just now. Try again in a moment.");
+        return;
+      }
+      const dest = params.get("next");
+      router.push(dest && dest.startsWith("/") && !dest.startsWith("//") ? dest : "/account");
+      router.refresh();
+    } catch {
+      setFormError("We couldn't reach CashCan. Check your connection and try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <h1>Welcome back</h1>
+      <p className="sub">Log in to see your drops, rewards and wallet.</p>
+      <form className="form" onSubmit={onSubmit} noValidate>
+        {wasReset && !formError && <div className="notice" role="status">Your password was changed. Log in with the new one.</div>}
+        {formError && <div className="alert" role="alert">{formError}</div>}
+        <Field
+          id="email" label="Email" type="email" autoComplete="email" value={email} error={errors.email}
+          onChange={(v) => { setEmail(v); if (errors.email) setErrors((x) => ({ ...x, email: undefined })); }}
+          onBlur={() => email && setErrors((x) => ({ ...x, email: validateEmail(email) }))}
+        />
+        <Field
+          id="password" label="Password" type="password" autoComplete="current-password" value={password} error={errors.password}
+          labelAside={<Link href="/forgot-password" className="label-link">Forgot password?</Link>}
+          onChange={(v) => { setPassword(v); if (errors.password) setErrors((x) => ({ ...x, password: undefined })); }}
+        />
+        <label className="check" style={{ alignItems: "center" }}>
+          <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
+          <span>Keep me logged in for 7 days</span>
+        </label>
+        <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? "Logging in…" : "Log in"}</button>
+      </form>
+      <div className="divider" aria-hidden="true"><span />or<span /></div>
+      <div className="face-note">
+        <Person size={22} />
+        <span>At a bin? Step up to the camera. Face match logs you in there, no password needed.</span>
+      </div>
+      <p className="auth-switch">New to CashCan? <Link href="/signup">Create an account</Link></p>
+    </>
+  );
+}
