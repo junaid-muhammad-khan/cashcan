@@ -65,6 +65,11 @@ python -m tools.face_demo evaluate --name junaid --mine ~/test/me --others ~/tes
 python -m tools.face_demo list
 python -m tools.face_demo delete --name junaid
 ```
+**If nothing seems to happen:** the terminal now prints each stage (model loading, camera opened, frames arriving) and ends with
+`Stopped: <reason>`. The video window can open behind other windows; if you cannot find it, press Ctrl+C and run
+`python -m tools.face_demo identify --webcam --no-window --debug`, which prints everything as text. The line
+`tform.estimate(lmk, dst)` seen in older versions was a harmless library warning, now silenced.
+
 **If it says "skipped":** the face was found but a quality gate rejected the frame, and the label says which one and by how much,
 e.g. `blurry: sharpness 23 < 40`. Add `--debug` to see every number (face size, detector confidence, sharpness, head turn, and
 your match score as a percentage with the percentage needed to match). Fixes: more light on your face, face the camera,

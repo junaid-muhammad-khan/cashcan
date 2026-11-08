@@ -193,6 +193,12 @@ def show(window: str, frame, no_window: bool) -> bool:
 
     try:
         cv2.imshow(window, frame)
+        if not getattr(show, "_front", False):
+            show._front = True
+            try:
+                cv2.setWindowProperty(window, cv2.WND_PROP_TOPMOST, 1)  # not every OpenCV build supports this
+            except cv2.error:
+                pass
     except cv2.error:
         raise SystemExit("No GUI available in this OpenCV build. Install the windowed build: "
                          "pip uninstall -y opencv-python-headless && pip install opencv-python  (or use --no-window)")
@@ -258,34 +264,49 @@ def cmd_identify(a, engine, store) -> int:
 
 def live(a, engine, store) -> int:
     cam, n, reports, t0 = open_camera(a.camera), 0, [], time.time()
-    last_print, last_debug_print = "", 0.0
-    print("Live identify. Press q in the window to quit." if not a.no_window else "Live identify (Ctrl+C to stop).")
+    is_device = a.camera.isdigit()
+    last_line, last_print_t, got_frame, failures, why = "", 0.0, False, 0, "stopped"
+    print(f"Camera {a.camera} opened. Waiting for frames (the first ones can take a few seconds on a Mac)...", flush=True)
     try:
         while True:
             ok, frame = cam.read()
             if not ok:
-                if a.camera.isdigit():
+                if not is_device:
+                    cam.set(1, 0)  # loop a video file
+                    continue
+                failures += 1
+                if failures > 60:  # about 6 seconds of nothing
+                    why = "the camera stopped delivering frames (check Terminal's camera permission and that no other app uses it)"
                     break
-                cam.set(1, 0)  # loop a video file
+                time.sleep(0.1)
                 continue
+            failures = 0
+            if not got_frame:
+                got_frame = True
+                print("Camera is delivering frames." + ("" if a.no_window else
+                      " A window called 'identify (q = quit)' should be open. If you cannot see it, look behind your other "
+                      "windows, or stop (Ctrl+C) and rerun with --no-window --debug for text output."), flush=True)
             n += 1
             if n % a.every == 0:
                 reports = identify_frame(engine, store, frame, a.threshold, a.margin)
                 line = " | ".join(describe(r) if a.debug else r.label for r in reports) or "no face detected"
                 now = time.time()
-                if a.no_window and (line != last_print or (a.debug and now - last_debug_print > 1.0)):
-                    if not a.debug or now - last_debug_print > 0.5:  # --debug: at most ~2 lines a second
-                        print(line, flush=True)
-                        last_debug_print = now
-                last_print = line
+                # print in every mode, at most about twice a second, so the terminal never looks stuck
+                if (line != last_line and now - last_print_t > 0.5) or (a.debug and now - last_print_t > 1.0):
+                    print(line, flush=True)
+                    last_print_t = now
+                last_line = line
             if show("identify (q = quit)", annotate(frame, reports, a.debug), a.no_window):
+                why = "q pressed"
                 break
             if a.max_seconds and time.time() - t0 > a.max_seconds:
+                why = "time limit reached"
                 break
     except KeyboardInterrupt:
-        pass
+        why = "Ctrl+C"
     finally:
         cam.release()
+    print(f"Stopped: {why}.", flush=True)
     return 0
 
 
@@ -395,7 +416,11 @@ def main(argv=None) -> int:
     apply_gate_overrides(a)
     from app.face_engine import InsightFaceEngine
 
+    if a.cmd not in ("list", "delete"):
+        print("Loading the face model (the very first run downloads ~125 MB and can take a minute)...", file=sys.stderr, flush=True)
     engine = None if a.cmd in ("list", "delete") else InsightFaceEngine()
+    if engine:
+        print("Model ready.", file=sys.stderr, flush=True)
     return a.fn(a, engine, FaceStore(a.db))
 
 

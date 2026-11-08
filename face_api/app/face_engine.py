@@ -59,6 +59,10 @@ class InsightFaceEngine:
         """modules=None loads the whole pack. ["detection", "recognition"] skips the 144 MB pose model
         (about 2x faster); FaceResult.yaw is then None, which only diagnostics use."""
         from insightface.app import FaceAnalysis  # heavy import, keep lazy
+        import warnings
+
+        # insightface calls a scikit-image function that is deprecated; harmless, but it looks like an error
+        warnings.filterwarnings("ignore", message=".*estimate.*deprecated.*", category=FutureWarning)
 
         self._app = FaceAnalysis(name=model, providers=["CPUExecutionProvider"], allowed_modules=modules)
         self._app.prepare(ctx_id=-1, det_size=(det_size, det_size))
