@@ -34,14 +34,18 @@ A bin with a camera and sensor that:
 
 ```
 Register user
-   -> Facial registration (enroll face, link it to the user's account)
-   -> Connect Solana wallet
+   -> Sign up / sign in with Auth0
+   -> Facial registration (scan face, link embedding to the user's account)
+   -> Add and verify Solana wallet
    -> At the bin: face match identifies the user
+   -> Radxa ROCK 5C runs face recognition and object recognition locally
+   -> Databricks vector lookup matches the face embedding to a user
    -> Two cameras (top + front) capture the item
-   -> Classifier (item + local rule + contamination)
+   -> Classifier + local rules select the appropriate bin
+   -> SBC actuates servos to open and close that bin
    -> Reward table decides which items earn a payout
    -> Payout (devnet SOL)
-   -> Activity log / dashboard
+   -> Dashboard: SOL earned, personal stats, and leaderboard
    -> (loops back for the next item)
 ```
 
@@ -66,15 +70,20 @@ The classifier detects the item, then a lookup table decides whether it earns a 
 ### Must have (MVP)
 - [ ] Classifier covering about 12 tricky Metro Vancouver items, clean and contaminated
 - [ ] Local rule lookup table (item -> correct bin + reason)
-- [ ] Two cameras (top and front) + Raspberry Pi capturing each item
+- [ ] Two cameras (top and front) + Radxa ROCK 5C with 16 GB RAM capturing each item
+- [ ] Face recognition model and object recognition model running on the SBC
+- [ ] Servo control on the SBC to open and close the appropriate bin
 - [ ] Bin indicator (LEDs or display) showing the correct bin and why
 - [ ] Reward table + devnet SOL payout for reward-eligible items
 - [ ] Facial registration and face match at the bin, so each payout goes to the right user's wallet (opt-in consent screen, store face embeddings only, never raw photos, delete on request)
-- [ ] Activity log / dashboard of items and contamination, built on Databricks (Delta table + AI/BI dashboard). Free Edition has no GPUs, so train the vision model elsewhere and use Databricks for data and analytics
+- [ ] Django backend and user dashboard with Auth0 authentication
+- [ ] Account creation workflow: sign in, consent to face enrollment, scan face, and link Solana wallet
+- [ ] Databricks vector database for face embedding lookup, linked to user identities
+- [ ] Databricks activity data for sorting events, contamination, and rewards
+- [ ] Dashboard showing leaderboard, SOL earned, personal sorting stats, and payout history
 - [ ] Gemini API: generate the plain-language "why" text and auto-label photos to speed up data collection
 
 ### Nice to have (only if time remains)
-- [ ] Simple user account page with payout history
 - [ ] Short in-app walkthrough
 
 ### Cut for the 24-hour build
@@ -82,19 +91,36 @@ The classifier detects the item, then a lookup table decides whether it earns a 
 
 ---
 
-## Proposed tech stack (not locked)
+## Tech stack
 
-| Area | Proposed |
+| Area | Choice |
 |---|---|
-| Face recognition | Existing open-source library (for example face_recognition, InsightFace, or DeepFace). Store embeddings only, not photos |
-| Vision model | Small model such as YOLOv8n or MobileNet, fine-tuned on our own photos |
-| Edge device | Raspberry Pi with two cameras (top + front; placement TBD by hardware team) |
-| Backend | TBD (for example Python / Node) |
+| Face recognition | Model running locally on the SBC; library and model TBD. Store embeddings only, not photos |
+| Object recognition | Model running locally on the SBC to classify waste; local rule lookup selects the destination bin. Model TBD |
+| Edge device | Radxa ROCK 5C, 16 GB RAM, with two cameras (top + front; placement TBD by hardware team) |
+| Bin actuation | SBC-controlled servos open and close the selected bin; wiring, driver, and power design TBD |
+| Backend | Django |
+| Authentication | Auth0 for web account signup and login |
+| Identity lookup | Databricks vector database for matching face embeddings to enrolled user IDs |
 | Payout | Solana **devnet** |
-| Dashboard | Web app, data in Databricks (Free Edition: Delta table + AI/BI dashboard) |
+| Dashboard | Django web app: leaderboard, SOL earned, personal stats, and payout history; activity and analytics data in Databricks |
 | Gemini API | Plain-language "why this bin" explanations (English / Cantonese / Mandarin) and auto-labeling of our photo dataset. Keep the local model as the main classifier path, so the demo never depends on venue wifi |
 | Domain | cashcan.com (set). See the domain note under "Awards we're targeting" |
 | Version control | Git |
+
+---
+
+## Application architecture
+
+- **Enrollment:** Auth0 authenticates the account. Django links the Auth0 subject to a CashCan user, captures consent, accepts a face scan, and registers the user's Solana wallet. Wallet ownership verification is part of enrollment; the app never requests a wallet private key or seed phrase.
+- **Face lookup:** the SBC computes a face embedding and submits it through an authenticated Django device endpoint. Django queries the Databricks vector database and resolves a sufficiently confident match to the enrolled user ID. Similarity thresholds and an unknown-user outcome must be defined before enabling rewards. Face matching at the bin identifies a reward recipient; Auth0 authenticates dashboard access.
+- **Sorting:** the SBC runs the object recognition model, maps its output through the local sorting rules, and actuates the appropriate bin's servos. Low-confidence or conflicting results need a defined fallback. Servo timing, obstruction handling, and the safe resting position remain hardware design tasks.
+- **Rewards:** Django records each sorting event, applies the reward table and anti-abuse checks, and tracks the devnet SOL payout and transaction status. Each event must have a unique ID so retries cannot create duplicate payouts. Bin opening alone is not proof of a completed deposit; deposit confirmation remains to be designed.
+- **Dashboard:** authenticated users see their SOL earned, payout history, and personal sorting statistics. A leaderboard ranks users by a metric still to be chosen. Display confirmed payouts separately from pending rewards.
+- **Data ownership:** Django needs persistent application records for users, wallet links, enrollment consent, events, and payout status; the application database is TBD. Databricks stores the face search index and activity data for analytics. Define synchronization and deletion across the application records and vector index.
+- **Connectivity:** local recognition and servo control run on the SBC. Remote identity lookup and payouts require connectivity; when unavailable, sorting can continue locally and reward processing waits for a verified identity and deduplicated event.
+
+This is the intended architecture, not an implemented system. Databricks workspace capabilities, vector index configuration, model compatibility and latency on the ROCK 5C, and device connectivity still need validation.
 
 ---
 
@@ -115,7 +141,7 @@ The classifier detects the item, then a lookup table decides whether it earns a 
 | 0-2 | Lock scope, pick 12 items, pull and verify local rules, assign roles |
 | 2-8 | Collect and label photos, split off test set |
 | 8-14 | Fine-tune model, wire to rule table, output bin + reason |
-| 14-18 | Hardware demo: two cameras, Pi, bin indicators, devnet payout |
+| 14-18 | Hardware demo: two cameras, ROCK 5C, servo-controlled bins, devnet payout |
 | 18-22 | Dashboard, anti-abuse checks, seeded demo flow that never depends on live luck |
 | 22-24 | Rehearse the 3-minute pitch out loud, twice |
 
@@ -123,7 +149,7 @@ The classifier detects the item, then a lookup table decides whether it earns a 
 
 | Role | Owner |
 |---|---|
-| Hardware (two cameras, Pi, indicators) | TBD |
+| Hardware (two cameras, ROCK 5C, servos, indicators) | TBD |
 | Data + model + rule table | TBD |
 | Backend + payout + dashboard | TBD |
 | Pitch + demo script | TBD |
@@ -138,7 +164,7 @@ We are a **beginner team**, so the Beginner stream applies.
 |---|---|---|
 | Overall Winner / Beginner Overall Winner | Automatic, no opt-in | Working demo, clear pitch |
 | Best Problem-Solution Fit (beginner only) | Clear problem (local sorting rules + contamination) and a direct solution | Opt in. Write a problem statement and solution description in Devpost |
-| Best Hardware | Two cameras + Raspberry Pi bin | Opt in. Show the physical bin working in the demo |
+| Best Hardware | Two cameras + Radxa ROCK 5C + servo-controlled bins | Opt in. Show the physical bin working in the demo |
 | Community Impact | Cleaner recycling and compost streams for a community | Opt in. Write a brief impact statement in Devpost |
 | MLH: Best Use of Solana | Reward payouts on Solana | Opt in. Solana must be a real part of the flow. Confirm with MLH mentors that devnet is acceptable |
 | Sponsor: Best Use of Databricks | Activity log and contamination analytics | Opt in. Use at least one Databricks product for real (Delta table + dashboard) |

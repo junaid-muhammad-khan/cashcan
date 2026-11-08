@@ -1,0 +1,56 @@
+:root {
+  --bg: #f6f8f5; --card: #fff; --ink: #14201a; --muted: #6b7a72; --line: #e3e9e4;
+  --green: #1f8a4c; --green-d: #17693a; --amber: #b7791f; --red: #c0392b;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #0f1612; --card: #17211b; --ink: #e8f0ea; --muted: #8fa398; --line: #263329; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; font: 15px/1.5 system-ui, sans-serif; background: var(--bg); color: var(--ink); }
+h1, h2, h3 { margin: 0 0 8px; }
+h3 { font-size: 16px; }
+a { color: inherit; }
+.muted { color: var(--muted); } .tiny { font-size: 12px; } .small { font-size: 13px; }
+.mono { font-family: ui-monospace, monospace; }
+.center { min-height: 100vh; display: grid; place-items: center; padding: 16px; }
+.shell { max-width: 1040px; margin: 0 auto; padding: 0 16px 48px; }
+.topbar { display: flex; justify-content: space-between; align-items: center; padding: 16px 0; }
+.topbar-right { display: flex; gap: 12px; align-items: center; }
+.brand { font-weight: 800; font-size: 20px; color: var(--green); }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+.login { width: 100%; max-width: 340px; display: flex; flex-direction: column; gap: 12px; text-align: center; }
+.narrow { max-width: 520px; margin: 0 auto; }
+.btn { display: inline-block; padding: 10px 16px; border-radius: 8px; border: 1px solid var(--line); background: var(--card);
+  color: var(--ink); text-decoration: none; cursor: pointer; font: inherit; text-align: center; }
+.btn.primary { background: var(--green); border-color: var(--green); color: #fff; }
+.btn.primary:hover:not(:disabled) { background: var(--green-d); }
+.btn.ghost { background: transparent; }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.field { display: block; margin: 12px 0; font-size: 13px; color: var(--muted); }
+.field input { display: block; width: 100%; margin-top: 4px; padding: 10px; border-radius: 8px; border: 1px solid var(--line);
+  background: var(--bg); color: var(--ink); font: inherit; }
+.check { display: flex; gap: 8px; margin: 12px 0; align-items: flex-start; }
+.error { color: var(--red); }
+.steps { list-style: none; display: flex; gap: 16px; padding: 0; margin: 0 0 16px; }
+.steps li { display: flex; gap: 6px; align-items: center; color: var(--muted); }
+.steps .dot { width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--line); display: grid; place-items: center; font-size: 12px; }
+.steps .active { color: var(--ink); font-weight: 600; } .steps .active .dot { border-color: var(--green); color: var(--green); }
+.steps .done .dot { background: var(--green); color: #fff; border-color: var(--green); }
+.camera { height: 200px; border: 2px dashed var(--line); border-radius: 12px; display: grid; place-items: center;
+  text-align: center; color: var(--muted); margin: 12px 0; }
+.row { display: flex; gap: 12px; align-items: center; } .between { justify-content: space-between; }
+.pill { font-size: 12px; padding: 2px 10px; border-radius: 99px; background: color-mix(in srgb, var(--amber) 18%, transparent); color: var(--amber); }
+.grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 760px) { .grid4 { grid-template-columns: 1fr 1fr; } .grid2 { grid-template-columns: 1fr; } }
+.stat { margin: 0; } .big { font-size: 28px; font-weight: 700; }
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); font-size: 14px; }
+th { color: var(--muted); font-weight: 500; font-size: 12px; }
+.r { text-align: right; } tr.me td { background: color-mix(in srgb, var(--green) 12%, transparent); font-weight: 600; }
+.bar-row { display: grid; grid-template-columns: 140px 1fr 32px; gap: 8px; align-items: center; margin: 6px 0; font-size: 14px; }
+.bar { height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; } .bar div { height: 100%; background: var(--green); }
+.tag { font-size: 11px; padding: 1px 8px; border-radius: 99px; border: 1px solid var(--line); color: var(--muted); }
+.tag.ok, .tag.confirmed { color: var(--green); border-color: var(--green); }
+.tag.bad, .tag.failed { color: var(--red); border-color: var(--red); }
+.tag.pending, .tag.submitted { color: var(--amber); border-color: var(--amber); }
