@@ -84,3 +84,39 @@ def test_list_images_accepts_files_and_folders(tmp_path):
     (d / "notes.txt").write_text("not an image")
     assert [p.name for p in fd.list_images([str(d)])] == ["a.png", "b.JPG"]
     assert [p.name for p in fd.list_images([str(d / "a.png")])] == ["a.png"]
+
+
+def _report(sharp=500.0, box=(0, 0, 200, 200), det=0.99, enrolled=True):
+    from app.face_engine import FaceResult
+    emb = np.zeros(512, np.float32)
+    emb[0] = 1.0
+    owners, gal = (["me"], emb[None, :].copy()) if enrolled else ([], np.zeros((0, 512), np.float32))
+    return fd.report_for(FaceResult(emb, det, box, sharp, 0.05), owners, gal, 0.45, 0.05)
+
+
+def test_percent_is_a_similarity_not_a_probability_and_never_negative():
+    assert fd.pct(0.974) == "97%" and fd.pct(0.0) == "0%" and fd.pct(-0.3) == "0%"
+
+
+def test_skipped_frame_says_which_gate_failed_and_by_how_much():
+    blurry = _report(sharp=12.0)
+    assert not blurry.usable and "blurry" in blurry.label and "12 < 40" in blurry.label
+    small = _report(box=(0, 0, 60, 70))
+    assert "too small" in small.label and "60px < 80px" in small.label
+    unclear = _report(det=0.4)
+    assert "unclear" in unclear.label and "0.40 < 0.60" in unclear.label
+    assert fd.short_gate(blurry) == "blurry" and "SKIPPED, blurry" in fd.describe(blurry)
+
+
+def test_usable_frame_shows_percentage_and_the_threshold_needed():
+    r = _report()
+    assert r.usable and r.matched and r.label == "me 100%"
+    assert "need 45% to match" in fd.describe(r) and "sharpness 500" in fd.describe(r)
+
+
+def test_gate_overrides_let_a_soft_webcam_through(monkeypatch):
+    from argparse import Namespace
+    monkeypatch.setattr(config, "MIN_SHARPNESS", config.MIN_SHARPNESS)  # restore after the test
+    assert not _report(sharp=20.0).usable
+    fd.apply_gate_overrides(Namespace(min_sharpness=15.0, min_face=None, min_det=None))
+    assert config.MIN_SHARPNESS == 15.0 and _report(sharp=20.0).usable

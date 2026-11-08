@@ -4,6 +4,7 @@
   python -m tools.face_demo enroll   --name junaid --images ~/me/*.jpg
   python -m tools.face_demo identify --image photo1.jpg group.png  # who is in these pictures?
   python -m tools.face_demo identify --webcam                      # live; press q to quit
+  python -m tools.face_demo identify --webcam --debug              # also show why a frame is skipped, in numbers
   python -m tools.face_demo evaluate --name junaid --mine ~/test/me --others ~/test/others
   python -m tools.face_demo list | delete --name junaid
 
@@ -40,12 +41,46 @@ class FaceReport:
     score: float = 0.0
     reason: str = ""             # below_threshold | ambiguous | no_enrolled_users | ok
     ranking: list[tuple[str, float]] = field(default_factory=list)  # best score per enrolled person
+    det_score: float = 0.0       # measurements the quality gates look at
+    size_px: int = 0
+    sharpness: float = 0.0
+    turn: float | None = None
 
     @property
     def label(self) -> str:
         if not self.usable:
-            return f"skipped: {self.message}"
-        return f"{self.name} {self.score:.2f}" if self.matched else f"unknown ({self.reason}, best {self.score:.2f})"
+            return f"skipped: {explain_gate(self)}"
+        return f"{self.name} {pct(self.score)}" if self.matched else f"unknown ({self.reason}, best {pct(self.score)})"
+
+
+def pct(cosine: float) -> str:
+    """Cosine similarity shown as a percentage. It is a similarity score, NOT a probability of being right."""
+    return f"{max(cosine, 0.0) * 100:.0f}%"
+
+
+def explain_gate(r: "FaceReport") -> str:
+    """Which quality gate rejected the frame, with the measured value against the limit (same order as check_quality)."""
+    if r.det_score < config.MIN_DET_SCORE:
+        return f"unclear: detector confidence {r.det_score:.2f} < {config.MIN_DET_SCORE:.2f} (more light, face the camera)"
+    if r.size_px < config.MIN_FACE_PX:
+        return f"too small: face {r.size_px}px < {config.MIN_FACE_PX}px (move closer)"
+    if r.sharpness < config.MIN_SHARPNESS:
+        return f"blurry: sharpness {r.sharpness:.0f} < {config.MIN_SHARPNESS:.0f} (hold still, more light, clean the lens)"
+    return r.message or "quality gate"
+
+
+def short_gate(r: "FaceReport") -> str:
+    return explain_gate(r).split(":")[0]
+
+
+def describe(r: "FaceReport") -> str:
+    """One line with every number, for --debug."""
+    turn = "n/a" if r.turn is None else f"{r.turn:+.2f}"
+    head = (f"face {r.size_px}px (min {config.MIN_FACE_PX}) | detector {r.det_score:.2f} (min {config.MIN_DET_SCORE:.2f}) | "
+            f"sharpness {r.sharpness:.0f} (min {config.MIN_SHARPNESS:.0f}) | turn {turn}")
+    if not r.usable:
+        return head + f" -> SKIPPED, {short_gate(r)}"
+    return head + f" -> {r.label}  [need {pct(config.MATCH_THRESHOLD)} to match]"
 
 
 def ranking(emb: np.ndarray, owners: list[str], gallery: np.ndarray) -> list[tuple[str, float]]:
@@ -56,13 +91,15 @@ def ranking(emb: np.ndarray, owners: list[str], gallery: np.ndarray) -> list[tup
 
 
 def report_for(face: FaceResult, owners, gallery, threshold, margin) -> FaceReport:
+    m = dict(det_score=face.det_score, size_px=min(face.box[2] - face.box[0], face.box[3] - face.box[1]),
+             sharpness=face.sharpness, turn=face.turn)
     try:
         check_quality(face)
     except QualityError as e:
-        return FaceReport(face.box, False, str(e))
+        return FaceReport(face.box, False, str(e), **m)
     r = match(face.embedding, owners, gallery, threshold=threshold, margin=margin)
     return FaceReport(face.box, True, "", r.matched, r.user_id, r.score, r.reason,
-                      ranking(face.embedding, owners, gallery)[:3] if len(owners) else [])
+                      ranking(face.embedding, owners, gallery)[:3] if len(owners) else [], **m)
 
 
 def identify_frame(engine: FaceEngine, store: FaceStore, img: np.ndarray,
@@ -71,7 +108,7 @@ def identify_frame(engine: FaceEngine, store: FaceStore, img: np.ndarray,
     return [report_for(f, owners, gallery, threshold, margin) for f in engine.analyse(img)]
 
 
-def annotate(img: np.ndarray, reports: list[FaceReport]) -> np.ndarray:
+def annotate(img: np.ndarray, reports: list[FaceReport], debug: bool = False) -> np.ndarray:
     import cv2
 
     out = img.copy()
@@ -79,9 +116,23 @@ def annotate(img: np.ndarray, reports: list[FaceReport]) -> np.ndarray:
         x1, y1, x2, y2 = r.box
         colour = (0, 180, 0) if r.matched else (0, 140, 255) if r.usable else (128, 128, 128)
         cv2.rectangle(out, (x1, y1), (x2, y2), colour, 2)
-        short = r.label if not r.usable else (f"{r.name} {r.score:.2f}" if r.matched else f"unknown {r.score:.2f}")
-        cv2.putText(out, short if r.usable else "skipped", (x1, max(y1 - 8, 14)), cv2.FONT_HERSHEY_SIMPLEX, 0.55, colour, 2)
+        short = (f"{r.name} {pct(r.score)}" if r.matched else f"unknown {pct(r.score)}") if r.usable else f"skipped: {short_gate(r)}"
+        cv2.putText(out, short, (x1, max(y1 - 8, 14)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, colour, 2)
+    if debug:
+        h = out.shape[0]
+        for i, r in enumerate(reports[:3]):
+            cv2.putText(out, describe(r), (8, h - 12 - 18 * (len(reports[:3]) - 1 - i)), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1)
+        if not reports:
+            cv2.putText(out, "no face detected", (8, h - 12), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
     return out
+
+
+def apply_gate_overrides(a) -> None:
+    """Let the user relax the quality gates (a laptop webcam is often softer than test photos)."""
+    for arg, name in (("min_sharpness", "MIN_SHARPNESS"), ("min_face", "MIN_FACE_PX"), ("min_det", "MIN_DET_SCORE")):
+        value = getattr(a, arg, None)
+        if value is not None:
+            setattr(config, name, value)
 
 
 def list_images(paths: list[str]) -> list[Path]:
@@ -207,7 +258,7 @@ def cmd_identify(a, engine, store) -> int:
 
 def live(a, engine, store) -> int:
     cam, n, reports, t0 = open_camera(a.camera), 0, [], time.time()
-    last_print = ""
+    last_print, last_debug_print = "", 0.0
     print("Live identify. Press q in the window to quit." if not a.no_window else "Live identify (Ctrl+C to stop).")
     try:
         while True:
@@ -220,11 +271,14 @@ def live(a, engine, store) -> int:
             n += 1
             if n % a.every == 0:
                 reports = identify_frame(engine, store, frame, a.threshold, a.margin)
-                line = " | ".join(r.label for r in reports) or "no face"
-                if a.no_window and line != last_print:
-                    print(line, flush=True)
+                line = " | ".join(describe(r) if a.debug else r.label for r in reports) or "no face detected"
+                now = time.time()
+                if a.no_window and (line != last_print or (a.debug and now - last_debug_print > 1.0)):
+                    if not a.debug or now - last_debug_print > 0.5:  # --debug: at most ~2 lines a second
+                        print(line, flush=True)
+                        last_debug_print = now
                 last_print = line
-            if show("identify (q = quit)", annotate(frame, reports), a.no_window):
+            if show("identify (q = quit)", annotate(frame, reports, a.debug), a.no_window):
                 break
             if a.max_seconds and time.time() - t0 > a.max_seconds:
                 break
@@ -314,6 +368,9 @@ def main(argv=None) -> int:
     ap.add_argument("--db", default=config.DB_PATH)
     ap.add_argument("--threshold", type=float, default=config.MATCH_THRESHOLD)
     ap.add_argument("--margin", type=float, default=config.AMBIGUITY_MARGIN)
+    ap.add_argument("--min-sharpness", type=float, help=f"relax the blur gate (default {config.MIN_SHARPNESS:g}); try 15 for a soft webcam")
+    ap.add_argument("--min-face", type=int, help=f"smallest face in pixels (default {config.MIN_FACE_PX})")
+    ap.add_argument("--min-det", type=float, help=f"detector confidence gate (default {config.MIN_DET_SCORE})")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     e = sub.add_parser("enroll"); e.add_argument("--name", required=True)
@@ -324,7 +381,9 @@ def main(argv=None) -> int:
     i = sub.add_parser("identify"); i.add_argument("--image", nargs="+"); i.add_argument("--webcam", action="store_true")
     i.add_argument("--camera", default="0"); i.add_argument("--every", type=int, default=2)
     i.add_argument("--annotate", metavar="DIR"); i.add_argument("--no-window", action="store_true")
-    i.add_argument("--max-seconds", type=float, default=0); i.set_defaults(fn=cmd_identify)
+    i.add_argument("--max-seconds", type=float, default=0)
+    i.add_argument("--debug", action="store_true", help="show every measurement (face size, detector, sharpness, score)")
+    i.set_defaults(fn=cmd_identify)
 
     v = sub.add_parser("evaluate"); v.add_argument("--name", required=True)
     v.add_argument("--mine", nargs="+"); v.add_argument("--others", nargs="+"); v.set_defaults(fn=cmd_evaluate)
@@ -333,6 +392,7 @@ def main(argv=None) -> int:
     d = sub.add_parser("delete"); d.add_argument("--name", required=True); d.set_defaults(fn=cmd_delete)
 
     a = ap.parse_args(argv)
+    apply_gate_overrides(a)
     from app.face_engine import InsightFaceEngine
 
     engine = None if a.cmd in ("list", "delete") else InsightFaceEngine()

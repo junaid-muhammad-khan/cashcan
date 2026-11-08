@@ -65,6 +65,13 @@ python -m tools.face_demo evaluate --name junaid --mine ~/test/me --others ~/tes
 python -m tools.face_demo list
 python -m tools.face_demo delete --name junaid
 ```
+**If it says "skipped":** the face was found but a quality gate rejected the frame, and the label says which one and by how much,
+e.g. `blurry: sharpness 23 < 40`. Add `--debug` to see every number (face size, detector confidence, sharpness, head turn, and
+your match score as a percentage with the percentage needed to match). Fixes: more light on your face, face the camera,
+move closer (face wider than 80 px), hold still, clean the lens. If your webcam is just soft, relax a gate for the test:
+`python -m tools.face_demo --min-sharpness 15 identify --webcam --debug` (also `--min-face`, `--min-det`). The percentage is
+a similarity score, not a probability of being right; 45% is the line.
+
 `evaluate` is the accuracy test: put photos of you in one folder (different light, angles, glasses, a different day)
 and photos of other people in another. It lists every photo as ok/ERR, your lowest score vs the others' highest, and
 whether a clean threshold exists. The more varied photos, the more it tells you.
