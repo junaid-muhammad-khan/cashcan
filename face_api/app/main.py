@@ -150,6 +150,15 @@ def create_app(engine: FaceEngine | None = None, store: FaceStore | None = None,
         if len(embeddings) < config.MIN_ENROLL_FRAMES:
             raise HTTPException(422, {"message": "Not enough usable frames.", "problems": problems})
 
+        # One face, one account: a face that already matches somebody else is refused, otherwise two accounts would hold the
+        # same face (bin lookups become ambiguous, and one person could collect rewards under several wallets).
+        owners, gallery = state["store"].all_embeddings()
+        if len(owners):
+            for emb in embeddings:
+                sims = gallery @ emb
+                best = int(np.argmax(sims))
+                if float(sims[best]) >= config.MATCH_THRESHOLD and owners[best] != user_id:
+                    raise HTTPException(409, "This face is already registered to another account.")
         state["store"].add_user(user_id, wallet, embeddings)
         if state["accounts"] is not None:
             state["accounts"].forget(user_id)

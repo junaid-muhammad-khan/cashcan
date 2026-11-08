@@ -100,13 +100,23 @@ def test_pose_endpoint_reads_the_head_direction(client):
 
 def test_enroll_checks_each_photo_shows_its_pose(client):
     from tests.conftest import png, WALLET
-    f = lambda t: ("frames", ("f.png", png(5, turn=t), "image/png"))
+    f = lambda t, who=5: ("frames", ("f.png", png(who, turn=t), "image/png"))
     ok = client.post("/enroll", data={"user_id": "p1", "wallet": WALLET, "consent": "true", "poses": "front,left,right"},
                      files=[f(0.0), f(0.3), f(-0.3)])
     assert ok.status_code == 200 and ok.json()["frames_used"] == 3
     # the person turned left for the "front" photo: that photo is refused, the other two still count
     bad = client.post("/enroll", data={"user_id": "p2", "wallet": WALLET, "consent": "true", "poses": "front,left,right"},
-                      files=[f(0.3), f(0.3), f(-0.3)])
+                      files=[f(0.3, 6), f(0.3, 6), f(-0.3, 6)])
     assert bad.status_code == 200 and bad.json()["frames_used"] == 2 and "Expected" in bad.json()["problems"][0]
     assert client.post("/enroll", data={"user_id": "p3", "wallet": WALLET, "consent": "true", "poses": "front,up"},
-                       files=[f(0.0), f(0.3)]).status_code == 400
+                       files=[f(0.0, 7), f(0.3, 7)]).status_code == 400
+
+
+def test_a_face_cannot_be_enrolled_under_a_second_account(client):
+    from tests.conftest import png, WALLET
+    f = [("frames", ("f.png", png(11), "image/png"))]
+    assert client.post("/enroll", data={"user_id": "first", "wallet": WALLET, "consent": "true"}, files=f).status_code == 200
+    r = client.post("/enroll", data={"user_id": "second", "wallet": WALLET, "consent": "true"}, files=f)
+    assert r.status_code == 409 and "already registered" in r.text
+    other = [("frames", ("f.png", png(12), "image/png"))]  # a different person is fine
+    assert client.post("/enroll", data={"user_id": "third", "wallet": WALLET, "consent": "true"}, files=other).status_code == 200
