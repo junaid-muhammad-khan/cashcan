@@ -83,7 +83,7 @@ One table, on the server (`face_api/app/rewards.py`, served at `GET /face-api/re
 - A reward needs a live verified face session. The head-turn liveness check rejects a held-up photo or screen. It does **not** stop a replayed video, a 3D mask or a deepfake, and we say so openly.
 - Each interaction has a bin-chosen id and is stored once; every payout step is a claim on the expected status, and the transfer carries the
   interaction id as a memo that is checked before sending, so retries and overlapping workers can't pay twice.
-- The bin must send a bin key to record interactions; one face can't be enrolled to two accounts.
+- Bins can record interactions without a key (demo setting), but then a reward only goes to a person with a live face-match session the server issued; a bin can't name a user directly, and `GET /gallery` (face templates) still needs a key. Set `BIN_AUTH_REQUIRED=1` to require a key again. One face can't be enrolled to two accounts.
 - Not built yet: rejecting repeated identical items, and a second camera that must agree. The item gate also can't tell a hand from an item.
 
 ---

@@ -50,6 +50,9 @@ AUTH0_DOMAIN = os.environ.get("AUTH0_DOMAIN", "")        # e.g. cashcoin.ca.auth
 AUTH0_AUDIENCE = os.environ.get("AUTH0_AUDIENCE", "")    # the API identifier configured in Auth0
 # Bins authenticate with a per-bin key, sent as X-Bin-Key. Comma-separated "bin_id:key" pairs.
 BIN_API_KEYS = os.environ.get("BIN_API_KEYS", "")
+# POST /interactions is open to bins without a key by default (demo): a bin identifies people only through a live session token the server
+# issued. A user_id named directly by a bin, and GET /gallery (everyone's face templates), still need a valid key. Set BIN_AUTH_REQUIRED=1 to lock it.
+BIN_AUTH_REQUIRED = os.environ.get("BIN_AUTH_REQUIRED", "0").lower() in ("1", "true", "yes")
 
 # Rewards and payouts (see app/rewards.py and app/payouts.py)
 MIN_CONFIDENCE = float(os.environ.get("MIN_CONFIDENCE", "0.75"))                    # classifier confidence needed for a reward

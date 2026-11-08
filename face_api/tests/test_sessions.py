@@ -88,3 +88,40 @@ def test_match_on_one_instance_and_drop_on_another_credits_the_user(tmp_path, mo
     assert r["user_id"] == "alice" and r["reward_cents"] == 5 and r["payout_status"] == "held"   # recognised (no wallet yet)
     assert ledger_b.rows["x-1"]["session_id"] and len(ledger_b.rows["x-1"]["session_id"]) == 8  # a random id, not the token
     assert b.get(f"/session/{m['session_token']}").json()["user_id"] == "alice"
+
+
+def _open_bin_app(tmp_path, monkeypatch, required=False):
+    monkeypatch.setattr(config, "REQUIRE_LIVENESS", False)
+    monkeypatch.setattr(config, "BIN_API_KEYS", "bin-1:k")
+    monkeypatch.setattr(config, "BIN_AUTH_REQUIRED", required)
+    path = str(tmp_path / "f.db")
+    FaceStore(path).add_user("alice", "", [FakeEngine().analyse(__import__("cv2").imdecode(
+        __import__("numpy").frombuffer(png(7), "uint8"), 1))[0].embedding])
+    ledger = MemoryLedger(wallet_of=lambda uid: None)
+    app = create_app(engine=FakeEngine(), store=FaceStore(path), sessions=SessionManager(secret="shared"), payouts=Payouts(ledger, FakePayoutClient()))
+    return TestClient(app), ledger
+
+
+def test_a_bin_without_a_key_is_allowed_and_credits_a_live_session(tmp_path, monkeypatch):
+    c, ledger = _open_bin_app(tmp_path, monkeypatch)
+    m = c.post("/match", files={"frame": ("f.png", png(7), "image/png")}).json()
+    r = c.post("/interactions", json={"interaction_id": "k-1", "session_token": m["session_token"], "item_class": "cans", "confidence": 0.9})
+    assert r.status_code == 200 and r.json()["user_id"] == "alice" and ledger.rows["k-1"]["bin_id"] == "bin-unkeyed"
+
+
+def test_an_unkeyed_bin_cannot_name_a_user_directly(tmp_path, monkeypatch):
+    c, _ = _open_bin_app(tmp_path, monkeypatch)
+    r = c.post("/interactions", json={"interaction_id": "k-2", "user_id": "alice", "item_class": "cans", "confidence": 0.9})
+    assert r.status_code == 200 and r.json()["user_id"] is None and r.json()["reward_cents"] == 0
+    keyed = c.post("/interactions", headers={"X-Bin-Key": "k"}, json={"interaction_id": "k-3", "user_id": "alice", "item_class": "cans", "confidence": 0.9})
+    assert keyed.json()["user_id"] == "alice"                                   # a keyed bin still may
+
+
+def test_the_gallery_of_face_templates_still_needs_a_key(tmp_path, monkeypatch):
+    c, _ = _open_bin_app(tmp_path, monkeypatch)
+    assert c.get("/gallery").status_code == 401
+
+
+def test_bin_keys_can_be_required_again(tmp_path, monkeypatch):
+    c, _ = _open_bin_app(tmp_path, monkeypatch, required=True)
+    assert c.post("/interactions", json={"interaction_id": "k-4", "item_class": "cans", "confidence": 0.9}).status_code == 401

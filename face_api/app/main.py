@@ -417,7 +417,7 @@ def create_app(engine: FaceEngine | None = None, store: FaceStore | None = None,
     def leaderboard(limit: int = 20):
         return {"leaderboard": need_accounts().leaderboard(max(1, min(limit, 100)))}
 
-    # ---- bin -> server (authenticated by X-Bin-Key) ----------------------------------------
+    # ---- bin -> server (X-Bin-Key: optional for /interactions, required for /gallery) ----------------------------------------
     def bin_id_of(key: str | None) -> str:
         found = bin_for_key(key)
         if not found:
@@ -444,7 +444,10 @@ def create_app(engine: FaceEngine | None = None, store: FaceStore | None = None,
         """One sorted item. `interaction_id` is chosen by the bin and makes retries safe: the same id is stored once and paid
         at most once. The user comes from the live bin session (face already checked), so no face data is sent or kept per item.
         The reward is decided here from the item class (app/rewards.py); any amount the bin sends is ignored."""
-        bin_id = bin_id_of(x_bin_key)
+        keyed = bin_for_key(x_bin_key)
+        if config.BIN_AUTH_REQUIRED:
+            bin_id_of(x_bin_key)
+        bin_id = keyed or "bin-unkeyed"      # no key needed by default: the bin is allowed, just not trusted to name users
         iid, item = str(body.get("interaction_id", "")).strip(), str(body.get("item_class", "")).strip().lower()
         if not iid or not item:
             raise HTTPException(400, "interaction_id and item_class are required.")
@@ -453,7 +456,7 @@ def create_app(engine: FaceEngine | None = None, store: FaceStore | None = None,
         token = body.get("session_token")
         user_id = state["sessions"].user_for(str(token)) if token else None
         claimed = str(body.get("user_id") or "").strip()   # a bin that identifies people itself (local identity) names them; the bin key vouches for it
-        if user_id is None and claimed and state["store"].user_exists(claimed):
+        if user_id is None and keyed and claimed and state["store"].user_exists(claimed):   # only a keyed bin may name a user directly
             user_id = claimed
         row, created = need_payouts().record(iid, bin_id, item, body.get("confidence"), user_id,
                                             state["sessions"].session_id(str(token)) if token else None)

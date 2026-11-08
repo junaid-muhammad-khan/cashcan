@@ -81,9 +81,13 @@ def test_drop_reward_gates(monkeypatch):
 
 
 # ---- POST /interactions ---------------------------------------------------------------------
-def test_needs_bin_key(env):
+def test_bin_key_is_optional_unless_required(env, monkeypatch):
+    from app import config
+
     r = env.c.post("/interactions", json={"interaction_id": "x", "item_class": "cans"})
-    assert r.status_code == 401
+    assert r.status_code == 200                                   # bins are allowed without a key
+    monkeypatch.setattr(config, "BIN_AUTH_REQUIRED", True)
+    assert env.c.post("/interactions", json={"interaction_id": "x2", "item_class": "cans"}).status_code == 401
     assert env.c.post("/interactions", json={"interaction_id": "x"}, headers=BIN).status_code == 400
 
 
