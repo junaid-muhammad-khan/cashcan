@@ -124,12 +124,15 @@ class Ledger:
             return None
         return to_row(rows[0][:len(COLS)]), rows[0][len(COLS)]
 
-    def recent_paying_drop(self, user_id: str, seconds: int, exclude: str) -> bool:
-        """Did this user have a paying drop in the last `seconds` (other than `exclude`)? Server time, from the table itself."""
+    def drop_context(self, user_id: str, cooldown_seconds: int, exclude: str) -> tuple[bool, str | None]:
+        """(paying drop by this user in the last `cooldown_seconds` other than `exclude`, the user's wallet), in ONE query.
+        Server time, from the table itself."""
         rows = self.db.sql(
-            f"SELECT 1 FROM {self.t}.interactions WHERE user_id = :u AND reward_cents > 0 AND interaction_id <> :i "
-            f"AND created_at > current_timestamp() - INTERVAL {int(seconds)} SECONDS LIMIT 1", {"u": user_id, "i": exclude})
-        return bool(rows)
+            f"SELECT EXISTS (SELECT 1 FROM {self.t}.interactions WHERE user_id = :u AND reward_cents > 0 AND interaction_id <> :i "
+            f"AND created_at > current_timestamp() - INTERVAL {int(cooldown_seconds)} SECONDS), "
+            f"(SELECT max(sol_wallet) FROM {self.t}.users WHERE user_id = :u)", {"u": user_id, "i": exclude})
+        cooling, wallet = (rows[0] if rows else (False, None))
+        return str(cooling).lower() == "true", wallet or None
 
     def pending_ids(self, user_id: str) -> list[str]:
         rows = self.db.sql(f"SELECT interaction_id FROM {self.t}.interactions WHERE user_id = :u AND payout_status = 'pending' "
@@ -144,10 +147,6 @@ class Ledger:
             f"OR (i.payout_status = 'failed' AND coalesce(i.payout_attempts, 0) < {int(max_attempts)}) "
             f"ORDER BY i.updated_at LIMIT {int(limit)}")
         return [(to_row(r[:len(COLS)]), float(r[len(COLS)] or 0)) for r in rows]
-
-    def wallet_of(self, user_id: str) -> str | None:
-        rows = self.db.sql(f"SELECT sol_wallet FROM {self.t}.users WHERE user_id = :u LIMIT 1", {"u": user_id})
-        return rows[0][0] if rows else None
 
     def rows_for_user(self, user_id: str, since: datetime, limit: int = 5000) -> list[dict]:
         """A user's drops since `since` (UTC), newest first, with the bin's name."""

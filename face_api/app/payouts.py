@@ -101,27 +101,28 @@ class Payouts:
     # ---- bin drop
     def record(self, interaction_id: str, bin_id: str, item_class: str, confidence, user_id: str | None,
                session_id: str | None) -> tuple[dict, bool]:
-        """Store one drop (once) and pay it now if it is owed and a wallet is known. Returns (row, created)."""
-        existing = self.ledger.get(interaction_id)
-        if existing:  # a retried request: the stored row, never a second payout
-            return existing[0], False
+        """Store one drop (once) and pay it now if it is owed and a wallet is known. Returns (row, created).
+        About 5 Databricks round trips on the paying path (each costs ~1 s), plus the payout route."""
         cents, reason = drop_reward(item_class, user_id, confidence)
-        if cents and self.ledger.recent_paying_drop(user_id, config.PAYOUT_COOLDOWN_SECONDS, interaction_id):
-            cents, reason = 0, "cooldown"
-        wallet = self.ledger.wallet_of(user_id) if (cents and user_id) else None
+        wallet = None
+        if cents:
+            cooling, wallet = self.ledger.drop_context(user_id, config.PAYOUT_COOLDOWN_SECONDS, interaction_id)
+            if cooling:
+                cents, reason, wallet = 0, "cooldown", None
         status = "none" if not cents else ("pending" if wallet else "held")
-        created = self.ledger.insert({"interaction_id": interaction_id, "user_id": user_id, "session_id": session_id,
-                                      "bin_id": bin_id, "item_class": item_class, "confidence": confidence,
-                                      "reward_cents": cents, "payout_status": status, "reason": reason})
-        if created and status == "pending":
-            self.pay(interaction_id, "pending")
-        got = self.ledger.get(interaction_id)
-        return got[0], created
+        row = {"interaction_id": interaction_id, "user_id": user_id, "session_id": session_id, "bin_id": bin_id,
+               "item_class": item_class, "confidence": confidence, "reward_cents": cents, "payout_status": status, "reason": reason}
+        if not self.ledger.insert(row):  # a retried request: the stored row, never a second payout
+            return self.ledger.get(interaction_id)[0], False
+        if status == "pending":
+            return self.pay(interaction_id, "pending", known=(row, wallet)), True
+        return row, True
 
     # ---- one payout
-    def pay(self, interaction_id: str, expected: str) -> dict | None:
-        """Claim the row (expected -> sending), call the payout route, store the result. Safe to call from any worker."""
-        got = self.ledger.get(interaction_id)
+    def pay(self, interaction_id: str, expected: str, known: tuple[dict, str | None] | None = None) -> dict | None:
+        """Claim the row (expected -> sending), call the payout route, store the result. Safe to call from any worker.
+        `known` = (row, wallet) the caller already holds, to save a read."""
+        got = known or self.ledger.get(interaction_id)
         if not got:
             return None
         row, wallet = got
@@ -132,7 +133,7 @@ class Payouts:
                 self.ledger.transition(interaction_id, "pending", "held")
             return self.ledger.get(interaction_id)[0]
         if not self.ledger.transition(interaction_id, expected, "sending", attempt=True, payout_wallet=wallet):
-            return row  # someone else claimed it
+            return self.ledger.get(interaction_id)[0]  # someone else claimed it
         res = self.client.send(interaction_id, wallet, row["reward_cents"])
         if res.ok:
             self.ledger.transition(interaction_id, "sending", "paid", paid=True, tx_signature=res.signature, lamports=res.lamports,

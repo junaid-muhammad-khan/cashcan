@@ -50,10 +50,11 @@ class MemoryLedger:
         r = self.rows.get(iid)
         return (dict(r), self._wallet_of(r["user_id"]) if r["user_id"] else None) if r else None
 
-    def recent_paying_drop(self, user_id, seconds, exclude):
+    def drop_context(self, user_id, seconds, exclude):
         cutoff = self.now() - timedelta(seconds=seconds)
-        return any(r["user_id"] == user_id and (r["reward_cents"] or 0) > 0 and r["interaction_id"] != exclude
-                   and r["created_at"] > cutoff for r in self.rows.values())
+        cooling = any(r["user_id"] == user_id and (r["reward_cents"] or 0) > 0 and r["interaction_id"] != exclude
+                      and r["created_at"] > cutoff for r in self.rows.values())
+        return cooling, self._wallet_of(user_id)
 
     def pending_ids(self, user_id):
         return [r["interaction_id"] for r in sorted(self.rows.values(), key=lambda r: r["created_at"])
@@ -63,9 +64,6 @@ class MemoryLedger:
         out = [(dict(r), (self.now() - r["updated_at"]).total_seconds()) for r in sorted(self.rows.values(), key=lambda r: r["updated_at"])
                if r["payout_status"] in ("sending", "pending") or (r["payout_status"] == "failed" and r["payout_attempts"] < max_attempts)]
         return out[:limit]
-
-    def wallet_of(self, user_id):
-        return self._wallet_of(user_id)
 
     def rows_for_user(self, user_id, since, limit=5000):
         rows = [dict(r, bin_name="Test bin") for r in self.rows.values() if r["user_id"] == user_id and r["created_at"] >= since]
