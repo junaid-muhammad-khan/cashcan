@@ -105,7 +105,7 @@ face disappears or a different-looking face steps in, so nobody can borrow anoth
 e.g. `too small: face 52px < 60px (move closer)`. Add `--debug` to see every number (face size, detector confidence, sharpness, head
 turn, and your match score as a percentage with the percentage needed to match). Fixes: more light on your face, face the camera, move
 closer (face at least 60 px wide), hold still, clean the lens. The percentage is a similarity score, not a probability of being right;
-the match line is 50%. To experiment, override a gate for one run: `python -m tools.face_demo --min-face 45 identify --webcam --debug`
+the default match line is 45% (`--threshold 0.50` is stricter; with your own frontal scores of 56-82% and strangers topping out at 25%, 50% is a sensible choice once a friend has also been tested). To experiment, override a gate for one run: `python -m tools.face_demo --min-face 45 identify --webcam --debug`
 (also `--min-sharpness`, `--min-det`).
 
 **Two tiers of quality gates.** *Enrollment is strict* (face >= 80 px, detector >= 0.60, sharpness >= 60), because a bad frame would be saved
