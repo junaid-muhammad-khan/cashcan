@@ -6,7 +6,7 @@ import { useAuth0 } from "@auth0/auth0-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import AuthShell from "@/components/AuthShell";
 import { Check, LogoMark } from "@/components/icons";
-import { checkPose, enroll, FaceApiError, getMe, matchFrame, saveWallet, userIdFromSub, type Me } from "@/lib/faceApi";
+import { checkPose, enroll, FaceApiError, getMe, matchFrame, userIdFromSub, type Me } from "@/lib/faceApi";
 import { useCamera } from "./useCamera";
 
 type Step = "loading" | "already" | "consent" | "camera" | "scan" | "saving" | "test" | "done";
@@ -21,7 +21,6 @@ const POSES = [
 const POLL_MS = 350;
 const POSE_TIMEOUT_MS = 30000;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-const SOLANA_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 const AUDIENCE = process.env.NEXT_PUBLIC_AUTH0_AUDIENCE;
 
 const STEPPER = ["Consent", "Scan", "Test", "Done"];
@@ -36,14 +35,13 @@ export default function EnrollFlow() {
   const [me, setMe] = useState<Me | null>(null);
   const [consent, setConsent] = useState(false);
   const [wallet, setWallet] = useState("");
-  const [errs, setErrs] = useState<{ consent?: string; wallet?: string }>({});
+  const [errs, setErrs] = useState<{ consent?: string }>({});
   const [error, setError] = useState<string | null>(null);
   const [problems, setProblems] = useState<string[]>([]);
   const [captured, setCaptured] = useState(0);
   const [flash, setFlash] = useState(false);
   const [liveHint, setLiveHint] = useState("");
   const [test, setTest] = useState<{ busy: boolean; score?: number; ok?: boolean; message?: string }>({ busy: false });
-  const [busy, setBusy] = useState(false);
   const runId = useRef(0);
 
   // Who is this, and are they already enrolled? Works without Auth0 on the API too (local dev).
@@ -75,26 +73,9 @@ export default function EnrollFlow() {
   const needsWallet = !me?.sol_wallet;
 
   async function onConsentContinue() {
-    const next = {
-      consent: consent ? undefined : "Tick the box to continue. Face match is required to use CashCan.",
-      wallet: !needsWallet ? undefined : !wallet.trim() ? "Add your crypto wallet address so we know where to send your SOL."
-        : !SOLANA_RE.test(wallet.trim()) ? "Solana addresses are 32–44 letters and numbers. Paste it again." : undefined,
-    };
-    setErrs(next);
-    if (next.consent || next.wallet) return;
+    if (!consent) { setErrs({ consent: "Tick the box to continue. Face match is required to use CashCan." }); return; }
+    setErrs({});
     setError(null);
-    if (needsWallet && token && me) {
-      setBusy(true);
-      try {
-        const updated = await saveWallet(token, wallet.trim());
-        setMe({ ...me, ...updated });
-      } catch (e) {
-        setError((e as Error).message);
-        setBusy(false);
-        return;
-      }
-      setBusy(false);
-    }
     setStep("camera");
     await cam.start();
   }
@@ -193,7 +174,7 @@ export default function EnrollFlow() {
 
   const journey = [
     { title: "Create your account", sub: "Done", done: true },
-    { title: "Link a crypto wallet", sub: needsWallet ? "Part of this setup" : "Linked", done: !needsWallet },
+    { title: "Link a crypto wallet", sub: needsWallet ? "Add it in your profile" : "Linked", done: !needsWallet },
     { title: "Set up face match", sub: step === "done" || step === "already" ? "Ready at any bin" : "About a minute", done: step === "done" || step === "already" },
   ];
 
@@ -247,29 +228,29 @@ export default function EnrollFlow() {
             ))}
           </div>
 
-          {needsWallet && (
-            <div className="field" style={{ marginTop: 20 }}>
-              <div className="label-row"><label htmlFor="wallet">Crypto wallet address <span className="hint">(for your SOL payouts)</span></label></div>
-              <input
-                id="wallet" type="text" autoComplete="off" spellCheck={false} value={wallet}
-                aria-invalid={errs.wallet ? true : undefined} aria-describedby={errs.wallet ? "wallet-err" : undefined}
-                onChange={(e) => { setWallet(e.target.value); if (errs.wallet) setErrs((x) => ({ ...x, wallet: undefined })); }}
-                className="en-mono"
-              />
-              {errs.wallet && <p className="err" id="wallet-err">{errs.wallet}</p>}
-            </div>
+          {needsWallet ? (
+            <>
+              <div className="alert" role="alert" style={{ marginTop: 20 }}>
+                Add a Solana wallet in your profile first — that&apos;s where CashCan sends your SOL rewards.
+              </div>
+              <div className="cta-row" style={{ marginTop: 16 }}>
+                <Link href="/account" className="btn btn-primary">Add wallet in profile</Link>
+              </div>
+            </>
+          ) : (
+            <>
+              <label className="check check-card" style={{ marginTop: 16, borderColor: errs.consent ? "var(--danger)" : undefined }}>
+                <input type="checkbox" checked={consent} onChange={(e) => { setConsent(e.target.checked); setErrs((x) => ({ ...x, consent: undefined })); }} />
+                <span>I agree to let CashCan create a face template from my camera to recognize me at bins, and I can delete it any time.</span>
+              </label>
+              {errs.consent && <p className="en-err" role="alert">{errs.consent}</p>}
+              {error && <div className="alert" role="alert" style={{ marginTop: 16 }}>{error}</div>}
+
+              <div className="cta-row" style={{ marginTop: 24 }}>
+                <button type="button" className="btn btn-primary" onClick={onConsentContinue}>Continue</button>
+              </div>
+            </>
           )}
-
-          <label className="check check-card" style={{ marginTop: 16, borderColor: errs.consent ? "var(--danger)" : undefined }}>
-            <input type="checkbox" checked={consent} onChange={(e) => { setConsent(e.target.checked); setErrs((x) => ({ ...x, consent: undefined })); }} />
-            <span>I agree to let CashCan create a face template from my camera to recognize me at bins, and I can delete it any time.</span>
-          </label>
-          {errs.consent && <p className="en-err" role="alert">{errs.consent}</p>}
-          {error && <div className="alert" role="alert" style={{ marginTop: 16 }}>{error}</div>}
-
-          <div className="cta-row" style={{ marginTop: 24 }}>
-            <button type="button" className="btn btn-primary" disabled={busy} onClick={onConsentContinue}>{busy ? "Saving wallet…" : "Continue"}</button>
-          </div>
         </div>
       )}
 
