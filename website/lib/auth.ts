@@ -1,4 +1,4 @@
-import { createHmac, randomBytes, scrypt as scryptCb, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, randomBytes, scrypt as scryptCb, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
 import { cookies } from "next/headers";
 import { findUserById, type UserRecord } from "./users";
@@ -35,10 +35,13 @@ function sign(payload: string): string {
   return createHmac("sha256", secret()).update(payload).digest("base64url");
 }
 
-export function createSessionToken(userId: string): { token: string; expires: Date } {
-  const expires = new Date(Date.now() + SESSION_DAYS * 86_400_000);
+// remember = true: 7-day persistent cookie. false: browser-session cookie whose token
+// still expires server-side after 12 hours.
+export function createSessionToken(userId: string, remember = true): { token: string; expires: Date; remember: boolean } {
+  const ms = remember ? SESSION_DAYS * 86_400_000 : 12 * 3_600_000;
+  const expires = new Date(Date.now() + ms);
   const payload = Buffer.from(JSON.stringify({ uid: userId, exp: expires.getTime() })).toString("base64url");
-  return { token: `${payload}.${sign(payload)}`, expires };
+  return { token: `${payload}.${sign(payload)}`, expires, remember };
 }
 
 export function readSessionToken(token: string | undefined): string | null {
@@ -56,13 +59,21 @@ export function readSessionToken(token: string | undefined): string | null {
   }
 }
 
-export const sessionCookieOptions = (expires: Date) => ({
+export const sessionCookieOptions = (expires: Date, remember = true) => ({
   httpOnly: true,
   sameSite: "lax" as const,
   secure: process.env.NODE_ENV === "production",
   path: "/",
-  expires,
+  ...(remember ? { expires } : {}),
 });
+
+export function hashResetToken(token: string): string {
+  return createHash("sha256").update(token).digest("hex");
+}
+
+export function newResetToken(): string {
+  return randomBytes(32).toString("base64url");
+}
 
 export async function getCurrentUser(): Promise<UserRecord | null> {
   const jar = await cookies();

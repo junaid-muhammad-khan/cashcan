@@ -17,8 +17,10 @@ npm run dev                  # http://localhost:3000
 | Route | What it is |
 |---|---|
 | `/` | Home page with scroll-triggered reveals, untilting hero mockup, floating cards, live drop feed, drifting gradient background, count-up numbers, pinned five-step "how it works" story, and a dashboard preview that expands on scroll |
-| `/signup` | Name, email, password, optional Solana wallet (base58 check), opt-in face enrollment, terms |
-| `/login` | Email + password; `?next=/path` returns you where you were |
+| `/signup` | Name, email, password (strength bar), optional Solana wallet (base58 check), opt-in face enrollment, terms. The side panel's three-step tracker ticks off as you fill the form |
+| `/login` | Email + password, "Keep me logged in for 7 days" (off = browser-session cookie, 12 h max), forgot-password link; `?next=/path` returns you where you were |
+| `/forgot-password` | Asks for an email and always answers the same way, so it can't reveal which emails have accounts |
+| `/reset-password?token=…` | New password + confirm, with strength bar; single-use token valid 30 minutes, logs you in when saved |
 | `/account` | Signed-in only; shows the profile and a log-out button |
 
 All motion is in `components/HomeMotion.tsx` and `components/AuthShell.tsx`. Content is visible
@@ -29,7 +31,11 @@ without JavaScript, and everything that moves is skipped when the visitor has re
 - Passwords hashed with scrypt (random salt per user); sessions are HMAC-signed, httpOnly, SameSite=Lax cookies (7 days).
 - Users are stored in `.data/users.json` (gitignored). That only works on a single server with a persistent
   disk, so it won't survive serverless deploys such as Vercel. Swap `lib/users.ts` for a real database (e.g. Postgres/Supabase) before production.
-- Not built yet: password reset, email verification, rate limiting on login, editing the wallet after sign-up,
+- Password reset: only a SHA-256 of the token is stored; tokens are single-use and expire after 30 minutes.
+  **No email provider is connected yet**: the reset link is printed to the server log
+  (`[cashcan] password reset link for …`). Hook `app/api/auth/forgot/route.ts` up to an email service
+  (e.g. Resend) before real users rely on it.
+- Not built yet: email verification, rate limiting on login and reset requests, editing the wallet after sign-up,
   and linking an account to the face-enrollment flow in `face_api/`.
 
 ## Sample data

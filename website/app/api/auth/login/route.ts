@@ -16,8 +16,9 @@ export async function POST(req: Request) {
       { status: 401 },
     );
   }
-  const { token, expires } = createSessionToken(user.id);
+  const remember = body?.remember !== false;
+  const { token, expires } = createSessionToken(user.id, remember);
   const res = NextResponse.json({ user: publicUser(user) });
-  res.cookies.set(SESSION_COOKIE, token, sessionCookieOptions(expires));
+  res.cookies.set(SESSION_COOKIE, token, sessionCookieOptions(expires, remember));
   return res;
 }

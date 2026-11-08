@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>CashCan — Log in</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Space+Grotesk:wght@500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#F4F6F1}
+a{color:#157A46}a:hover{color:#0E5A33}
+.blob{position:absolute;border-radius:50%;filter:blur(70px);pointer-events:none}
+.b1{animation:drift1 16s ease-in-out infinite}
+.b2{animation:drift2 20s ease-in-out infinite}
+@keyframes drift1{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(80px,-40px) scale(1.15)}}
+@keyframes drift2{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(-70px,50px) scale(1.2)}}
+.floaty{animation:floaty 6s ease-in-out infinite}
+@keyframes floaty{0%,100%{transform:translateY(0)}50%{transform:translateY(-12px)}}
+.intro{animation:intro .8s cubic-bezier(.2,.7,.2,1) both}
+@keyframes intro{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:none}}
+.inp{width:100%;min-height:48px;box-sizing:border-box;padding:0 14px;border-radius:12px;border:1px solid #C5D0C8;background:#FFFFFF;font:16px Inter,system-ui,sans-serif;color:#0F1F17;transition:border-color .15s ease,box-shadow .15s ease}
+.inp:focus{outline:none;border-color:#157A46;box-shadow:0 0 0 3px rgba(21,122,70,.18)}
+.inp.bad{border-color:#B4321F}
+.btn{min-height:48px;border-radius:999px;border:0;font:600 16px Inter,system-ui,sans-serif;cursor:pointer;transition:background-color .2s ease}
+.btn-primary{background:#157A46;color:#FFFFFF}.btn-primary:hover{background:#0E5A33}
+@media (prefers-reduced-motion: reduce){.b1,.b2,.floaty,.intro{animation:none}}
+@media (max-width: 860px){.aside{display:none !important}.mobile-logo{display:flex !important}.split{grid-template-columns:minmax(0,1fr) !important}}
+</style>
+</helmet>
+<div class="split" style="min-height: 100vh; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); font-family: Inter, system-ui, sans-serif; color: #0F1F17">
+
+  <aside class="aside" style="position: relative; overflow: hidden; background: #0F1F17; color: #E6EEE9; padding: 40px 56px; display: flex; flex-direction: column">
+    <div aria-hidden="true" class="blob b1" style="width: 420px; height: 420px; background: #2BB673; opacity: .3; left: -120px; top: -80px"></div>
+    <div aria-hidden="true" class="blob b2" style="width: 360px; height: 360px; background: #E3B23C; opacity: .2; right: -100px; bottom: -80px"></div>
+    <a href="Main.dc.html" style="position: relative; display: flex; align-items: center; gap: 10px; color: #FFFFFF; text-decoration: none">
+      <svg aria-hidden="true" width="30" height="30" viewBox="0 0 32 32" fill="none" stroke="#5FD79A" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 9h18l-2 18H9z"></path><path d="M5 9h22"></path><path d="M12 9V6h8v3"></path><path d="M13 15c1.5-1.5 4.5-1.5 6 0M16 14v8"></path></svg>
+      <span style="font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 22px; letter-spacing: -0.02em">cashcan</span>
+    </a>
+    <div style="position: relative; margin: auto 0; max-width: 460px">
+      <h2 class="intro" style="font-family: 'Space Grotesk', sans-serif; font-size: 44px; line-height: 1.08; letter-spacing: -0.03em; margin: 0; color: #FFFFFF">Sort it right.<br>Get paid for it.</h2>
+      <p class="intro" style="font-size: 17px; line-height: 1.6; color: #B9C7BF; margin: 16px 0 0; animation-delay: .08s">Your rewards, drop history and wallet live in your CashCan account.</p>
+      <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 36px">
+        <div class="floaty" style="background: #FFFFFF; color: #0F1F17; border-radius: 16px; padding: 16px 18px; display: flex; gap: 12px; align-items: center; max-width: 320px; box-shadow: 0 20px 40px -16px rgba(0,0,0,.5)">
+          <span style="width: 36px; height: 36px; border-radius: 50%; background: #2BB673; display: flex; align-items: center; justify-content: center; flex-shrink: 0"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0F1F17" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"></path></svg></span>
+          <span><span style="display: block; font-size: 14px; font-weight: 600">Payout sent</span><span style="display: block; font-size: 12px; color: #5C6B62">+0.004 SOL · aluminum can · devnet</span></span>
+        </div>
+        <div class="floaty" style="margin-left: 48px; background: #15291F; border: 1px solid #24402F; border-radius: 16px; padding: 14px 18px; max-width: 280px; animation-delay: 1.2s">
+          <div style="display: flex; justify-content: space-between; font-size: 12px; color: #8FB5A0"><span>This week</span><span>sample</span></div>
+          <div style="font-family: 'Space Grotesk', sans-serif; font-size: 28px; font-weight: 700; color: #5FD79A; margin-top: 4px">0.031 SOL</div>
+          <div style="font-size: 12px; color: #B9C7BF; margin-top: 2px">from 14 clean drops</div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <main style="display: flex; align-items: center; justify-content: center; padding: 48px 24px; background: #F4F6F1">
+    <div style="width: 100%; max-width: 420px">
+      <a class="mobile-logo" href="Main.dc.html" style="display: none; align-items: center; gap: 10px; color: #0F1F17; text-decoration: none; margin-bottom: 32px">
+        <svg aria-hidden="true" width="30" height="30" viewBox="0 0 32 32" fill="none" stroke="#157A46" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 9h18l-2 18H9z"></path><path d="M5 9h22"></path><path d="M12 9V6h8v3"></path><path d="M13 15c1.5-1.5 4.5-1.5 6 0M16 14v8"></path></svg>
+        <span style="font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 22px">cashcan</span>
+      </a>
+
+      <sc-if value="{{done}}" hint-placeholder-val="{{ false }}">
+        <div style="background: #FFFFFF; border: 1px solid #DCE4DD; border-radius: 20px; padding: 32px; text-align: center">
+          <div style="width: 56px; height: 56px; border-radius: 50%; background: #E3F5EB; margin: 0 auto; display: flex; align-items: center; justify-content: center"><svg aria-hidden="true" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#157A46" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"></path></svg></div>
+          <h1 style="font-family: 'Space Grotesk', sans-serif; font-size: 28px; letter-spacing: -0.02em; margin: 18px 0 0">You're logged in</h1>
+          <p style="color: #4A5A51; font-size: 15px; margin: 8px 0 0">In the real site this goes to your account page.</p>
+          <button type="button" class="btn" onClick="{{reset}}" style="margin-top: 22px; background: #FFFFFF; color: #0F1F17; border: 1px solid #DCE4DD; padding: 0 22px">Back to the form</button>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{notDone}}" hint-placeholder-val="{{ true }}">
+        <h1 style="font-family: 'Space Grotesk', sans-serif; font-size: 36px; letter-spacing: -0.03em; margin: 0">Welcome back</h1>
+        <p style="color: #4A5A51; font-size: 16px; margin: 10px 0 0">Log in to see your drops, rewards and wallet.</p>
+        <form onSubmit="{{submit}}" novalidate="" style="display: flex; flex-direction: column; gap: 18px; margin-top: 32px">
+          <sc-if value="{{formError}}" hint-placeholder-val="{{ false }}">
+            <div role="alert" style="background: #FDECEA; color: #B4321F; border-radius: 12px; padding: 12px 14px; font-size: 14px">{{formError}}</div>
+          </sc-if>
+          <div>
+            <label for="login-email" style="display: block; font-size: 14px; font-weight: 600; margin-bottom: 6px">Email</label>
+            <input id="login-email" type="email" autocomplete="email" class="{{emailCls}}" value="{{email}}" onChange="{{setEmail}}" onBlur="{{blurEmail}}">
+            <sc-if value="{{emailErr}}" hint-placeholder-val="{{ false }}"><p style="color: #B4321F; font-size: 13px; margin: 6px 0 0">{{emailErr}}</p></sc-if>
+          </div>
+          <div>
+            <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px">
+              <label for="login-pw" style="font-size: 14px; font-weight: 600">Password</label>
+              <a href="#forgot" style="font-size: 13px">Forgot password?</a>
+            </div>
+            <div style="position: relative">
+              <input id="login-pw" type="{{pwType}}" autocomplete="current-password" class="{{pwCls}}" value="{{password}}" onChange="{{setPassword}}" style="padding-right: 64px">
+              <button type="button" aria-label="{{pwToggleLabel}}" onClick="{{togglePw}}" style="position: absolute; right: 6px; top: 6px; min-height: 36px; min-width: 52px; border: 0; background: transparent; color: #157A46; font: 600 14px Inter, sans-serif; cursor: pointer; border-radius: 8px">{{pwToggleText}}</button>
+            </div>
+            <sc-if value="{{pwErr}}" hint-placeholder-val="{{ false }}"><p style="color: #B4321F; font-size: 13px; margin: 6px 0 0">{{pwErr}}</p></sc-if>
+          </div>
+          <label style="display: flex; gap: 10px; align-items: center; font-size: 14px; color: #33433A">
+            <input type="checkbox" checked="" style="width: 20px; height: 20px; margin: 0; accent-color: #157A46">
+            Keep me logged in for 7 days
+          </label>
+          <button type="submit" class="btn btn-primary">Log in</button>
+        </form>
+        <div style="display: flex; align-items: center; gap: 12px; margin: 24px 0; color: #5C6B62; font-size: 13px">
+          <span style="flex: 1; height: 1px; background: #DCE4DD"></span>or<span style="flex: 1; height: 1px; background: #DCE4DD"></span>
+        </div>
+        <div style="background: #FFFFFF; border: 1px solid #DCE4DD; border-radius: 14px; padding: 14px 16px; display: flex; gap: 12px; align-items: center">
+          <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#157A46" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"></path></svg>
+          <span style="font-size: 14px; color: #33433A">At a bin? Step up to the camera. Face match logs you in there, no password needed.</span>
+        </div>
+        <p style="margin: 24px 0 0; font-size: 15px; color: #4A5A51; text-align: center">New to CashCan? <a href="Signup.dc.html">Create an account</a></p>
+      </sc-if>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { email: '', password: '', showPw: false, errs: {}, formError: '', done: false };
+  }
+  vEmail(v) {
+    if (!v.trim()) return 'Enter your email address.';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim())) return 'That email looks incomplete, for example name@example.com.';
+    return '';
+  }
+  renderVals() {
+    var s = this.state, self = this;
+    var setErr = function (k, v) { var e = Object.assign({}, s.errs); e[k] = v; return e; };
+    return {
+      email: s.email, password: s.password,
+      emailErr: s.errs.email || '', pwErr: s.errs.password || '', formError: s.formError,
+      emailCls: 'inp' + (s.errs.email ? ' bad' : ''), pwCls: 'inp' + (s.errs.password ? ' bad' : ''),
+      pwType: s.showPw ? 'text' : 'password',
+      pwToggleText: s.showPw ? 'Hide' : 'Show', pwToggleLabel: s.showPw ? 'Hide password' : 'Show password',
+      done: s.done, notDone: !s.done,
+      setEmail: function (e) { self.setState({ email: e.target.value, errs: setErr('email', ''), formError: '' }); },
+      setPassword: function (e) { self.setState({ password: e.target.value, errs: setErr('password', ''), formError: '' }); },
+      blurEmail: function () { if (self.state.email) self.setState({ errs: setErr('email', self.vEmail(self.state.email)) }); },
+      togglePw: function () { self.setState({ showPw: !self.state.showPw }); },
+      reset: function () { self.setState({ done: false, password: '' }); },
+      submit: function (e) {
+        e.preventDefault();
+        var errs = { email: self.vEmail(self.state.email), password: self.state.password ? '' : 'Enter your password.' };
+        if (errs.email || errs.password) { self.setState({ errs: errs }); return; }
+        if (self.state.password.length < 8) {
+          self.setState({ errs: {}, formError: "That email and password don't match an account. Check both, or create an account." });
+          return;
+        }
+        self.setState({ errs: {}, formError: '', done: true });
+      }
+    };
+  }
+}
+</script>
+</body>
+</html>
