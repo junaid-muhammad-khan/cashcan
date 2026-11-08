@@ -123,13 +123,13 @@ class BinController:
         self.outbox.flush(now)
 
         if self._votes is not None:         # collecting looks at the item that just settled
-            self._crop = self.gate.crop(frame)
+            self._crop = getattr(self.gate, "item_crop", self.gate.crop)(frame)
             self._votes.append(self.classifier.probs(self._crop))
             if len(self._votes) >= self.votes:
                 self._decide(now)
             return
         if self.gate.step(frame, now):
-            self._crop = self.gate.crop(frame)
+            self._crop = getattr(self.gate, "item_crop", self.gate.crop)(frame)
             self._votes = [self.classifier.probs(self._crop)]
             if len(self._votes) >= self.votes:
                 self._decide(now)

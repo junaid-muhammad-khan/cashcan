@@ -106,3 +106,8 @@ Add `--liveness` to ask for one random head turn at the bin as well; that stops 
 
 `--save-items DIR` keeps a photo of every item the classifier looks at, named `<time>_<bin>_<confidence>[_unsure]_<id>.jpg`. Hold a few of each kind of item, then sort the photos into
 `cans/`, `organics/` and `waste/` folders by what the item REALLY was. Those are training photos from this very camera (the model was trained on public photo sets, not on a bin camera).
+
+**What the gate and crop do (tuned from a real test where cans and bottles were called waste):** the gate fires when the biggest changed blob in the box covers at least ~1.2% of it (a held can or bottle is a small blob; the old 10% threshold
+meant it often never noticed them), ignores a person who fills most of the box, and the classifier is given a square crop tightly around the item, not the whole box. In a simulation (held-out can, bottle and waste photos pasted at webcam size on a plain desk),
+judging the whole box got 23% of cans and bottles right; the tight crop got about 62-68%; the same photos with no scene around them get 97%. The remaining gap is the difference between public photo sets and a webcam picture:
+**photos from your own camera (`--save-items`) are the way to close it.**

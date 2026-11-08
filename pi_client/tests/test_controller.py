@@ -261,3 +261,21 @@ def test_item_photos_are_saved_with_the_decision_in_the_name(tmp_path):
     c2.save_dir = str(tmp_path / "p2")
     c2.step(with_item(), 1.0)
     assert "_waste_" in next((tmp_path / "p2").glob("*.jpg")).name and "_unsure_" in next((tmp_path / "p2").glob("*.jpg")).name
+
+
+def test_item_crop_is_tight_square_around_the_item_and_a_person_filling_the_box_is_not_an_item():
+    g = ItemGate(warmup=0.5, settle=0.5)
+    for t in range(0, 12):
+        g.step(EMPTY, t / 10)
+    small = EMPTY.copy(); small[300:360, 300:360] = (20, 200, 230)        # a small item inside the box
+    fired = [g.step(small, 1.2 + t / 10) for t in range(0, 15)]
+    assert any(fired)
+    crop = g.item_crop(small)
+    assert crop.shape[0] == crop.shape[1] and crop.shape[0] < g.crop(small).shape[0] * 0.5   # square, much smaller than the whole box
+    cy, cx = crop.shape[0] // 2, crop.shape[1] // 2
+    assert tuple(crop[cy, cx]) == (20, 200, 230)                                            # and the item is in the middle of it
+    person = ItemGate(warmup=0.5, settle=0.5)
+    for t in range(0, 12):
+        person.step(EMPTY, t / 10)
+    body = np.full((480, 640, 3), (40, 40, 160), np.uint8)               # a torso: the whole box changes
+    assert not any(person.step(body, 1.2 + t / 10) for t in range(0, 20))
