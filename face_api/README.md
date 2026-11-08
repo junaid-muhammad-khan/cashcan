@@ -159,7 +159,7 @@ Real pipeline, threshold 0.45, 150 enrolled people (3 photos each), 757 later ph
 | 1:1 verification (2,199 pairs) | AUC 0.994, EER 1.18%, 99.36% accuracy at the best threshold; 95.0% at 0.45, because single-photo-vs-single-photo is stricter than matching against 3 enrolled photos |
 | Liveness turn measure vs InsightFace yaw (4,400 faces) | correlation 0.93; faces within 10 degrees of frontal pass "facing camera" 95-100% and "turned" 0%; faces 30+ degrees pass "turned" 98-100%, 20-30 degrees only 47% |
 
-This is celebrity press photos, a gallery of 150, and no spoof attempts. It says the model is sound, not that the bin
+Distance and lighting (simulated degradations, which fixes help and which gates were wrongly rejecting people): [`ROBUSTNESS.md`](ROBUSTNESS.md). This is celebrity press photos, a gallery of 150, and no spoof attempts. It says the model is sound, not that the bin
 will hit these numbers under venue lighting. Fairness across groups was not measured. Measure on the team with `tools.tune`.
 
 ## Training experiments (LFW)
