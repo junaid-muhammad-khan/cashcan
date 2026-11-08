@@ -53,6 +53,10 @@ def main(argv=None) -> int:
     g.add_argument("--teach-dir", metavar="DIR", help="where photos of taught items are kept, one folder per bin (default ~/.cashcan/taught_photos)")
     g.add_argument("--save-items", metavar="DIR", help="save a photo of every item the bin classifies, with the decision in the file name (to retrain on this camera)")
     g.add_argument("--lids", metavar="FILE.json", help='{"cans": {"open": "cmd", "close": "cmd"}, ...}; omit to simulate lids on stderr')
+    g.add_argument("--servos", metavar="BIN=CHIP:CH,...", help="drive hobby servos on hardware PWM, e.g. cans=0:0,waste=0:1 (see SERVO.md); a can opens the cans lid, no can leaves it shut")
+    g.add_argument("--servo-open-angle", type=float, default=90)
+    g.add_argument("--servo-closed-angle", type=float, default=0)
+    g.add_argument("--servo-dry-run", action="store_true", help="print servo pulses instead of moving anything")
     a = ap.parse_args(argv)
 
     ind = ConsoleIndicator()
@@ -91,7 +95,13 @@ def main(argv=None) -> int:
         if not a.bin_key:
             print("cashcan_pi: no --bin-key / CASHCAN_BIN_KEY: items will be sorted but the server will refuse the records", file=sys.stderr)
         roi = tuple(float(v) for v in a.item_roi.split(","))
-        driver = CommandLid(json.loads(open(a.lids).read())) if a.lids else SimulatedLid()
+        if a.servos and a.lids:
+            ap.error("use either --servos or --lids, not both")
+        if a.servos:
+            from .servo import make_lid
+            driver = make_lid(a.servos, a.servo_open_angle, a.servo_closed_angle, dry_run=a.servo_dry_run)
+        else:
+            driver = CommandLid(json.loads(open(a.lids).read())) if a.lids else SimulatedLid()
         classifier = OnnxClassifier(a.model) if a.model else TeachableClassifier(store=a.teach_file, photos=a.teach_dir)   # a named model file is used as is (no teaching)
         runner = BinController(loop, ItemGate(roi=roi), classifier, LidController(driver, a.lid_seconds),
                                Outbox(api, on_event=emit), emit, min_confidence=a.min_confidence, save_dir=a.save_items)
