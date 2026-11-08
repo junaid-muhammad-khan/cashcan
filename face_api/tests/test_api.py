@@ -131,3 +131,30 @@ def test_match_logs_similarity_and_threshold_but_the_response_keeps_its_shape(cl
     assert r["matched"] is True
     line = next(m for m in caplog.messages if m.startswith("match "))
     assert "matched=True" in line and "user=logme" in line and "similarity=" in line and "threshold=0.45" in line
+
+
+def test_a_face_can_replace_its_old_account_when_the_person_chooses_to(client):
+    from tests.conftest import png, WALLET
+    f = lambda who: [("frames", ("f.png", png(who), "image/png"))]
+    d = lambda uid, **kw: {"user_id": uid, "wallet": WALLET, "consent": "true", **kw}
+    assert client.post("/enroll", data=d("old"), files=f(31)).status_code == 200
+    r = client.post("/enroll", data=d("new"), files=f(31))
+    assert r.status_code == 409 and r.json()["detail"]["code"] == "face_already_registered"        # the page uses this to offer the button
+    ok = client.post("/enroll", data=d("new", replace="true"), files=f(31))
+    assert ok.status_code == 200 and ok.json()["replaced_old_account"] is True
+    assert client.post("/match", files={"frame": ("f.png", png(31), "image/png")}).json()["user_id"] == "new"   # one account holds the face now
+    assert client.delete("/users/old").status_code == 404                                              # the old one is gone
+
+
+def test_replace_is_refused_when_the_photos_match_two_accounts_or_nobody(client):
+    from tests.conftest import png, WALLET
+    d = lambda uid, **kw: {"user_id": uid, "wallet": WALLET, "consent": "true", **kw}
+    client.post("/enroll", data=d("a1"), files=[("frames", ("f.png", png(41), "image/png"))])
+    client.post("/enroll", data=d("a2"), files=[("frames", ("f.png", png(42), "image/png"))])
+    mixed = [("frames", ("f.png", png(41), "image/png")), ("frames", ("f.png", png(42), "image/png"))]
+    r = client.post("/enroll", data=d("n1", replace="true"), files=mixed)
+    assert r.status_code == 409 and r.json()["detail"]["code"] == "face_replace_refused"
+    half = [("frames", ("f.png", png(41), "image/png")), ("frames", ("f.png", png(43), "image/png"))]     # only one of two photos matches a1
+    assert client.post("/enroll", data=d("n2", replace="true"), files=half).status_code == 409
+    assert client.post("/enroll", data=d("n3", replace="true"), files=[("frames", ("f.png", png(44), "image/png"))]).status_code == 200  # nothing to replace: normal enroll
+    assert client.post("/match", files={"frame": ("f.png", png(41), "image/png")}).json()["user_id"] == "a1"       # a1 untouched by the refusals

@@ -63,6 +63,11 @@ class Accounts:
             {"s": sub, "id": uuid.uuid4().hex})
         return self.user_by_sub(sub)
 
+    def delete_profile(self, user_id: str) -> None:
+        """Remove an account's profile row (its face data is deleted separately). Interaction history is kept."""
+        self.db.sql(f"DELETE FROM {self.t}.users WHERE user_id = :u", {"u": user_id})
+        self.forget(user_id)
+
     def update_profile(self, user_id: str, username: str | None, pseudonym: str | None, wallet: str | None) -> None:
         if wallet is not None and not SOLANA_ADDR_RE.match(wallet):
             raise ValueError("That does not look like a Solana wallet address.")

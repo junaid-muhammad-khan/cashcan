@@ -9,7 +9,7 @@ import { Check, LogoMark } from "@/components/icons";
 import { checkPose, enroll, FaceApiError, getMe, matchFrame, userIdFromSub, type Me } from "@/lib/faceApi";
 import { useCamera } from "./useCamera";
 
-type Step = "loading" | "already" | "consent" | "camera" | "scan" | "saving" | "test" | "done";
+type Step = "loading" | "already" | "consent" | "camera" | "scan" | "saving" | "duplicate" | "test" | "done";
 
 // The face API accepts 1-3 enrollment frames (face_api/app/config.py); three angles give the best recall.
 // Each photo is taken only once the API sees the head really turned that way (POST /pose), so "left" is never a front photo.
@@ -41,6 +41,7 @@ export default function EnrollFlow() {
   const [captured, setCaptured] = useState(0);
   const [flash, setFlash] = useState(false);
   const [liveHint, setLiveHint] = useState("");
+  const [dupFrames, setDupFrames] = useState<Blob[] | null>(null);  // the photos that matched an existing account, kept so they can be re-sent with replace
   const [test, setTest] = useState<{ busy: boolean; score?: number; ok?: boolean; message?: string }>({ busy: false });
   const runId = useRef(0);
 
@@ -78,6 +79,50 @@ export default function EnrollFlow() {
     setError(null);
     setStep("camera");
     await cam.start();
+  }
+
+  // Send the photos. replace=true deletes the old account that holds this same face (the person chose that in the "duplicate" step).
+  const save = useCallback(async (frames: Blob[], replace: boolean, id: number) => {
+    try {
+      await enroll(frames, { token, userId: me?.user_id ?? userIdFromSub(user?.sub ?? "user"), wallet: wallet.trim(), poses: POSES.map((p) => p.want), replace });
+    } catch (e) {
+      const err = e as FaceApiError;
+      if (runId.current !== id) return;
+      if (err.status === 409 && /already enrolled/i.test(err.message)) { cam.stop(); try { sessionStorage.removeItem("cashcan.profile.v1"); } catch { /* ignore */ } router.replace("/dashboard"); return; }
+      if (err.code === "face_already_registered") { cam.stop(); setDupFrames(frames); setStep("duplicate"); return; }
+      setProblems(err.problems.map(friendlyProblem));
+      setError(err.status === 422 ? "Some pictures weren't clear enough to save. Check the tips below and scan again." : err.message);
+      setStep("camera");
+      if (cam.state !== "on") cam.start();
+      return;
+    }
+    if (runId.current !== id) return;
+    setDupFrames(null);
+    try { sessionStorage.removeItem("cashcan.profile.v1"); } catch { /* ignore */ }  // force a fresh profile (face_enrolled is now true)
+    setStep("test");
+    setTest({ busy: true });
+    await new Promise((r) => setTimeout(r, 900));
+    const f = await cam.capture();
+    try {
+      const res = f ? await matchFrame(f) : null;
+      const isMe = !!res?.matched && (!me?.user_id || res.user_id === me.user_id);
+      // The numbers stay in the log, not on screen: similarity from the face API, 45% is the match threshold (face_api MATCH_THRESHOLD).
+      console.info("[cashcan] face test", { matched: isMe, similarity: res?.score ?? null, threshold: 0.45, reason: res?.reason ?? null });
+      setTest({
+        busy: false, ok: isMe, score: res?.score != null ? Math.round(res.score * 100) : undefined,
+        message: isMe ? undefined : res?.message ?? "The test frame didn't match yet. Better light usually fixes it.",
+      });
+    } catch (e) {
+      setTest({ busy: false, ok: false, message: (e as Error).message });
+    }
+  }, [cam, me, router, token, user, wallet]);
+
+  async function replaceOldAccount() {
+    if (!dupFrames) return;
+    const id = ++runId.current;
+    setError(null);
+    setStep("saving");
+    await save(dupFrames, true, id);
   }
 
   const runScan = useCallback(async () => {
@@ -122,39 +167,13 @@ export default function EnrollFlow() {
     }
     setLiveHint("");
     setStep("saving");
-    try {
-      await enroll(frames, { token, userId: me?.user_id ?? userIdFromSub(user?.sub ?? "user"), wallet: wallet.trim(), poses: POSES.map((p) => p.want) });
-    } catch (e) {
-      const err = e as FaceApiError;
-      if (runId.current !== id) return;
-      if (err.status === 409 && /already enrolled/i.test(err.message)) { cam.stop(); try { sessionStorage.removeItem("cashcan.profile.v1"); } catch { /* ignore */ } router.replace("/dashboard"); return; }
-      setProblems(err.problems.map(friendlyProblem));
-      setError(err.status === 422 ? "Some pictures weren't clear enough to save. Check the tips below and scan again." : err.message);
-      setStep("camera");
-      return;
-    }
-    if (runId.current !== id) return;
-    try { sessionStorage.removeItem("cashcan.profile.v1"); } catch { /* ignore */ }  // force a fresh profile (face_enrolled is now true)
-    setStep("test");
-    setTest({ busy: true });
-    await new Promise((r) => setTimeout(r, 900));
-    const f = await cam.capture();
-    try {
-      const res = f ? await matchFrame(f) : null;
-      const isMe = !!res?.matched && (!me?.user_id || res.user_id === me.user_id);
-      // The numbers stay in the log, not on screen: similarity from the face API, 45% is the match threshold (face_api MATCH_THRESHOLD).
-      console.info("[cashcan] face test", { matched: isMe, similarity: res?.score ?? null, threshold: 0.45, reason: res?.reason ?? null });
-      setTest({
-        busy: false, ok: isMe, score: res?.score != null ? Math.round(res.score * 100) : undefined,
-        message: isMe ? undefined : res?.message ?? "The test frame didn't match yet. Better light usually fixes it.",
-      });
-    } catch (e) {
-      setTest({ busy: false, ok: false, message: (e as Error).message });
-    }
-  }, [cam, me, token, user, wallet]);
+    await save(frames, false, id);
+  }, [cam, save]);
 
   function restart() {
     runId.current++;
+    setDupFrames(null);
+    setError(null);
     setCaptured(0);
     setTest({ busy: false });
     setStep("camera");
@@ -211,6 +230,23 @@ export default function EnrollFlow() {
             <Link href="/dashboard" className="btn btn-primary">Go to your dashboard</Link>
             <Link href="/account" className="btn btn-ghost">Profile</Link>
           </div>
+        </div>
+      )}
+
+      {step === "duplicate" && (
+        <div className="success-panel en-fade" role="alert">
+          <h1>This face is already registered</h1>
+          <p className="sub">Your face matches another CashCan account. One face can belong to only one account.</p>
+          <p className="sub" style={{ marginTop: 10 }}>
+            If that old account is yours, you can <b>delete it and use this account as your main one</b>. The old account&apos;s saved face data and profile
+            will be permanently removed, and rewards will go to the wallet on this account from now on.
+          </p>
+          {error && <div className="alert" style={{ marginTop: 14 }}>{error}</div>}
+          <div className="cta-row" style={{ marginTop: 22 }}>
+            <button type="button" className="btn btn-primary" onClick={replaceOldAccount}>Delete the old account and use this one</button>
+            <button type="button" className="btn btn-ghost" onClick={restart}>Scan again</button>
+          </div>
+          <p className="sub" style={{ marginTop: 14, fontSize: 13 }}>Not your face? Don&apos;t delete anything; scan again or contact the CashCan team.</p>
         </div>
       )}
 

@@ -55,3 +55,7 @@ MOUNT_PREFIX = os.environ.get("MOUNT_PREFIX", "/face-api")
 ENROLL_FRONT_MAX = 0.10     # |turn| at or below this is "straight"
 ENROLL_TURN_MIN = 0.16      # at least this much for "left"/"right"
 ENROLL_TURN_MAX = 0.55      # beyond this the face is in profile and no longer recognisable
+
+# Replacing an old account with the same face (destructive): every photo must match that one account, and on average at least this well
+# (stricter than MATCH_THRESHOLD; strangers scored 21% at most in the tests, real people 58-83%).
+REPLACE_MIN_SIMILARITY = float(os.environ.get("REPLACE_MIN_SIMILARITY", "0.50"))

@@ -115,7 +115,7 @@ def create_app(engine: FaceEngine | None = None, store: FaceStore | None = None,
 
     @app.post("/enroll")
     async def enroll(user_id: str = Form(""), wallet: str = Form(""), consent: bool = Form(False),
-                     frames: list[UploadFile] = File(...), poses: str = Form(""),
+                     frames: list[UploadFile] = File(...), poses: str = Form(""), replace: bool = Form(False),
                      authorization: str | None = Header(None)):
         if state["verifier"] is not None:  # signed-in mode: identity comes from the token, never from the form
             user = current_user(bearer(authorization))
@@ -157,17 +157,37 @@ def create_app(engine: FaceEngine | None = None, store: FaceStore | None = None,
 
         # One face, one account: a face that already matches somebody else is refused, otherwise two accounts would hold the
         # same face (bin lookups become ambiguous, and one person could collect rewards under several wallets).
+        # The person may choose to REPLACE the old account (replace=true): their old face data and profile are deleted and this
+        # account becomes the main one. Only allowed when every photo clearly matches exactly one old account.
         owners, gallery = state["store"].all_embeddings()
+        clash: dict[str, list[float]] = {}
         if len(owners):
             for emb in embeddings:
                 sims = gallery @ emb
                 best = int(np.argmax(sims))
                 if float(sims[best]) >= config.MATCH_THRESHOLD and owners[best] != user_id:
-                    raise HTTPException(409, "This face is already registered to another account.")
+                    clash.setdefault(owners[best], []).append(float(sims[best]))
+        replaced = False
+        if clash:
+            if not replace:
+                raise HTTPException(409, {"message": "This face is already registered to another account.", "code": "face_already_registered"})
+            old = next(iter(clash))
+            if len(clash) != 1 or len(clash[old]) != len(embeddings):
+                raise HTTPException(409, {"message": "These photos do not clearly match one single account, so the old one cannot be replaced automatically.",
+                                          "code": "face_replace_refused"})
+            if float(np.mean(clash[old])) < config.REPLACE_MIN_SIMILARITY:
+                raise HTTPException(409, {"message": "The match with the old account is not strong enough to replace it. Try again facing the camera in good light.",
+                                          "code": "face_replace_refused"})
+            log.warning("face replace old_user=%s new_user=%s mean_similarity=%.3f frames=%d", old, user_id, float(np.mean(clash[old])), len(embeddings))
+            state["store"].delete_user(old)
+            state["sessions"].close_user(old)
+            if state["accounts"] is not None:
+                state["accounts"].delete_profile(old)
+            replaced = True
         state["store"].add_user(user_id, wallet, embeddings)
         if state["accounts"] is not None:
             state["accounts"].forget(user_id)
-        return {"enrolled": True, "user_id": user_id, "frames_used": len(embeddings), "problems": problems}
+        return {"enrolled": True, "user_id": user_id, "frames_used": len(embeddings), "problems": problems, "replaced_old_account": replaced}
 
     @app.post("/pose")
     async def pose(frame: UploadFile = File(...)):

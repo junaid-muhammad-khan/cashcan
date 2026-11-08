@@ -41,6 +41,10 @@ class FakeDB:
         if "FROM workspace.cashcan_app.users u WHERE u.auth0_sub" in stmt:
             u = self.users.get(p["s"])
             return [[u["user_id"], p["s"], u.get("username"), u.get("pseudonym"), u.get("sol_wallet"), "false"]] if u else []
+        if stmt.startswith("DELETE FROM workspace.cashcan_app.users"):
+            for sub in [k for k, u in self.users.items() if u["user_id"] == p["u"]]:
+                del self.users[sub]
+            return []
         if stmt.startswith("MERGE INTO workspace.cashcan_app.users"):
             self.users.setdefault(p["s"], {"user_id": p["id"]})
             return []
@@ -108,12 +112,13 @@ def test_profile_wallet_validated(env):
 def test_enroll_takes_identity_from_token_not_form(env):
     c, _, _ = env
     files = [("frames", ("f.png", png(7), "image/png"))]
+    # signed in, no wallet yet: allowed (the wallet is added on the profile page afterwards); identity comes from the token, not the form
     r = c.post("/enroll", data={"consent": "true", "user_id": "someone-else", "wallet": WALLET}, files=files, headers=auth())
-    assert r.status_code == 400 and "wallet" in r.text            # profile has no wallet yet
-    c.put("/me", json={"sol_wallet": WALLET}, headers=auth())
-    r = c.post("/enroll", data={"consent": "true", "user_id": "someone-else"}, files=files, headers=auth())
     uid = c.get("/me", headers=auth()).json()["user_id"]
     assert r.status_code == 200 and r.json()["user_id"] == uid != "someone-else"
+    assert c.store.wallet(uid) == ""                      # the form's wallet was ignored too
+    c.put("/me", json={"sol_wallet": WALLET}, headers=auth())
+    assert c.store.wallet(uid) == WALLET                  # saving the wallet later copies it to the face store
     assert c.post("/enroll", data={"consent": "true"}, files=files).status_code == 401
 
 
@@ -193,3 +198,19 @@ def test_returning_user_costs_one_cached_query_and_writes_forget_it(env):
 def test_warm_loads_the_engine(env):
     c, _, _ = env
     assert c.get("/warm").json() == {"warm": True}
+
+
+def test_replacing_an_old_account_also_deletes_its_profile(env):
+    c, db, _ = env
+    other_sub = "auth0|second"
+    files = [("frames", ("f.png", png(7), "image/png"))]
+    c.put("/me", json={"sol_wallet": WALLET}, headers=auth())
+    c.post("/enroll", data={"consent": "true"}, files=files, headers=auth())
+    old_id = c.get("/me", headers=auth()).json()["user_id"]
+    c.get("/me", headers=auth(sub=other_sub)); c.put("/me", json={"sol_wallet": WALLET}, headers=auth(sub=other_sub))
+    r = c.post("/enroll", data={"consent": "true"}, files=files, headers=auth(sub=other_sub))
+    assert r.status_code == 409 and r.json()["detail"]["code"] == "face_already_registered"
+    ok = c.post("/enroll", data={"consent": "true", "replace": "true"}, files=files, headers=auth(sub=other_sub))
+    assert ok.status_code == 200 and ok.json()["replaced_old_account"] is True
+    assert "auth0|abc" not in db.users and old_id not in [u["user_id"] for u in db.users.values()]    # the old profile row is gone
+    assert not c.store.user_exists(old_id)                                                                # and its face data

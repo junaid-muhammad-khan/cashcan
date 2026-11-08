@@ -16,7 +16,7 @@ export interface Me {
 }
 
 export class FaceApiError extends Error {
-  constructor(message: string, public status: number, public problems: string[] = []) {
+  constructor(message: string, public status: number, public problems: string[] = [], public code?: string) {
     super(message);
   }
 }
@@ -34,7 +34,7 @@ async function call<T>(path: string, init: RequestInit, token?: string): Promise
   if (!res.ok) {
     const d = body?.detail;
     const message = typeof d === "string" ? d : d?.message ?? `The face service returned an error (${res.status}).`;
-    throw new FaceApiError(message, res.status, Array.isArray(d?.problems) ? d.problems : []);
+    throw new FaceApiError(message, res.status, Array.isArray(d?.problems) ? d.problems : [], typeof d?.code === "string" ? d.code : undefined);
   }
   return body as T;
 }
@@ -53,11 +53,12 @@ export function checkPose(frame: Blob) {
   return call<PoseResult>("/pose", { method: "POST", body: fd });
 }
 
-export function enroll(frames: Blob[], opts: { token?: string; userId: string; wallet: string; poses?: string[] }) {
+export function enroll(frames: Blob[], opts: { token?: string; userId: string; wallet: string; poses?: string[]; replace?: boolean }) {
   const fd = new FormData();
   fd.set("consent", "true");
   fd.set("user_id", opts.userId); // ignored by the API when Auth0 is on
   fd.set("wallet", opts.wallet);
+  if (opts.replace) fd.set("replace", "true"); // delete the old account that holds this same face and use this one
   if (opts.poses) fd.set("poses", opts.poses.join(",")); // the API checks each photo really shows its direction
   frames.forEach((f, i) => fd.append("frames", f, `frame${i + 1}.jpg`));
   return call<{ enrolled: boolean; frames_used: number; problems: string[] }>("/enroll", { method: "POST", body: fd }, opts.token);
