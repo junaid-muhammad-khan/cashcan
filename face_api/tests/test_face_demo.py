@@ -18,7 +18,7 @@ def write(tmp_path, folder, name, pid, **kw):
 def args(tmp_path, **kw):
     base = dict(db=str(tmp_path / "d.db"), name="me", images=None, camera="0", count=5, interval=1.0,
                 no_window=True, threshold=config.MATCH_THRESHOLD, margin=config.AMBIGUITY_MARGIN,
-                mine=None, others=None)
+                mine=None, others=None, add=False)
     return Namespace(**{**base, **kw})
 
 
@@ -120,3 +120,33 @@ def test_gate_overrides_let_a_soft_webcam_through(monkeypatch):
     assert not _report(sharp=20.0).usable
     fd.apply_gate_overrides(Namespace(min_sharpness=15.0, min_face=None, min_det=None))
     assert config.MIN_SHARPNESS == 15.0 and _report(sharp=20.0).usable
+
+
+def test_enroll_add_extends_the_same_person_and_refuses_a_second_name_trap(tmp_path, capsys):
+    from app.store import FaceStore
+
+    store = FaceStore(str(tmp_path / "d.db"))
+    enroll_me(tmp_path, store, pid=1)                       # 3 templates
+    for i in range(3):
+        write(tmp_path, "cam", f"c{i}.png", 1)
+    add = args(tmp_path, images=[str(tmp_path / "cam")], add=True)
+    assert fd.cmd_enroll(add, FakeEngine(), store) == 0
+    assert len(store.embeddings_for("me")) == 6 and store.all_embeddings()[0].count("me") == 6   # still ONE person
+    # enrolling again without --add is refused and explains the ambiguity trap
+    assert fd.cmd_enroll(args(tmp_path, images=[str(tmp_path / "cam")]), FakeEngine(), store) == 1
+    assert "ambiguous" in capsys.readouterr().err
+    # --add for someone who is not saved yet is refused
+    assert fd.cmd_enroll(args(tmp_path, name="nobody", images=[str(tmp_path / "cam")], add=True), FakeEngine(), store) == 1
+
+
+def test_store_add_embeddings_has_a_cap(tmp_path):
+    import pytest
+    from app.store import FaceStore
+
+    store = FaceStore(str(tmp_path / "s.db"))
+    store.add_user("me", "W", [np.ones(512, np.float32)] * 3)
+    assert store.add_embeddings("me", [np.ones(512, np.float32)] * 2) == 5
+    with pytest.raises(ValueError):
+        store.add_embeddings("me", [np.ones(512, np.float32)] * 20)
+    with pytest.raises(KeyError):
+        store.add_embeddings("ghost", [np.ones(512, np.float32)])

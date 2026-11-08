@@ -1,6 +1,7 @@
 """Try the face recognition on your own laptop (macOS or Linux): save your face, then test it.
 
   python -m tools.face_demo enroll   --name junaid                 # webcam, 5 frames
+  python -m tools.face_demo enroll   --name junaid --add           # add webcam frames to the same person (raises scores)
   python -m tools.face_demo enroll   --name junaid --images ~/me/*.jpg
   python -m tools.face_demo identify --image photo1.jpg group.png  # who is in these pictures?
   python -m tools.face_demo identify --webcam                      # live; press q to quit
@@ -151,8 +152,14 @@ def largest_usable(engine: FaceEngine, img: np.ndarray) -> FaceResult:
 # ---------------------------------------------------------------- commands
 def cmd_enroll(a, engine, store) -> int:
     name = a.name
-    if store.user_exists(name):
-        print(f"'{name}' is already saved. Run `delete --name {name}` first to re-enroll.", file=sys.stderr)
+    exists = store.user_exists(name)
+    if a.add and not exists:
+        print(f"'{name}' is not saved yet; run enroll without --add first.", file=sys.stderr)
+        return 1
+    if exists and not a.add:
+        print(f"'{name}' is already saved. To add webcam templates to the same person use `enroll --name {name} --add` "
+              f"(do NOT enroll the same person under a second name: two similar names are rejected as ambiguous). "
+              f"To start over run `delete --name {name}`.", file=sys.stderr)
         return 1
     embs: list[np.ndarray] = []
     if a.images:
@@ -166,8 +173,17 @@ def cmd_enroll(a, engine, store) -> int:
     if len(embs) < config.MIN_ENROLL_FRAMES:
         print(f"Only {len(embs)} usable frame(s); need {config.MIN_ENROLL_FRAMES}. Nothing saved.", file=sys.stderr)
         return 1
-    store.add_user(name, PLACEHOLDER_WALLET, embs[: config.MAX_ENROLL_FRAMES])
-    print(f"Saved '{name}' with {min(len(embs), config.MAX_ENROLL_FRAMES)} face templates -> {a.db}")
+    embs = embs[: config.MAX_ENROLL_FRAMES]
+    if a.add:
+        try:
+            total = store.add_embeddings(name, embs)
+        except ValueError as e:
+            print(e, file=sys.stderr)
+            return 1
+        print(f"Added {len(embs)} templates to '{name}' (now {total}) -> {a.db}")
+        return 0
+    store.add_user(name, PLACEHOLDER_WALLET, embs)
+    print(f"Saved '{name}' with {len(embs)} face templates -> {a.db}")
     return 0
 
 
@@ -397,6 +413,7 @@ def main(argv=None) -> int:
     e = sub.add_parser("enroll"); e.add_argument("--name", required=True)
     e.add_argument("--images", nargs="+"); e.add_argument("--count", type=int, default=5)
     e.add_argument("--camera", default="0"); e.add_argument("--interval", type=float, default=1.0)
+    e.add_argument("--add", action="store_true", help="add templates to a person who is already saved (best way to improve scores)")
     e.add_argument("--no-window", action="store_true"); e.set_defaults(fn=cmd_enroll)
 
     i = sub.add_parser("identify"); i.add_argument("--image", nargs="+"); i.add_argument("--webcam", action="store_true")

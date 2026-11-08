@@ -26,6 +26,23 @@ First request downloads the InsightFace `buffalo_s` model (~125 MB) to `~/.insig
 
 Settings are in `app/config.py` (`MATCH_THRESHOLD` 0.45, `AMBIGUITY_MARGIN` 0.05, quality gates).
 
+## What recognises a face (the models)
+Only two small neural networks decide who someone is. Both come pretrained from InsightFace's `buffalo_s` pack (we never trained
+them; file sizes and parameter counts read from the model files):
+
+| Step | What | Size |
+|---|---|---|
+| 1. Find the face | `det_500m`: a lightweight face detector (SCRFD-style) that also returns 5 landmarks (eyes, nose, mouth corners) | 2.5 MB, 0.63 M parameters |
+| 2. Align | plain geometry: rotate/scale the face to a standard 112x112 crop using the landmarks | no network |
+| 3. Turn the face into numbers | `w600k_mbf`: MobileFaceNet trained with an ArcFace-style loss (InsightFace's WebFace600K data) -> a 512-number template | 13.6 MB, 3.40 M parameters |
+| 4. Compare | **no network**: cosine similarity (a dot product) against the stored templates, then the 45% threshold and the 5-point ambiguity rule | maths |
+| Liveness | **no network**: the nose's sideways offset from the eyes, from the 5 landmarks | geometry |
+| Blur / size check | **no network**: Laplacian variance of the 112x112 face, and the face size | classic image processing |
+
+The pack also contains three more networks (3D landmarks/pose 35.9 M parameters, 106 landmarks, gender/age) that are loaded in the
+default mode but not used for any decision. The garbage classifier in `ml/` is a separate model (MobileNetV2).
+The pretrained weights are non-commercial research only.
+
 ## Liveness (head-turn challenge)
 After a face is recognised, `/match` returns a random challenge ("turn your head to your left/right") instead of a
 session. The bin streams frames to `/liveness/{id}/frame`; only a pass returns the session token that payouts need.
@@ -65,6 +82,14 @@ python -m tools.face_demo evaluate --name junaid --mine ~/test/me --others ~/tes
 python -m tools.face_demo list
 python -m tools.face_demo delete --name junaid
 ```
+**Make the scores higher (add webcam templates).** Templates from a single studio photo match live webcam frames at only about
+50-65% (measured on a real MacBook webcam: median 55%, max 66%, against the 45% line), while variants of the same photo match at 99%.
+Add real webcam frames to the **same person**:
+`python -m tools.face_demo enroll --name junaid --add` (follow the prompts: straight, left, right, chin up), then
+`python -m tools.databricks_sync push --name junaid --replace`. Do not enroll the same person under a second name: two similar
+names are rejected as "ambiguous" (verified: a 0.90 match is refused when the same person exists under two names).
+`--replace` swaps the person's templates in Databricks and keeps a real wallet that is already stored there.
+
 **If nothing seems to happen:** the terminal now prints each stage (model loading, camera opened, frames arriving) and ends with
 `Stopped: <reason>`. The video window can open behind other windows; if you cannot find it, press Ctrl+C and run
 `python -m tools.face_demo identify --webcam --no-window --debug`, which prints everything as text. The line

@@ -81,6 +81,10 @@ class DatabricksFaces:
     def user_exists(self, user_id: str) -> bool:
         return bool(self.sql(f"SELECT 1 FROM {self.schema}.users WHERE user_id = :u", {"u": user_id}))
 
+    def get_wallet(self, user_id: str) -> str | None:
+        rows = self.sql(f"SELECT wallet FROM {self.schema}.users WHERE user_id = :u", {"u": user_id})
+        return rows[0][0] if rows else None
+
     def push_user(self, user_id: str, wallet: str, embeddings: list[np.ndarray]) -> int:
         """Store a person's consented templates. Refuses duplicates; delete first to re-enroll."""
         if self.user_exists(user_id):

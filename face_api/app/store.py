@@ -40,6 +40,18 @@ class FaceStore:
                 [(user_id, e.astype(np.float32).tobytes()) for e in embeddings],
             )
 
+    def add_embeddings(self, user_id: str, embeddings: list[np.ndarray], max_total: int = 20) -> int:
+        """Add more templates to an existing person (e.g. webcam frames next to a studio photo). Returns the new total."""
+        if not self.user_exists(user_id):
+            raise KeyError(user_id)
+        have = len(self.embeddings_for(user_id))
+        if have + len(embeddings) > max_total:
+            raise ValueError(f"'{user_id}' has {have} templates; adding {len(embeddings)} would exceed {max_total}.")
+        with self._db:
+            self._db.executemany("INSERT INTO embeddings(user_id, vec) VALUES (?,?)",
+                                 [(user_id, e.astype(np.float32).tobytes()) for e in embeddings])
+        return have + len(embeddings)
+
     def delete_user(self, user_id: str) -> bool:
         with self._db:
             cur = self._db.execute("DELETE FROM users WHERE user_id=?", (user_id,))

@@ -186,3 +186,8 @@ def test_delete_many_deletes_templates_and_users_with_bound_ids():
     deletes = [(s, p) for s, p in rec.stmts if s.startswith("DELETE")]
     assert [("face_templates" in s) for s, _ in deletes] == [True, False] and deletes[0][1] == {"d0": "a", "d1": "b", "d2": "c"}
     assert d.delete_many([]) == 0
+
+
+def test_get_wallet_returns_none_for_unknown_user(db):
+    d, fake = db
+    assert d.get_wallet("nobody") is None
