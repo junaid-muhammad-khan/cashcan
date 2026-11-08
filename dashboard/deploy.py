@@ -1,6 +1,6 @@
 """Create or update the CashCan AI/BI dashboard via the Lakeview REST API, then publish.
 
-  python deploy.py [--schema cashcan_demo|cashcan] [--id DASHBOARD_ID]
+  python deploy.py [--schema cashcan_app] [--id DASHBOARD_ID]
 
 Uses DATABRICKS_SERVER_HOSTNAME / DATABRICKS_TOKEN / DATABRICKS_WAREHOUSE_ID from the env.
 """
@@ -21,13 +21,13 @@ def call(method, path, body=None, params=None):
         raise SystemExit(f"{method} {path} -> {e.code}: {e.read().decode()}")
 
 ap = argparse.ArgumentParser()
-ap.add_argument("--schema", default="cashcan_demo")
+ap.add_argument("--schema", default="cashcan_app")
 ap.add_argument("--catalog", default="workspace")
 ap.add_argument("--id")
 ap.add_argument("--parent", default=None)
 a = ap.parse_args()
 
-body = {"display_name": "CashCan — Bin Activity", "warehouse_id": WH,
+body = {"display_name": "CashCan — City Activity", "warehouse_id": WH,
         "serialized_dashboard": json.dumps(build_dashboard.dashboard)}
 params = {"dataset_catalog": a.catalog, "dataset_schema": a.schema}
 if a.id:

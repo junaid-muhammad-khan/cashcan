@@ -5,7 +5,7 @@ AI/BI (Lakeview) dashboard over `activity_log` — the table `backend/src/activi
 **Live (demo data):** https://dbc-38b8f0fd-7cd5.cloud.databricks.com/sql/dashboardsv3/01f1db16c4d811588d4df6a43f9d2aea/published
 
 ## What it shows
-- KPIs: items sorted (daily sparkline), contamination rate, devnet SOL paid, payout rate
+
 - Items per day by bin (cans / organics / waste) and share by bin
 - Contamination rate by item — where people sort wrong
 - Daily payout-outcome mix: Paid vs. the anti-abuse gates (low confidence, cameras disagree, not reward-eligible)
