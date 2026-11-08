@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>CashCan — Sign up</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Space+Grotesk:wght@500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#F4F6F1}
+a{color:#157A46}a:hover{color:#0E5A33}
+.blob{position:absolute;border-radius:50%;filter:blur(70px);pointer-events:none}
+.b1{animation:drift1 16s ease-in-out infinite}
+.b2{animation:drift2 20s ease-in-out infinite}
+@keyframes drift1{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(80px,-40px) scale(1.15)}}
+@keyframes drift2{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(-70px,50px) scale(1.2)}}
+.intro{animation:intro .8s cubic-bezier(.2,.7,.2,1) both}
+@keyframes intro{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:none}}
+.inp{width:100%;min-height:48px;box-sizing:border-box;padding:0 14px;border-radius:12px;border:1px solid #C5D0C8;background:#FFFFFF;font:16px Inter,system-ui,sans-serif;color:#0F1F17;transition:border-color .15s ease,box-shadow .15s ease}
+.inp:focus{outline:none;border-color:#157A46;box-shadow:0 0 0 3px rgba(21,122,70,.18)}
+.inp.bad{border-color:#B4321F}
+.btn{min-height:48px;border-radius:999px;border:0;font:600 16px Inter,system-ui,sans-serif;cursor:pointer;transition:background-color .2s ease}
+.btn-primary{background:#157A46;color:#FFFFFF}.btn-primary:hover{background:#0E5A33}
+.seg{height:6px;flex:1;border-radius:99px;transition:background-color .3s ease}
+@media (prefers-reduced-motion: reduce){.b1,.b2,.intro{animation:none}}
+@media (max-width: 860px){.aside{display:none !important}.mobile-logo{display:flex !important}.split{grid-template-columns:minmax(0,1fr) !important}}
+</style>
+</helmet>
+<div class="split" style="min-height: 100vh; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); font-family: Inter, system-ui, sans-serif; color: #0F1F17">
+
+  <aside class="aside" style="position: relative; overflow: hidden; background: #0F1F17; color: #E6EEE9; padding: 40px 56px; display: flex; flex-direction: column">
+    <div aria-hidden="true" class="blob b1" style="width: 420px; height: 420px; background: #2BB673; opacity: .3; left: -120px; top: -80px"></div>
+    <div aria-hidden="true" class="blob b2" style="width: 360px; height: 360px; background: #E3B23C; opacity: .2; right: -100px; bottom: -80px"></div>
+    <a href="Main.dc.html" style="position: relative; display: flex; align-items: center; gap: 10px; color: #FFFFFF; text-decoration: none">
+      <svg aria-hidden="true" width="30" height="30" viewBox="0 0 32 32" fill="none" stroke="#5FD79A" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 9h18l-2 18H9z"></path><path d="M5 9h22"></path><path d="M12 9V6h8v3"></path><path d="M13 15c1.5-1.5 4.5-1.5 6 0M16 14v8"></path></svg>
+      <span style="font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 22px; letter-spacing: -0.02em">cashcan</span>
+    </a>
+    <div style="position: relative; margin: auto 0; max-width: 460px">
+      <h2 class="intro" style="font-family: 'Space Grotesk', sans-serif; font-size: 44px; line-height: 1.08; letter-spacing: -0.03em; margin: 0; color: #FFFFFF">Every item you sort right pays you back.</h2>
+      <p class="intro" style="font-size: 17px; line-height: 1.6; color: #B9C7BF; margin: 16px 0 0; animation-delay: .08s">Three steps and the next CashCan bin knows where to send your rewards.</p>
+      <ol style="list-style: none; margin: 36px 0 0; padding: 0; display: flex; flex-direction: column; gap: 12px">
+        <sc-for list="{{journey}}" as="j" hint-placeholder-count="3">
+          <li style="display: flex; gap: 14px; align-items: center; background: {{j.bg}}; border: 1px solid {{j.border}}; border-radius: 14px; padding: 14px 16px; transition: background-color .3s ease, border-color .3s ease">
+            <span style="width: 30px; height: 30px; border-radius: 50%; background: {{j.dot}}; color: {{j.dotText}}; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; flex-shrink: 0">{{j.mark}}</span>
+            <span><span style="display: block; font-size: 15px; font-weight: 600; color: #FFFFFF">{{j.title}}</span><span style="display: block; font-size: 13px; color: #8FB5A0">{{j.sub}}</span></span>
+          </li>
+        </sc-for>
+      </ol>
+    </div>
+  </aside>
+
+  <main style="display: flex; align-items: center; justify-content: center; padding: 48px 24px; background: #F4F6F1">
+    <div style="width: 100%; max-width: 440px">
+      <a class="mobile-logo" href="Main.dc.html" style="display: none; align-items: center; gap: 10px; color: #0F1F17; text-decoration: none; margin-bottom: 32px">
+        <svg aria-hidden="true" width="30" height="30" viewBox="0 0 32 32" fill="none" stroke="#157A46" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 9h18l-2 18H9z"></path><path d="M5 9h22"></path><path d="M12 9V6h8v3"></path><path d="M13 15c1.5-1.5 4.5-1.5 6 0M16 14v8"></path></svg>
+        <span style="font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 22px">cashcan</span>
+      </a>
+
+      <sc-if value="{{done}}" hint-placeholder-val="{{ false }}">
+        <div style="background: #FFFFFF; border: 1px solid #DCE4DD; border-radius: 20px; padding: 32px">
+          <div style="width: 56px; height: 56px; border-radius: 50%; background: #E3F5EB; display: flex; align-items: center; justify-content: center"><svg aria-hidden="true" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#157A46" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"></path></svg></div>
+          <h1 style="font-family: 'Space Grotesk', sans-serif; font-size: 30px; letter-spacing: -0.02em; margin: 18px 0 0">Welcome to CashCan, {{firstName}}.</h1>
+          <p style="color: #4A5A51; font-size: 15px; line-height: 1.55; margin: 8px 0 0">{{doneText}}</p>
+          <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 22px">
+            <a href="Main.dc.html" style="display: inline-flex; align-items: center; min-height: 48px; padding: 0 22px; border-radius: 999px; background: #157A46; color: #FFFFFF; text-decoration: none; font-weight: 600">Go to home</a>
+            <button type="button" class="btn" onClick="{{reset}}" style="background: #FFFFFF; color: #0F1F17; border: 1px solid #DCE4DD; padding: 0 22px">Back to the form</button>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{notDone}}" hint-placeholder-val="{{ true }}">
+        <h1 style="font-family: 'Space Grotesk', sans-serif; font-size: 36px; letter-spacing: -0.03em; margin: 0">Create your account</h1>
+        <p style="color: #4A5A51; font-size: 16px; margin: 10px 0 0">Free to join. Earn devnet SOL every time you sort right.</p>
+        <form onSubmit="{{submit}}" novalidate="" style="display: flex; flex-direction: column; gap: 18px; margin-top: 28px">
+          <div>
+            <label for="su-name" style="display: block; font-size: 14px; font-weight: 600; margin-bottom: 6px">Name</label>
+            <input id="su-name" type="text" autocomplete="name" class="{{f.name.cls}}" value="{{v.name}}" onChange="{{f.name.set}}" onBlur="{{f.name.blur}}">
+            <sc-if value="{{f.name.err}}" hint-placeholder-val="{{ false }}"><p style="color: #B4321F; font-size: 13px; margin: 6px 0 0">{{f.name.err}}</p></sc-if>
+          </div>
+          <div>
+            <label for="su-email" style="display: block; font-size: 14px; font-weight: 600; margin-bottom: 6px">Email</label>
+            <input id="su-email" type="email" autocomplete="email" class="{{f.email.cls}}" value="{{v.email}}" onChange="{{f.email.set}}" onBlur="{{f.email.blur}}">
+            <sc-if value="{{f.email.err}}" hint-placeholder-val="{{ false }}"><p style="color: #B4321F; font-size: 13px; margin: 6px 0 0">{{f.email.err}}</p></sc-if>
+          </div>
+          <div>
+            <label for="su-pw" style="display: block; font-size: 14px; font-weight: 600; margin-bottom: 6px">Password <span style="font-weight: 400; color: #5C6B62">(8+ characters)</span></label>
+            <div style="position: relative">
+              <input id="su-pw" type="{{pwType}}" autocomplete="new-password" class="{{f.password.cls}}" value="{{v.password}}" onChange="{{f.password.set}}" onBlur="{{f.password.blur}}" style="padding-right: 64px">
+              <button type="button" aria-label="{{pwToggleLabel}}" onClick="{{togglePw}}" style="position: absolute; right: 6px; top: 6px; min-height: 36px; min-width: 52px; border: 0; background: transparent; color: #157A46; font: 600 14px Inter, sans-serif; cursor: pointer; border-radius: 8px">{{pwToggleText}}</button>
+            </div>
+            <div aria-hidden="true" style="display: flex; gap: 6px; margin-top: 8px">
+              <sc-for list="{{segs}}" as="sg" hint-placeholder-count="4"><span class="seg" style="background: {{sg.c}}"></span></sc-for>
+            </div>
+            <p style="font-size: 12px; color: #5C6B62; margin: 6px 0 0">{{strengthText}}</p>
+            <sc-if value="{{f.password.err}}" hint-placeholder-val="{{ false }}"><p style="color: #B4321F; font-size: 13px; margin: 6px 0 0">{{f.password.err}}</p></sc-if>
+          </div>
+          <div>
+            <label for="su-wallet" style="display: block; font-size: 14px; font-weight: 600; margin-bottom: 6px">Solana wallet address <span style="font-weight: 400; color: #5C6B62">(optional, add it later)</span></label>
+            <input id="su-wallet" type="text" autocomplete="off" spellcheck="false" placeholder="e.g. 9xQeWvG8…VFin" class="{{f.wallet.cls}}" value="{{v.wallet}}" onChange="{{f.wallet.set}}" onBlur="{{f.wallet.blur}}" style="font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 14px">
+            <sc-if value="{{f.wallet.err}}" hint-placeholder-val="{{ false }}"><p style="color: #B4321F; font-size: 13px; margin: 6px 0 0">{{f.wallet.err}}</p></sc-if>
+            <sc-if value="{{walletOk}}" hint-placeholder-val="{{ false }}"><p style="color: #157A46; font-size: 13px; margin: 6px 0 0">Looks like a valid Solana address.</p></sc-if>
+          </div>
+
+          <label style="display: flex; gap: 12px; align-items: flex-start; background: #FFFFFF; border: 1px solid #DCE4DD; border-radius: 14px; padding: 14px 16px; font-size: 14px; line-height: 1.5; color: #33433A; cursor: pointer">
+            <input type="checkbox" checked="{{face}}" onChange="{{toggleFace}}" style="width: 20px; height: 20px; margin: 1px 0 0; accent-color: #157A46; flex-shrink: 0">
+            <span><span style="display: block; font-weight: 600; color: #0F1F17">Enroll my face at a bin</span>Rewards reach you without a card or phone. Only a face template is stored, never photos, and you can delete it any time.</span>
+          </label>
+          <div>
+            <label style="display: flex; gap: 10px; align-items: flex-start; font-size: 14px; line-height: 1.5; color: #33433A; cursor: pointer">
+              <input type="checkbox" checked="{{terms}}" onChange="{{toggleTerms}}" style="width: 20px; height: 20px; margin: 1px 0 0; accent-color: #157A46; flex-shrink: 0">
+              <span>I agree to the <a href="#terms">terms</a> and understand payouts are Solana devnet test tokens with no cash value.</span>
+            </label>
+            <sc-if value="{{termsErr}}" hint-placeholder-val="{{ false }}"><p style="color: #B4321F; font-size: 13px; margin: 6px 0 0">{{termsErr}}</p></sc-if>
+          </div>
+
+          <button type="submit" class="btn btn-primary">Create account</button>
+        </form>
+        <p style="margin: 24px 0 0; font-size: 15px; color: #4A5A51; text-align: center">Already have an account? <a href="Login.dc.html">Log in</a></p>
+      </sc-if>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1000}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { v: { name: '', email: '', password: '', wallet: '' }, errs: {}, face: false, terms: false, showPw: false, done: false };
+  }
+  check(k, val) {
+    if (k === 'name') { if (!val.trim()) return 'Enter your name so the bin can greet you.'; return ''; }
+    if (k === 'email') {
+      if (!val.trim()) return 'Enter your email address.';
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val.trim())) return 'That email looks incomplete, for example name@example.com.';
+      return '';
+    }
+    if (k === 'password') { if (!val) return 'Enter a password.'; if (val.length < 8) return 'Use at least 8 characters.'; return ''; }
+    if (k === 'wallet') {
+      if (val.trim() && !/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(val.trim())) return 'Solana addresses are 32–44 letters and numbers. Paste it again, or leave it blank for now.';
+      return '';
+    }
+    return '';
+  }
+  renderVals() {
+    var s = this.state, self = this;
+    var field = function (k) {
+      return {
+        err: s.errs[k] || '',
+        cls: 'inp' + (s.errs[k] ? ' bad' : ''),
+        set: function (e) {
+          var v = Object.assign({}, self.state.v); v[k] = e.target.value;
+          var errs = Object.assign({}, self.state.errs); errs[k] = '';
+          self.setState({ v: v, errs: errs });
+        },
+        blur: function () {
+          var val = self.state.v[k]; if (!val) return;
+          var errs = Object.assign({}, self.state.errs); errs[k] = self.check(k, val);
+          self.setState({ errs: errs });
+        }
+      };
+    };
+    var pw = s.v.password;
+    var score = 0;
+    if (pw.length >= 8) score++;
+    if (pw.length >= 12) score++;
+    if (/[0-9]/.test(pw) && /[a-zA-Z]/.test(pw)) score++;
+    if (/[^A-Za-z0-9]/.test(pw) || pw.length >= 16) score++;
+    var colors = ['#B4321F', '#E3B23C', '#2BB673', '#157A46'];
+    var segs = [0, 1, 2, 3].map(function (i) { return { c: i < score ? colors[score - 1] : '#DCE4DD' }; });
+    var strengthText = !pw ? 'Use a phrase you will remember. Longer is stronger.' : ['Too short', 'Okay', 'Good', 'Strong', 'Very strong'][score];
+    var filled = { account: !!(s.v.name && s.v.email && pw.length >= 8), wallet: !!s.v.wallet && !this.check('wallet', s.v.wallet), face: s.face };
+    var journey = [
+      { title: 'Create your account', sub: 'Name, email and password', on: filled.account },
+      { title: 'Link a Solana wallet', sub: 'Where your rewards are sent', on: filled.wallet },
+      { title: 'Enroll your face at a bin', sub: 'Optional, so no card or phone is needed', on: filled.face }
+    ].map(function (j, i) {
+      return Object.assign({}, j, {
+        mark: j.on ? '✓' : String(i + 1),
+        bg: j.on ? '#1D3828' : '#15291F', border: j.on ? '#5FD79A' : '#24402F',
+        dot: j.on ? '#5FD79A' : '#24402F', dotText: j.on ? '#0F1F17' : '#B9C7BF'
+      });
+    });
+    return {
+      v: s.v,
+      f: { name: field('name'), email: field('email'), password: field('password'), wallet: field('wallet') },
+      pwType: s.showPw ? 'text' : 'password',
+      pwToggleText: s.showPw ? 'Hide' : 'Show', pwToggleLabel: s.showPw ? 'Hide password' : 'Show password',
+      togglePw: function () { self.setState({ showPw: !self.state.showPw }); },
+      segs: segs, strengthText: strengthText,
+      walletOk: filled.wallet,
+      face: s.face, terms: s.terms, termsErr: s.errs.terms || '',
+      toggleFace: function (e) { self.setState({ face: e.target.checked }); },
+      toggleTerms: function (e) { var errs = Object.assign({}, self.state.errs); errs.terms = ''; self.setState({ terms: e.target.checked, errs: errs }); },
+      journey: journey,
+      done: s.done, notDone: !s.done,
+      firstName: (s.v.name.trim().split(' ')[0]) || 'there',
+      doneText: s.v.wallet ? 'Your wallet is linked. Drop a reward-eligible item at any CashCan bin to earn.' : 'Add a Solana wallet from your account so the bin knows where to send your rewards.',
+      reset: function () { self.setState({ done: false }); },
+      submit: function (e) {
+        e.preventDefault();
+        var v = self.state.v;
+        var errs = { name: self.check('name', v.name), email: self.check('email', v.email), password: self.check('password', v.password), wallet: self.check('wallet', v.wallet), terms: self.state.terms ? '' : 'Accept the terms to create your account.' };
+        var bad = errs.name || errs.email || errs.password || errs.wallet || errs.terms;
+        self.setState(bad ? { errs: errs } : { errs: {}, done: true });
+      }
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -12,9 +12,11 @@ type Props = {
   autoComplete?: string;
   onChange: (v: string) => void;
   onBlur?: () => void;
+  labelAside?: React.ReactNode;
+  children?: React.ReactNode;
 };
 
-export default function Field({ id, label, hint, type = "text", value, error, autoComplete, onChange, onBlur }: Props) {
+export default function Field({ id, label, hint, type = "text", value, error, autoComplete, onChange, onBlur, labelAside, children }: Props) {
   const [show, setShow] = useState(false);
   const isPw = type === "password";
   const errId = `${id}-err`;
@@ -34,9 +36,12 @@ export default function Field({ id, label, hint, type = "text", value, error, au
   );
   return (
     <div className="field">
-      <label htmlFor={id}>
-        {label} {hint && <span className="hint">({hint})</span>}
-      </label>
+      <div className="label-row">
+        <label htmlFor={id}>
+          {label} {hint && <span className="hint">({hint})</span>}
+        </label>
+        {labelAside}
+      </div>
       {isPw ? (
         <div className="pw-wrap">
           {input}
@@ -47,6 +52,7 @@ export default function Field({ id, label, hint, type = "text", value, error, au
       ) : (
         input
       )}
+      {children}
       {error && <p className="err" id={errId}>{error}</p>}
     </div>
   );
