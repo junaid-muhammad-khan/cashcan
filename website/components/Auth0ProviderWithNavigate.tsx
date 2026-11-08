@@ -12,7 +12,7 @@ export default function Auth0ProviderWithNavigate({ children }: { children: Reac
   const clientId = process.env.NEXT_PUBLIC_AUTH0_CLIENT_ID!;
 
   const onRedirectCallback = (appState?: AppState) => {
-    router.replace(appState?.returnTo ?? "/account");
+    router.replace(appState?.returnTo ?? "/dashboard");
   };
 
   return (
