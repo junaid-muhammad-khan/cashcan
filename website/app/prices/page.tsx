@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import ContainerArt from "@/components/ContainerArt";
 import PageShell from "@/components/PageShell";
+import RewardCalculator from "@/components/RewardCalculator";
 import { CONTAINERS, OTHER, cashBackCents, formatCents } from "@/lib/prices";
 import "./catalogue.css";
 
@@ -42,6 +43,8 @@ export default function PricesPage() {
           </li>
         ))}
       </ul>
+
+      <RewardCalculator />
 
       <h2 className="cat-subhead">Everything else the bin sorts</h2>
       <ul className="cat-other">
