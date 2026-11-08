@@ -5,18 +5,21 @@ import { useAuth0 } from "@auth0/auth0-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import AuthShell from "@/components/AuthShell";
 import { Check } from "@/components/icons";
-import { enroll, FaceApiError, getMe, matchFrame, saveWallet, userIdFromSub, type Me } from "@/lib/faceApi";
+import { checkPose, enroll, FaceApiError, getMe, matchFrame, saveWallet, userIdFromSub, type Me } from "@/lib/faceApi";
 import { useCamera } from "./useCamera";
 
 type Step = "loading" | "already" | "consent" | "camera" | "scan" | "saving" | "test" | "done";
 
 // The face API accepts 1-3 enrollment frames (face_api/app/config.py); three angles give the best recall.
+// Each photo is taken only once the API sees the head really turned that way (POST /pose), so "left" is never a front photo.
 const POSES = [
-  { label: "Straight", cue: "Look straight at the camera", cls: "" },
-  { label: "Left", cue: "Turn your head a little to your left", cls: "nudge-l" },
-  { label: "Right", cue: "Now a little to your right", cls: "nudge-r" },
-];
-const HOLD_MS = 1800;
+  { label: "Straight", want: "front", cue: "Look straight at the camera", cls: "" },
+  { label: "Left", want: "left", cue: "Turn your head a little to your left", cls: "nudge-l" },
+  { label: "Right", want: "right", cue: "Now a little to your right", cls: "nudge-r" },
+] as const;
+const POLL_MS = 350;
+const POSE_TIMEOUT_MS = 30000;
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const SOLANA_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 const AUDIENCE = process.env.NEXT_PUBLIC_AUTH0_AUDIENCE;
 
@@ -36,6 +39,7 @@ export default function EnrollFlow() {
   const [problems, setProblems] = useState<string[]>([]);
   const [captured, setCaptured] = useState(0);
   const [flash, setFlash] = useState(false);
+  const [liveHint, setLiveHint] = useState("");
   const [test, setTest] = useState<{ busy: boolean; score?: number; ok?: boolean; message?: string }>({ busy: false });
   const [busy, setBusy] = useState(false);
   const runId = useRef(0);
@@ -65,7 +69,7 @@ export default function EnrollFlow() {
 
   async function onConsentContinue() {
     const next = {
-      consent: consent ? undefined : "Tick the box to continue, or skip face match for now.",
+      consent: consent ? undefined : "Tick the box to continue. Face match is required to use CashCan.",
       wallet: !needsWallet ? undefined : !wallet.trim() ? "Add your crypto wallet address so we know where to send your SOL."
         : !SOLANA_RE.test(wallet.trim()) ? "Solana addresses are 32–44 letters and numbers. Paste it again." : undefined,
     };
@@ -96,18 +100,42 @@ export default function EnrollFlow() {
     setStep("scan");
     const frames: Blob[] = [];
     for (let i = 0; i < POSES.length; i++) {
-      await new Promise((r) => setTimeout(r, HOLD_MS));
-      if (runId.current !== id) return; // restarted or left
-      const f = await cam.capture();
-      if (!f) { setError("The camera stopped sending pictures. Start the scan again."); setStep("camera"); return; }
-      frames.push(f);
+      // Wait until the API sees this direction in two consecutive looks, then keep that frame.
+      let streak = 0, kept: Blob | null = null;
+      const t0 = Date.now();
+      setLiveHint("");
+      while (!kept && Date.now() - t0 < POSE_TIMEOUT_MS) {
+        if (runId.current !== id) return; // restarted or left
+        const f = await cam.capture();
+        if (!f) { await sleep(POLL_MS); continue; }
+        try {
+          const r = await checkPose(f);
+          if (runId.current !== id) return;
+          if (r.found && r.pose === POSES[i].want) {
+            streak++;
+            setLiveHint("Hold still…");
+            if (streak >= 2) kept = f;
+          } else {
+            streak = 0;
+            setLiveHint(r.found ? (r.hint || POSES[i].cue) : (r.hint || "Move into the oval so we can see your face."));
+          }
+        } catch (e) {
+          setError((e as Error).message);
+          setStep("camera");
+          return;
+        }
+        if (!kept) await sleep(POLL_MS);
+      }
+      if (!kept) { setError(`We didn't see your head ${POSES[i].want === "front" ? "facing the camera" : "turned to your " + POSES[i].want}. Start the scan again.`); setStep("camera"); return; }
+      frames.push(kept);
       setFlash(true);
       setTimeout(() => setFlash(false), 180);
       setCaptured(i + 1);
     }
+    setLiveHint("");
     setStep("saving");
     try {
-      await enroll(frames, { token, userId: me?.user_id ?? userIdFromSub(user?.sub ?? "user"), wallet: wallet.trim() });
+      await enroll(frames, { token, userId: me?.user_id ?? userIdFromSub(user?.sub ?? "user"), wallet: wallet.trim(), poses: POSES.map((p) => p.want) });
     } catch (e) {
       const err = e as FaceApiError;
       if (runId.current !== id) return;
@@ -198,7 +226,7 @@ export default function EnrollFlow() {
       {step === "consent" && (
         <div className="en-fade">
           <h1>Set up face match</h1>
-          <p className="sub">Takes about a minute. You can skip this and use your account without it, or enroll at a bin later.</p>
+          <p className="sub">Takes about a minute. Face match is required: the bin uses it to know who to pay.</p>
           <div className="en-facts">
             {[
               ["512", "Numbers, not photos", "Your face becomes a 512-number template. Camera pictures are thrown away."],
@@ -231,7 +259,6 @@ export default function EnrollFlow() {
 
           <div className="cta-row" style={{ marginTop: 24 }}>
             <button type="button" className="btn btn-primary" disabled={busy} onClick={onConsentContinue}>{busy ? "Saving wallet…" : "Continue"}</button>
-            <Link href="/dashboard" className="btn btn-ghost">Skip for now</Link>
           </div>
         </div>
       )}
@@ -272,7 +299,7 @@ export default function EnrollFlow() {
               <div className="en-cue"><span className={pose.cls} aria-hidden="true">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"
                   style={{ transform: pose.cls === "nudge-l" ? "rotate(180deg)" : pose.cls ? "none" : "rotate(90deg)" }}><path d="M5 12h14M13 6l6 6-6 6" /></svg>
-              </span>{pose.label === "Straight" ? "Look straight ahead" : pose.cue}</div>
+              </span>{liveHint || (pose.label === "Straight" ? "Look straight ahead" : pose.cue)}</div>
             )}
             <span className="en-count" aria-live="polite">{captured} of {POSES.length}</span>
           </div>

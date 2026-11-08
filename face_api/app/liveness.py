@@ -114,3 +114,20 @@ class LivenessManager:
             del self._open[cid]
             return Status("passed", user_id=ch.user_id)
         return Status("pending", hint=prompt_for(ch.direction))
+
+
+def enroll_pose(turn: float | None) -> str:
+    """Which enrollment pose a head-turn ratio shows: front | left | right | between (not clearly any) | profile (turned too far)."""
+    if turn is None:
+        return "between"
+    if abs(turn) <= config.ENROLL_FRONT_MAX:
+        return "front"
+    if abs(turn) > config.ENROLL_TURN_MAX:
+        return "profile"
+    if abs(turn) < config.ENROLL_TURN_MIN:
+        return "between"
+    return "left" if turn > 0 else "right"
+
+
+POSE_HINTS = {"front": "Look straight at the camera.", "left": "Turn your head a little to your left.",
+              "right": "Turn your head a little to your right."}

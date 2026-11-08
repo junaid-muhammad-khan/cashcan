@@ -46,3 +46,12 @@ AUTH0_DOMAIN = os.environ.get("AUTH0_DOMAIN", "")        # e.g. cashcoin.ca.auth
 AUTH0_AUDIENCE = os.environ.get("AUTH0_AUDIENCE", "")    # the API identifier configured in Auth0
 # Bins authenticate with a per-bin key, sent as X-Bin-Key. Comma-separated "bin_id:key" pairs.
 BIN_API_KEYS = os.environ.get("BIN_API_KEYS", "")
+
+# Where the API is mounted behind the website (vercel.json rewrites /face-api/* to it). Requests with this prefix are accepted too.
+MOUNT_PREFIX = os.environ.get("MOUNT_PREFIX", "/face-api")
+
+# Enrollment poses: each of the (up to) 3 photos must really show the requested head direction.
+# turn ratio, positive = the person's own left (see liveness.py). A "little" turn, gentler than the liveness challenge.
+ENROLL_FRONT_MAX = 0.10     # |turn| at or below this is "straight"
+ENROLL_TURN_MIN = 0.16      # at least this much for "left"/"right"
+ENROLL_TURN_MAX = 0.55      # beyond this the face is in profile and no longer recognisable

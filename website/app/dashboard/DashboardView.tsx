@@ -24,7 +24,20 @@ function shortWallet(w: string) {
   return `${w.slice(0, 4)}…${w.slice(-4)}`;
 }
 
-export default function DashboardView({ firstName, walletAddress, welcome }: { firstName: string; walletAddress: string | null; welcome: boolean }) {
+const SOLANA_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+
+export default function DashboardView({ firstName, walletAddress, onSaveWallet, welcome }: { firstName: string; walletAddress: string | null; onSaveWallet?: (wallet: string) => Promise<void>; welcome: boolean }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [walletErr, setWalletErr] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  async function saveWallet() {
+    const w = draft.trim();
+    if (!SOLANA_RE.test(w)) { setWalletErr("Solana addresses are 32–44 letters and numbers. Paste it again."); return; }
+    setSaving(true); setWalletErr(null);
+    try { await onSaveWallet?.(w); setEditing(false); } catch (e) { setWalletErr((e as Error).message); }
+    setSaving(false);
+  }
   const root = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const [range, setRange] = useState<RangeKey>("week");
@@ -185,12 +198,25 @@ export default function DashboardView({ firstName, walletAddress, welcome }: { f
                     <svg {...S} width={15} height={15} viewBox="0 0 24 24" strokeWidth={1.8}><rect x="3" y="6" width="18" height="14" rx="2" /><path d="M3 10h18M16 15h2" /></svg>
                     Wallet
                   </span>
-                  <span className="val">{walletAddress ? `${shortWallet(walletAddress)} · devnet` : "Not connected"}</span>
+                  <span className="val" title={walletAddress ?? undefined}>{walletAddress ? `${shortWallet(walletAddress)} · devnet` : "Not connected"}</span>
                 </div>
-                <Link href="/account" className="db-lime">
-                  {walletAddress ? "Manage wallet" : "View rewards setup"}
-                  <svg {...S} width={14} height={14} viewBox="0 0 24 24" strokeWidth={2.2}><path d="M5 12h14M13 6l6 6-6 6" /></svg>
-                </Link>
+                {editing ? (
+                  <div style={{ marginTop: 12 }}>
+                    <label htmlFor="db-wallet-input" className="sr-only">Solana wallet address</label>
+                    <input id="db-wallet-input" type="text" value={draft} onChange={(e) => setDraft(e.target.value)} spellCheck={false} autoComplete="off"
+                      placeholder="Paste your Solana wallet address" style={{ width: "100%", padding: "9px 10px", borderRadius: 8, border: "1px solid #36574a", background: "#17352a", color: "#fff", fontFamily: "monospace", fontSize: 12 }} />
+                    {walletErr && <p role="alert" className="db-small" style={{ color: "#ffb4a8" }}>{walletErr}</p>}
+                    <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
+                      <button type="button" className="db-lime" disabled={saving} onClick={saveWallet}>{saving ? "Saving…" : "Save wallet"}</button>
+                      <button type="button" className="db-lime" onClick={() => { setEditing(false); setWalletErr(null); }}>Cancel</button>
+                    </div>
+                  </div>
+                ) : (
+                  <button type="button" className="db-lime" onClick={() => { setDraft(walletAddress ?? ""); setEditing(true); }}>
+                    {walletAddress ? "Change wallet" : "Add wallet"}
+                    <svg {...S} width={14} height={14} viewBox="0 0 24 24" strokeWidth={2.2}><path d="M5 12h14M13 6l6 6-6 6" /></svg>
+                  </button>
+                )}
                 <p className="db-small">Keep sorting and tracking. A wallet isn&apos;t needed for activity history.</p>
               </section>
             </div>

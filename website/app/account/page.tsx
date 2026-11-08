@@ -3,6 +3,8 @@
 import { useAuth0 } from "@auth0/auth0-react";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect } from "react";
+import RequireFace from "@/components/RequireFace";
+import type { Me } from "@/lib/faceApi";
 import SiteNav from "@/components/SiteNav";
 
 export default function AccountPage() {
@@ -14,6 +16,10 @@ export default function AccountPage() {
 }
 
 function AccountPageInner() {
+  return <RequireFace>{({ me }) => <AccountBody me={me} />}</RequireFace>;
+}
+
+function AccountBody({ me }: { me: Me | null }) {
   const { isLoading, isAuthenticated, user, loginWithRedirect, logout } = useAuth0();
   const welcome = useSearchParams().get("welcome");
 
@@ -41,14 +47,13 @@ function AccountPageInner() {
           <dl>
             <dt>Name</dt><dd>{user.name}</dd>
             <dt>Email</dt><dd>{user.email}</dd>
-            <dt>Wallet</dt><dd>Not linked yet</dd>
-            <dt>Face match</dt><dd><a href="/enroll">Set up face match</a></dd>
+            <dt>Wallet</dt><dd>{me?.sol_wallet ?? "Not linked yet"}</dd>
+            <dt>Face match</dt><dd>{me?.face_enrolled ? "Set up" : "Not set up"}</dd>
           </dl>
         </section>
 
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 28 }}>
           <a href="/dashboard" className="btn btn-primary">Back to dashboard</a>
-          <a href="/enroll" className="btn btn-ghost">Set up face match</a>
           <button
             type="button"
             className="btn btn-ghost"

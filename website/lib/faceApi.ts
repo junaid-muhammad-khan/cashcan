@@ -44,11 +44,21 @@ export const getMe = (token: string) => call<Me>("/me", { method: "GET" }, token
 export const saveWallet = (token: string, wallet: string) =>
   call<Me>("/me", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sol_wallet: wallet }) }, token);
 
-export function enroll(frames: Blob[], opts: { token?: string; userId: string; wallet: string }) {
+export interface PoseResult { found: boolean; pose?: "front" | "left" | "right" | "between" | "profile"; turn?: number; hint?: string }
+
+/** Which way is the head turned in this frame? Nothing is stored. */
+export function checkPose(frame: Blob) {
+  const fd = new FormData();
+  fd.append("frame", frame, "frame.jpg");
+  return call<PoseResult>("/pose", { method: "POST", body: fd });
+}
+
+export function enroll(frames: Blob[], opts: { token?: string; userId: string; wallet: string; poses?: string[] }) {
   const fd = new FormData();
   fd.set("consent", "true");
   fd.set("user_id", opts.userId); // ignored by the API when Auth0 is on
   fd.set("wallet", opts.wallet);
+  if (opts.poses) fd.set("poses", opts.poses.join(",")); // the API checks each photo really shows its direction
   frames.forEach((f, i) => fd.append("frames", f, `frame${i + 1}.jpg`));
   return call<{ enrolled: boolean; frames_used: number; problems: string[] }>("/enroll", { method: "POST", body: fd }, opts.token);
 }

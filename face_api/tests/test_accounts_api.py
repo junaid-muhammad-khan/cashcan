@@ -67,9 +67,12 @@ def env(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "BIN_API_KEYS", "bin-1:secretkey")
     monkeypatch.setattr(config, "REQUIRE_LIVENESS", False)
     db, sessions = FakeDB(), SessionManager()
-    app = create_app(engine=FakeEngine(), store=FaceStore(str(tmp_path / "f.db")), sessions=sessions,
+    store = FaceStore(str(tmp_path / "f.db"))
+    app = create_app(engine=FakeEngine(), store=store, sessions=sessions,
                      accounts=Accounts(db), verifier=TokenVerifier(DOMAIN, AUD, key_resolver=Resolver()))
-    return TestClient(app), db, sessions
+    client = TestClient(app)
+    client.store = store
+    return client, db, sessions
 
 
 def auth(**kw):
@@ -141,3 +144,14 @@ def test_leaderboard_and_bin_keys(env):
     assert c.get("/leaderboard").json()["leaderboard"] == [{"rank": 1, "name": "Sorter ab12", "sol_earned": 0.5, "items": 3}]
     assert bin_for_key("secretkey", "bin-1:secretkey,bin-2:k2") == "bin-1" and bin_for_key("k2", "bin-1:secretkey,bin-2:k2") == "bin-2"
     assert bin_for_key(None, "bin-1:secretkey") is None and bin_for_key("x", "") is None
+
+
+def test_changing_wallet_also_updates_the_wallet_the_bin_pays_to(env):
+    c, _, _ = env
+    other = "7EcDhSYGxXyscszYEp35KHN8vvw3svAuLKTzXwCFLtV"
+    c.put("/me", json={"sol_wallet": WALLET}, headers=auth())
+    c.post("/enroll", data={"consent": "true"}, files=[("frames", ("f.png", png(7), "image/png"))], headers=auth())
+    uid = c.get("/me", headers=auth()).json()["user_id"]
+    assert c.store.wallet(uid) == WALLET
+    c.put("/me", json={"sol_wallet": other}, headers=auth())
+    assert c.store.wallet(uid) == other

@@ -272,6 +272,9 @@ class DatabricksStore:
     def wallet(self, user_id: str) -> str | None:
         return self.db.get_wallet(user_id)
 
+    def set_wallet(self, user_id: str, wallet: str) -> None:
+        self.db.sql(f"UPDATE {self.db.schema}.users SET wallet = :w WHERE user_id = :u", {"w": wallet, "u": user_id})
+
     def embeddings_for(self, user_id: str) -> np.ndarray:
         owners, mat = self._pull()
         idx = [i for i, o in enumerate(owners) if o == user_id]

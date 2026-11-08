@@ -64,6 +64,10 @@ class FaceStore:
             cur = self._db.execute("DELETE FROM users WHERE user_id=?", (user_id,))
         return cur.rowcount > 0
 
+    def set_wallet(self, user_id: str, wallet: str) -> None:
+        with self._db:
+            self._db.execute("UPDATE users SET wallet=? WHERE user_id=?", (wallet, user_id))
+
     def wallet(self, user_id: str) -> str | None:
         row = self._db.execute("SELECT wallet FROM users WHERE user_id=?", (user_id,)).fetchone()
         return row[0] if row else None

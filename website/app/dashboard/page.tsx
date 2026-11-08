@@ -3,6 +3,7 @@
 import { useAuth0 } from "@auth0/auth0-react";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect } from "react";
+import RequireFace from "@/components/RequireFace";
 import DashboardView from "./DashboardView";
 import "./dashboard.css";
 
@@ -29,6 +30,9 @@ function DashboardPageInner() {
 
   const firstName = (user.given_name ?? user.name ?? user.email ?? "there").split(/[\s@]/)[0];
 
-  // Wallet linking has no store yet under Auth0 (see README), so it shows as not connected.
-  return <DashboardView firstName={firstName} walletAddress={null} welcome={welcome} />;
+  return (
+    <RequireFace>
+      {({ me, setWallet }) => <DashboardView firstName={firstName} walletAddress={me?.sol_wallet ?? null} onSaveWallet={setWallet} welcome={welcome} />}
+    </RequireFace>
+  );
 }

@@ -81,3 +81,32 @@ def test_wallet_validated_server_side(client):
 def test_enrollment_page_served(client):
     r = client.get("/")
     assert r.status_code == 200 and "text/html" in r.headers["content-type"] and "consent" in r.text.lower()
+
+
+def test_accepts_the_mount_prefix_too(client):
+    assert client.get("/health").json() == {"ok": True}
+    assert client.get("/face-api/health").json() == {"ok": True}
+    r = client.post("/face-api/enroll", data={"user_id": "x", "wallet": "w"})  # reaches the real route (fails validation, not 404)
+    assert r.status_code in (400, 422)
+
+
+def test_pose_endpoint_reads_the_head_direction(client):
+    from tests.conftest import png
+    for turn, want in ((0.0, "front"), (0.3, "left"), (-0.3, "right"), (0.13, "between"), (0.6, "profile")):
+        r = client.post("/pose", files={"frame": ("f.png", png(1, turn=turn), "image/png")}).json()
+        assert r["found"] and r["pose"] == want, (turn, r)
+    assert client.post("/pose", files={"frame": ("f.png", png(1, noface=True), "image/png")}).json()["found"] is False
+
+
+def test_enroll_checks_each_photo_shows_its_pose(client):
+    from tests.conftest import png, WALLET
+    f = lambda t: ("frames", ("f.png", png(5, turn=t), "image/png"))
+    ok = client.post("/enroll", data={"user_id": "p1", "wallet": WALLET, "consent": "true", "poses": "front,left,right"},
+                     files=[f(0.0), f(0.3), f(-0.3)])
+    assert ok.status_code == 200 and ok.json()["frames_used"] == 3
+    # the person turned left for the "front" photo: that photo is refused, the other two still count
+    bad = client.post("/enroll", data={"user_id": "p2", "wallet": WALLET, "consent": "true", "poses": "front,left,right"},
+                      files=[f(0.3), f(0.3), f(-0.3)])
+    assert bad.status_code == 200 and bad.json()["frames_used"] == 2 and "Expected" in bad.json()["problems"][0]
+    assert client.post("/enroll", data={"user_id": "p3", "wallet": WALLET, "consent": "true", "poses": "front,up"},
+                       files=[f(0.0), f(0.3)]).status_code == 400

@@ -19,7 +19,7 @@ from fastapi.responses import FileResponse
 from . import config
 from .auth import TokenVerifier, bearer, bin_for_key
 from .face_engine import FaceEngine, InsightFaceEngine, QualityError, check_quality, decode_image, pick_face
-from .liveness import LivenessManager
+from .liveness import POSE_HINTS, LivenessManager, enroll_pose
 from .matching import match
 import numpy as np
 from .sessions import SessionManager
@@ -64,6 +64,16 @@ def create_app(engine: FaceEngine | None = None, store: FaceStore | None = None,
                sessions: SessionManager | None = None, liveness: LivenessManager | None = None,
                accounts=None, verifier=None) -> FastAPI:
     app = FastAPI(title="CashCan face API")
+
+    @app.middleware("http")
+    async def strip_mount_prefix(request, call_next):
+        """Behind Vercel the API is mounted at /face-api and the prefix may reach us unstripped: accept both forms."""
+        path = request.scope["path"]
+        if path == config.MOUNT_PREFIX or path.startswith(config.MOUNT_PREFIX + "/"):
+            request.scope["path"] = path[len(config.MOUNT_PREFIX):] or "/"
+            if request.scope.get("raw_path"):
+                request.scope["raw_path"] = request.scope["path"].encode()
+        return await call_next(request)
     state = {"engine": engine, "store": store or make_store(),
              "sessions": sessions or SessionManager(), "liveness": liveness or LivenessManager(),
              "accounts": accounts or make_accounts(), "verifier": verifier or make_verifier()}
@@ -94,7 +104,8 @@ def create_app(engine: FaceEngine | None = None, store: FaceStore | None = None,
 
     @app.post("/enroll")
     async def enroll(user_id: str = Form(""), wallet: str = Form(""), consent: bool = Form(False),
-                     frames: list[UploadFile] = File(...), authorization: str | None = Header(None)):
+                     frames: list[UploadFile] = File(...), poses: str = Form(""),
+                     authorization: str | None = Header(None)):
         if state["verifier"] is not None:  # signed-in mode: identity comes from the token, never from the form
             user = current_user(bearer(authorization))
             user_id, wallet = user["user_id"], user["sol_wallet"] or ""
@@ -114,11 +125,17 @@ def create_app(engine: FaceEngine | None = None, store: FaceStore | None = None,
         if not config.MIN_ENROLL_FRAMES <= len(frames) <= config.MAX_ENROLL_FRAMES:
             raise HTTPException(400, f"Send {config.MIN_ENROLL_FRAMES}-{config.MAX_ENROLL_FRAMES} frames.")
 
+        wanted = [p.strip() for p in poses.split(",") if p.strip()]
+        if wanted and (len(wanted) != len(frames) or any(p not in POSE_HINTS for p in wanted)):
+            raise HTTPException(400, "poses must list front, left or right once per frame.")
         embeddings, problems = [], []
         for i, f in enumerate(frames):
             try:
                 face = pick_face(get_engine().analyse(decode_image(await f.read())))
                 check_quality(face)  # strict tier: bad frames must not become templates
+                if wanted and enroll_pose(face.turn) != wanted[i]:  # the photo must really show the asked direction
+                    raise QualityError(f"Expected your head turned {'straight' if wanted[i] == 'front' else 'to your ' + wanted[i]}, "
+                                       f"but the photo shows a different direction.")
                 embeddings.append(face.embedding)
             except QualityError as e:
                 problems.append(f"frame {i + 1}: {e}")
@@ -127,6 +144,18 @@ def create_app(engine: FaceEngine | None = None, store: FaceStore | None = None,
 
         state["store"].add_user(user_id, wallet, embeddings)
         return {"enrolled": True, "user_id": user_id, "frames_used": len(embeddings), "problems": problems}
+
+    @app.post("/pose")
+    async def pose(frame: UploadFile = File(...)):
+        """Which way is the head turned in this frame? Used by the enrollment page to take each photo only when the
+        requested direction is really shown. Nothing is stored."""
+        try:
+            face = pick_face(get_engine().analyse(decode_image(await frame.read())))
+        except QualityError as e:
+            return {"found": False, "hint": str(e)}
+        p = enroll_pose(face.turn)
+        return {"found": True, "pose": p, "turn": None if face.turn is None else round(face.turn, 3),
+                "hint": {"between": "Turn a little more.", "profile": "That's too far. Turn back a little."}.get(p, "")}
 
     @app.post("/match")
     async def match_face(frame: UploadFile = File(...), session_token: str | None = Form(None)):
@@ -202,6 +231,9 @@ def create_app(engine: FaceEngine | None = None, store: FaceStore | None = None,
             need_accounts().update_profile(u["user_id"], body.get("username"), body.get("pseudonym"), body.get("sol_wallet"))
         except ValueError as e:
             raise HTTPException(400, str(e)) from e
+        wallet = body.get("sol_wallet")
+        if wallet and state["store"].user_exists(u["user_id"]):  # keep the wallet the bin pays to in step with the profile
+            state["store"].set_wallet(u["user_id"], wallet.strip())
         return need_accounts().user_by_sub(u["auth0_sub"])
 
     @app.get("/leaderboard")
