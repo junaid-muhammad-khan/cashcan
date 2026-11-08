@@ -138,6 +138,10 @@ def main(argv=None) -> int:
                     done = runner.teach(label, now)
                     if done is None:
                         print("cashcan_pi: nothing to teach: put the item inside the amber box first", file=sys.stderr)
+                    elif done.get("skipped"):
+                        pass                                    # a held-down key: ignore the repeats silently
+                    elif not done.get("added", True):
+                        print(f"cashcan_pi: already knows this view of '{label}': turn the item a little, then press again", file=sys.stderr)
                     else:
                         print(f"cashcan_pi: taught '{label}' ({done['examples']} example(s) of it now)", file=sys.stderr)
                 elif a.classify and key == ord("u"):

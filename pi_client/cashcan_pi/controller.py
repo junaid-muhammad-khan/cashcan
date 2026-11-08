@@ -20,7 +20,7 @@ import uuid
 from dataclasses import dataclass
 from typing import Callable
 
-from .classifier import decide
+from .classifier import average_probs, decide
 from .lid import LidController
 
 
@@ -98,6 +98,8 @@ class BinController:
     min_confidence: float = 0.60
     votes: int = 3
     new_id: Callable[[], str] = lambda: uuid.uuid4().hex
+    switch_margin: float = 0.12    # to move the lid, the new bin must lead the current one by this much (averaged), twice in a row
+    teach_gap: float = 0.5         # ignore teach key presses closer together than this (a held-down key)
     reeval_interval: float = 1.0   # while an item is held in the box, look at it again this often and update the decision
     save_dir: str | None = None   # save a photo of every item the bin looks at (see _save_photo): the raw material for retraining on this camera
 
@@ -109,6 +111,8 @@ class BinController:
         self._committed: dict | None = None   # the decision currently in force for the item in the box: bin, confidence, reason
         self._recent: list[dict] = []         # the last few looks, averaged so one odd frame does not flip the decision
         self._next_reeval = 0.0
+        self._pending: str | None = None     # a bin that has led once and must lead again before the lid moves
+        self._last_teach = -1e9
         self.last_item: dict | None = None   # most recent decision, for the preview window
         self.last_item_at = 0.0
 
@@ -144,37 +148,47 @@ class BinController:
             return
         state = getattr(self.gate, "state", None)
         if state == "empty":
-            self._committed, self._recent = None, []             # the item is gone: forget its decision
+            self._committed, self._recent, self._pending = None, [], None   # the item is gone: forget its decision
         elif state == "present" and self._committed and now >= self._next_reeval:
             self._crop = getattr(self.gate, "item_crop", self.gate.crop)(frame)
             self._reeval(now)
 
     def _reeval(self, now: float, fresh: bool = False) -> None:
-        """Look at the item in the box again (every `reeval_interval` s while it is held). The decision and the lid follow what the bin sees NOW;
-        a confident change to Recycle or Organics also records a new item (the server decides any reward). `fresh` drops the earlier looks (after teaching)."""
+        """Look at the item in the box again (every `reeval_interval` s while it is held). The numbers on screen follow what the bin sees now, but the LID
+        only moves when another bin has clearly led (by `switch_margin`, with at least `min_confidence`) on two looks in a row; this stops the lid flipping
+        between two close classes every second. `fresh` (just taught) drops the earlier looks and may switch at once. A confident change to Recycle or
+        Organics records a new item (the server decides any reward)."""
         if self._committed is None or self._crop is None:
             return
         self._next_reeval = now + self.reeval_interval
         p = self.classifier.probs(self._crop)
-        self._recent = ([p] if fresh else self._recent + [p])[-3:]
-        bin_name, conf, reason = decide(self._recent, self.min_confidence)
+        self._recent = ([p] if fresh else self._recent + [p])[-5:]
+        avg = average_probs(self._recent)
+        cand = max(avg, key=avg.get)
         old = self._committed["bin"]
         item = self.last_item
+        if cand == old or avg[cand] < self.min_confidence or avg[cand] - avg[old] < self.switch_margin:
+            self._pending = None                                  # no clear challenger: the decision stands
+            self._committed["confidence"] = avg[old]
+            if item is not None:
+                item.update(bin=old, confidence=round(avg[old], 3))
+                self.last_item_at = now
+            return
+        if not fresh and self._pending != cand:
+            self._pending = cand                                  # first time it leads: wait for one more look that agrees
+            return
+        self._pending = None
+        conf = avg[cand]
+        self.lid.open(cand, now)
+        self._committed = {"bin": cand, "confidence": conf, "reason": "ok"}
         if item is not None:
-            item.update(bin=bin_name, confidence=round(conf, 3), reason=reason)
+            item.update(bin=cand, confidence=round(conf, 3), reason="ok")
             self.last_item_at = now
-        if bin_name == old:
-            self._committed.update(confidence=conf, reason=reason)
-            return
-        if reason != "ok" and not fresh:      # an unsure look must not flip a decision that was made confidently
-            return
-        self.lid.open(bin_name, now)
-        self._committed = {"bin": bin_name, "confidence": conf, "reason": reason}
-        self.on_event({"event": "item_revised", "from": old, "bin": bin_name, "confidence": round(conf, 3), "reason": reason})
-        if bin_name != "waste":               # waste needs no record of its own; Recycle and Organics do (the server decides the reward)
+        self.on_event({"event": "item_revised", "from": old, "bin": cand, "confidence": round(conf, 3), "reason": "ok"})
+        if cand != "waste":               # waste needs no record of its own; Recycle and Organics do (the server decides the reward)
             session = self.loop.current_session(now)
             iid = self.new_id()
-            payload = {"interaction_id": iid, "item_class": bin_name, "confidence": round(conf, 4)}
+            payload = {"interaction_id": iid, "item_class": cand, "confidence": round(conf, 4)}
             if session:
                 payload["session_token"], payload["user_id"] = session.token, session.user_id
             if item is not None:
@@ -190,19 +204,23 @@ class BinController:
         noticed the item yet, this makes it look at it now (so teaching works even when the automatic trigger did not fire)."""
         if not hasattr(self.classifier, "teach"):
             return None
+        if now - self._last_teach < self.teach_gap:           # a key held down repeats many times a second: take the first press only
+            return {"label": label, "examples": self.classifier.labels.count(label), "skipped": True}
+        self._last_teach = now
         frame = getattr(self, "_last_frame", None)
         crop = getattr(self.gate, "item_crop", self.gate.crop)(frame) if frame is not None else self._crop
         if crop is None:
             return None
         self._crop = crop
         n = self.classifier.teach(label, crop)
-        self.on_event({"event": "taught", "label": label, "examples": n})
+        added = getattr(self.classifier, "last_added", True)
+        self.on_event({"event": "taught", "label": label, "examples": n, "added": added})
         if self._committed is not None:
             self._reeval(now, fresh=True)
         else:
             self._votes = [self.classifier.probs(crop)]
             self._decide(now)
-        return {"label": label, "examples": n}
+        return {"label": label, "examples": n, "added": added}
 
     def forget_last_teaching(self) -> str | None:
         gone = self.classifier.forget_last() if hasattr(self.classifier, "forget_last") else None

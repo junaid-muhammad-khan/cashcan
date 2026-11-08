@@ -122,3 +122,11 @@ judging the whole box got 23% of cans and bottles right; the tight crop got abou
 **Teach keys work on whatever is in the amber box right now**, even if the bin never noticed the item by itself: press R, O or W with the item in the box and the bin learns it, judges it and opens the lid.
 The line above the help text in the window, `item check: ...`, says in plain words what the bin is waiting for: `nothing new in the box (change 0.4%, needs 1.2%)`, `item is moving: hold it still`,
 `most of the box changed: looks like a person, not an item` (move back, or move the box with `--item-roi x1,y1,x2,y2`), `settling...` or `item in the box`.
+
+
+## Putting it on the Raspberry Pi / Radxa board
+Run `./make_pi_bundle.sh` in this folder: it writes `~/Desktop/cashcan_pi_bundle.tar.gz` (about 25 MB) with exactly what the bin needs, in the repo's own folder layout:
+`pi_client/` (the bin program), `face_api/app/` + `face_api/models/` (the face code and the two face models, used for on-device identity) and `ml/models/` (the classifier, FP32 and INT8).
+Copy it with `scp`, unpack, `pip install -r pi_client/requirements.txt`, and run; `RUN_ON_PI.md` inside has the exact commands. Or simply `git clone` the repo on the board.
+What you taught the bin lives in `~/.cashcan/taught.npz` (and `taught_photos/`): copy that folder to the board's `~/.cashcan/` to keep it.
+Not yet tried on a real board: the camera path (`--camera /dev/video0`), speed (the numbers in `ml/QUANTIZATION.md` are from a cloud CPU), the lid driver and the RK3582 NPU conversion.

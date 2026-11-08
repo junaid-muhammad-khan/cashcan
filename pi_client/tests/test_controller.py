@@ -357,11 +357,13 @@ def test_the_item_is_judged_again_every_second_and_a_confident_change_moves_the_
     c.step(EMPTY, 2.2)
     assert c.last_item["bin"] == "waste"                        # one look is not enough: the last three looks are averaged
     c.step(EMPTY, 3.4)
+    assert c.last_item["bin"] == "waste"                        # it leads now, but must lead on a second look before the lid moves
+    c.step(EMPTY, 4.6)
     assert c.last_item["bin"] == "cans" and drv.log[-2:] == [("waste", False), ("cans", True)]
     assert any(e["event"] == "item_revised" and e["from"] == "waste" and e["bin"] == "cans" for e in events)
     assert [p["item_class"] for p in api.sent] == ["waste", "cans"]    # the corrected item is recorded too (new id)
     clf.p = {"cans": 0.4, "organics": 0.3, "waste": 0.3}        # a single unsure look does not flip a confident decision
-    c.step(EMPTY, 4.6)
+    c.step(EMPTY, 5.8)
     assert drv.log[-1] == ("cans", True) and len(api.sent) == 2
 
 
@@ -380,7 +382,7 @@ def test_teaching_in_the_window_fixes_the_decision_straight_away():
     c, api, events, drv, gate, clf = make_live({"cans": 0.05, "organics": 0.05, "waste": 0.9})     # a soda can wrongly called waste
     c.step(EMPTY, 1.0)
     assert c.last_item["bin"] == "waste"
-    assert c.teach("cans", 1.2) == {"label": "cans", "examples": 1}
+    assert c.teach("cans", 1.2)["examples"] == 1
     assert c.last_item["bin"] == "cans" and drv.log[-1] == ("cans", True)
     assert api.sent[-1]["item_class"] == "cans" and c.status(1.3)["can_teach"] and c.status(1.3)["taught"] == 1
     assert c.forget_last_teaching() == "cans"
@@ -402,7 +404,7 @@ def test_teaching_works_even_when_the_bin_never_noticed_the_item():
     for t in (1.0, 2.0, 3.0):
         c.step(EMPTY, t)
     assert c.last_item is None and drv.log == []                                   # nothing was ever noticed
-    assert c.teach("cans", 3.2) == {"label": "cans", "examples": 1}                # R pressed with the can in the box
+    assert c.teach("cans", 3.2)["examples"] == 1                                   # R pressed with the can in the box
     assert c.last_item["bin"] == "cans" and drv.log == [("cans", True)] and api.sent[-1]["item_class"] == "cans"
     assert c.status(3.3)["gate_why"].startswith("nothing new")
 
@@ -416,3 +418,34 @@ def test_gate_says_in_words_why_it_is_not_firing():
     body = np.full((480, 640, 3), (40, 40, 160), np.uint8)
     g.step(body, 1.3)
     assert "person" in g.why
+
+
+def test_the_lid_does_not_flip_between_two_close_classes_and_a_held_down_key_teaches_once():
+    c, api, events, drv, gate, clf = make_live({"cans": 0.2, "organics": 0.1, "waste": 0.7})
+    c.step(EMPTY, 1.0)
+    flips = 0
+    for i, t in enumerate((2.2, 3.4, 4.6, 5.8, 7.0, 8.2, 9.4, 10.6)):     # looks that alternate between two nearly equal answers
+        clf.p = {"cans": 0.62, "organics": 0.03, "waste": 0.35} if i % 2 == 0 else {"cans": 0.35, "organics": 0.03, "waste": 0.62}
+        c.step(EMPTY, t)
+    assert [e for e in events if e["event"] == "item_revised"] == [] and drv.log == [("waste", True)]    # the lid never moved
+    c.teach("cans", 20.0)
+    again = c.teach("cans", 20.1)                                         # key repeat 0.1 s later: ignored
+    assert again["skipped"] is True and clf.labels == ["cans"]
+
+
+def test_teaching_the_same_view_twice_is_not_stored_twice_and_examples_are_capped(tmp_path):
+    from cashcan_pi.classifier import TeachableClassifier
+
+    c = TeachableClassifier(store=tmp_path / "t.npz", photos=tmp_path / "ph")
+    rng = np.random.default_rng(3)
+    img = np.clip(rng.normal(120, 60, (200, 200, 3)), 0, 255).astype(np.uint8)
+    c.teach("cans", img)
+    assert c.last_added is True
+    c.teach("cans", img)
+    assert c.last_added is False and c.labels == ["cans"]                # identical view: skipped
+    c.MAX_PER_LABEL = 3
+    c.DUP = 1.1                      # random noise pictures look alike to the network; switch the duplicate check off to test the cap alone
+    for k in range(6):
+        v = np.clip(rng.normal(120, 60, (200, 200, 3)), 0, 255).astype(np.uint8)
+        c.teach("waste", v)
+    assert c.labels.count("waste") == 3 and len(c.vecs) == len(c.labels)  # oldest dropped past the cap

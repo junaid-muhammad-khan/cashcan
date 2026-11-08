@@ -50,6 +50,10 @@ class OnnxClassifier:
         return dict(zip(self.classes, softmax(logits).tolist()))
 
 
+def average_probs(prob_list: list[dict[str, float]]) -> dict[str, float]:
+    return {c: float(np.mean([p[c] for p in prob_list])) for c in prob_list[0]}
+
+
 def decide(prob_list: list[dict[str, float]], min_confidence: float, fallback: str = "waste") -> tuple[str, float, str]:
     """Average several looks, then pick the bin. Returns (bin, confidence, reason).
     Not sure enough -> the fallback bin (waste): an unsure item must not be rewarded or put in the wrong recycling stream."""
@@ -71,6 +75,8 @@ class TeachableClassifier(OnnxClassifier):
     """
 
     LO, HI, TEMP = 0.60, 0.90, 20.0   # similarity ramp: below LO the taught examples are ignored, at HI they decide
+    DUP = 0.985                        # a new picture this similar to one already taught under the same label adds nothing: it is skipped
+    MAX_PER_LABEL = 60                 # keep the newest; more only slows matching and lets one bad example linger
 
     def __init__(self, model=None, classes=None, store: str | Path | None = None, photos: str | Path | None = None):
         import onnx
@@ -92,6 +98,7 @@ class TeachableClassifier(OnnxClassifier):
         self.photos = Path(photos or Path.home() / ".cashcan" / "taught_photos").expanduser()
         self.vecs = np.zeros((0, 1280), np.float32)
         self.labels: list[str] = []
+        self.last_added = True
         self._load()
 
     def _load(self) -> None:
@@ -132,8 +139,16 @@ class TeachableClassifier(OnnxClassifier):
         if label not in self.classes:
             raise ValueError(f"label must be one of {self.classes}")
         _, f = self._run(frame_bgr)
+        same = [i for i, l in enumerate(self.labels) if l == label]
+        self.last_added = not (same and float((self.vecs[same] @ f).max()) >= self.DUP)
+        if not self.last_added:                       # already knows this view (e.g. a key held down): do not store it again
+            return len(same)
         self.vecs = np.vstack([self.vecs, f[None]])
         self.labels.append(label)
+        if len(same) + 1 > self.MAX_PER_LABEL:         # drop the oldest example of this label
+            drop = same[0]
+            self.vecs = np.delete(self.vecs, drop, axis=0)
+            del self.labels[drop]
         self._save()
         try:
             import cv2, time as _t
