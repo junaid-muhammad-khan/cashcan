@@ -113,7 +113,7 @@ def run(a, dbx, store) -> int:
         engine = InsightFaceEngine(modules=["detection", "recognition"])
         try:
             if a.webcam:
-                print("Look at the camera: taking a photo...", flush=True)
+                print("Look at the camera and hold still for a moment: averaging a few frames...", flush=True)
                 face = face_from_camera(engine, a.camera)
             else:
                 face = largest_usable(engine, decode_image(image.read_bytes()), identification=True)

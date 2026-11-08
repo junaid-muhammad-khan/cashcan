@@ -176,23 +176,29 @@ def largest_usable(engine: FaceEngine, img: np.ndarray, identification: bool = F
 
 
 # ---------------------------------------------------------------- commands
-def face_from_camera(engine, camera: str, seconds: float = 10.0) -> FaceResult:
-    """Watch the camera until a frame has a usable face (identification tier). A Mac camera's first frames are often dark or
-    out of focus, so keep trying for `seconds`. Raises QualityError with the last reason if nothing usable shows up."""
-    cam, last = open_camera(camera), "No face found. Look at the camera."
+def face_from_camera(engine, camera: str, seconds: float = 10.0, frames: int = 5, warmup: float = 1.0) -> FaceResult:
+    """A representative face from the camera: ignore the first `warmup` seconds (a Mac camera's first frames are often dark or
+    out of focus while auto-exposure settles), then average the templates of up to `frames` usable frames, like live mode does.
+    Raises QualityError with the last reason if no usable frame shows up within `seconds`."""
+    cam, last, good = open_camera(camera), "No face found. Look at the camera.", []
     try:
         t0 = time.time()
-        while time.time() - t0 < seconds:
+        while time.time() - t0 < seconds and len(good) < frames:
             frame = grab(cam, camera.isdigit(), timeout=3.0)
             if frame is None:
                 break
+            if time.time() - t0 < warmup:
+                continue
             try:
-                return largest_usable(engine, frame, identification=True)
+                good.append(largest_usable(engine, frame, identification=True))
             except QualityError as e:
                 last = str(e)
     finally:
         cam.release()
-    raise QualityError(last)
+    if not good:
+        raise QualityError(last)
+    mean = np.mean([f.embedding for f in good], axis=0)
+    return replace(good[-1], embedding=(mean / np.linalg.norm(mean)).astype(np.float32))
 
 
 def cmd_enroll(a, engine, store) -> int:

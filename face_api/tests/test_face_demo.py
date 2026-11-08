@@ -254,7 +254,7 @@ class _FakeCam:
 def test_face_from_camera_waits_for_a_usable_face(monkeypatch):
     cam = _FakeCam([png(1, noface=True), png(1, noface=True), png(1)])
     monkeypatch.setattr(fd, "open_camera", lambda src: cam)
-    face = fd.face_from_camera(FakeEngine(), "0", seconds=5)
+    face = fd.face_from_camera(FakeEngine(), "0", seconds=5, warmup=0.0)
     assert face.det_score > 0.9 and cam.released
 
 
@@ -265,5 +265,29 @@ def test_face_from_camera_gives_up_with_the_reason(monkeypatch):
     cam = _FakeCam([png(1, noface=True)])
     monkeypatch.setattr(fd, "open_camera", lambda src: cam)
     with pytest.raises(QualityError, match="No face found"):
-        fd.face_from_camera(FakeEngine(), "0", seconds=0.4)
+        fd.face_from_camera(FakeEngine(), "0", seconds=0.4, warmup=0.0)
     assert cam.released
+
+
+def test_face_from_camera_ignores_the_warmup_and_averages_good_frames(monkeypatch):
+    import numpy as np
+
+    class Seq:
+        """Each analysed frame gets a different noisy template of the same person; the average must be closer to the truth."""
+        calls = 0
+
+        def analyse(self, img):
+            from app.face_engine import FaceResult
+            Seq.calls += 1
+            v = np.random.default_rng(1).normal(size=512).astype(np.float32); v /= np.linalg.norm(v)
+            n = np.random.default_rng(100 + Seq.calls).normal(size=512).astype(np.float32)
+            e = v + 0.02 * n
+            return [FaceResult((e / np.linalg.norm(e)).astype(np.float32), 0.99, (0, 0, 200, 200), 500.0, 0.0)]
+
+    cam = _FakeCam([png(1)])
+    monkeypatch.setattr(fd, "open_camera", lambda src: cam)
+    truth = np.random.default_rng(1).normal(size=512).astype(np.float32); truth /= np.linalg.norm(truth)
+    face = fd.face_from_camera(Seq(), "0", seconds=5, frames=5, warmup=0.0)
+    assert Seq.calls == 5 and abs(float(np.linalg.norm(face.embedding)) - 1.0) < 1e-5
+    single = Seq().analyse(None)[0].embedding
+    assert float(face.embedding @ truth) > float(single @ truth)          # averaging 5 noisy frames beats one frame
