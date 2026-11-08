@@ -6,7 +6,8 @@
   python -m tools.databricks_sync push   --name junaid        # local enrollment -> Databricks (needs consent: you enrolled it)
   python -m tools.databricks_sync push   --name junaid --replace   # same person already there: replace with the local templates
   python -m tools.databricks_sync pull                         # Databricks -> local database (adds people missing locally)
-  python -m tools.databricks_sync search --image me.jpg        # same lookup done by Databricks Vector Search
+  python -m tools.databricks_sync search --webcam              # take a photo from the camera, ask Databricks Vector Search who it is
+  python -m tools.databricks_sync search --image me.jpg        # same, from a JPG or PNG file
   python -m tools.databricks_sync delete --name junaid         # removes the person from Databricks (not from the local file)
   python -m tools.databricks_sync status
 
@@ -43,7 +44,8 @@ def main(argv=None) -> int:
     p = sub.add_parser("push"); p.add_argument("--name", required=True)
     p.add_argument("--replace", action="store_true", help="the person already exists in Databricks: replace their templates with the local ones")
     sub.add_parser("delete").add_argument("--name", required=True)
-    s = sub.add_parser("search"); s.add_argument("--image", required=True); s.add_argument("--k", type=int, default=3)
+    s = sub.add_parser("search"); s.add_argument("--image"); s.add_argument("--webcam", action="store_true")
+    s.add_argument("--camera", default="0"); s.add_argument("--k", type=int, default=3)
     sub.add_parser("pull"); sub.add_parser("status")
     a = ap.parse_args(argv)
 
@@ -93,25 +95,38 @@ def run(a, dbx, store) -> int:
         st = dbx.index_status()
         print(f"people: {len(set(owners))}, templates: {len(owners)} | index {st.get('detailed_state')}, rows {st.get('indexed_row_count')}")
     else:  # search
-        from app.face_engine import InsightFaceEngine, QualityError, check_quality, decode_image, pick_face
+        import time
         from pathlib import Path
 
-        image = Path(a.image).expanduser()
-        if not image.is_file():
-            print(f"Cannot find an image at '{image}'. Give the path of a real JPG or PNG photo of a face "
-                  "(tip: drag the file into this window to paste its path).", file=sys.stderr)
-            return 1
+        from app.face_engine import InsightFaceEngine, QualityError, decode_image
+        from tools.face_demo import face_from_camera, largest_usable, pct
 
+        if not a.webcam and not a.image:
+            print("Say what to look up: --webcam (takes a photo from your camera) or --image <path to a JPG or PNG>.", file=sys.stderr)
+            return 2
+        if a.image and not a.webcam:
+            image = Path(a.image).expanduser()
+            if not image.is_file():
+                print(f"Cannot find an image at '{image}'. Give the path of a real JPG or PNG photo of a face "
+                      "(tip: drag the file into this window to paste its path), or use --webcam.", file=sys.stderr)
+                return 1
+        engine = InsightFaceEngine(modules=["detection", "recognition"])
         try:
-            face = pick_face(InsightFaceEngine(modules=["detection", "recognition"]).analyse(decode_image(image.read_bytes())))
-            check_quality(face)
+            if a.webcam:
+                print("Look at the camera: taking a photo...", flush=True)
+                face = face_from_camera(engine, a.camera)
+            else:
+                face = largest_usable(engine, decode_image(image.read_bytes()), identification=True)
         except QualityError as e:
-            print(f"Cannot use that image: {e}", file=sys.stderr); return 1
+            print(f"Cannot use that photo: {e}", file=sys.stderr)
+            return 1
+        t0 = time.time()
         hits = dbx.search(face.embedding, a.k)
+        print(f"Databricks Vector Search answered in {(time.time() - t0) * 1000:.0f} ms. Closest people to this face:")
         for user, cos in hits:
-            print(f"  {user}: cosine {cos:.3f}" + ("  (above threshold)" if cos >= config.MATCH_THRESHOLD else ""))
+            print(f"  {user}: {pct(cos)} similar" + (f"   <- above the {pct(config.MATCH_THRESHOLD)} match line" if cos >= config.MATCH_THRESHOLD else ""))
         if not hits:
-            print("  no results (empty index?)")
+            print("  no results (is the index empty?)")
     return 0
 
 

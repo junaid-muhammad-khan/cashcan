@@ -229,3 +229,41 @@ def test_unreadable_image_says_to_use_jpg_or_png():
 
     with pytest.raises(QualityError, match="JPG or PNG"):
         decode_image(b"this is not an image")
+
+
+class _FakeCam:
+    """A camera that shows two empty frames, then a face."""
+
+    def __init__(self, frames):
+        self.frames, self.released = list(frames), False
+
+    def read(self):
+        import cv2
+        import numpy as np
+
+        data = self.frames.pop(0) if len(self.frames) > 1 else self.frames[0]
+        return True, cv2.imdecode(np.frombuffer(data, np.uint8), 1)
+
+    def set(self, *a):
+        pass
+
+    def release(self):
+        self.released = True
+
+
+def test_face_from_camera_waits_for_a_usable_face(monkeypatch):
+    cam = _FakeCam([png(1, noface=True), png(1, noface=True), png(1)])
+    monkeypatch.setattr(fd, "open_camera", lambda src: cam)
+    face = fd.face_from_camera(FakeEngine(), "0", seconds=5)
+    assert face.det_score > 0.9 and cam.released
+
+
+def test_face_from_camera_gives_up_with_the_reason(monkeypatch):
+    import pytest
+    from app.face_engine import QualityError
+
+    cam = _FakeCam([png(1, noface=True)])
+    monkeypatch.setattr(fd, "open_camera", lambda src: cam)
+    with pytest.raises(QualityError, match="No face found"):
+        fd.face_from_camera(FakeEngine(), "0", seconds=0.4)
+    assert cam.released

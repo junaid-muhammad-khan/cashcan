@@ -133,6 +133,8 @@ Workspace `dbc-38b8f0fd-7cd5.cloud.databricks.com`, schema `workspace.cashcan_fa
 `users` (wallet, consent time) and `face_templates` (512-d templates, Change Data Feed on), plus Vector Search endpoint
 `cashcan-faces` (standard; storage-optimised is not supported on this workspace) with Delta Sync index `face_templates_index`.
 Code: `app/databricks_store.py`, CLI: `python -m tools.databricks_sync` (see its docstring). Needs `DATABRICKS_HOST`,
+Try the Vector Search lookup with one command and no files: `python -m tools.databricks_sync search --webcam` takes a photo from your camera and
+prints the closest people with a similarity percentage (use `--image <real JPG or PNG path>` for a file; HEIC is not supported).
 `DATABRICKS_TOKEN` (your personal access token, never committed) and `DATABRICKS_WAREHOUSE_ID=9a5194b5eb7321ed`.
 
 Checked live with synthetic (random) templates, no real faces: Vector Search cosine matched the local cosine to 0.00005 and

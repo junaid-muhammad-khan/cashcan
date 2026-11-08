@@ -176,6 +176,25 @@ def largest_usable(engine: FaceEngine, img: np.ndarray, identification: bool = F
 
 
 # ---------------------------------------------------------------- commands
+def face_from_camera(engine, camera: str, seconds: float = 10.0) -> FaceResult:
+    """Watch the camera until a frame has a usable face (identification tier). A Mac camera's first frames are often dark or
+    out of focus, so keep trying for `seconds`. Raises QualityError with the last reason if nothing usable shows up."""
+    cam, last = open_camera(camera), "No face found. Look at the camera."
+    try:
+        t0 = time.time()
+        while time.time() - t0 < seconds:
+            frame = grab(cam, camera.isdigit(), timeout=3.0)
+            if frame is None:
+                break
+            try:
+                return largest_usable(engine, frame, identification=True)
+            except QualityError as e:
+                last = str(e)
+    finally:
+        cam.release()
+    raise QualityError(last)
+
+
 def cmd_enroll(a, engine, store) -> int:
     name = a.name
     exists = store.user_exists(name)
