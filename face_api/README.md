@@ -71,11 +71,16 @@ python -m tools.face_demo delete --name junaid
 `tform.estimate(lmk, dst)` seen in older versions was a harmless library warning, now silenced.
 
 **If it says "skipped":** the face was found but a quality gate rejected the frame, and the label says which one and by how much,
-e.g. `blurry: sharpness 23 < 40`. Add `--debug` to see every number (face size, detector confidence, sharpness, head turn, and
+e.g. `blurry: sharpness 19 < 30`. Add `--debug` to see every number (face size, detector confidence, sharpness, head turn, and
 your match score as a percentage with the percentage needed to match). Fixes: more light on your face, face the camera,
 move closer (face wider than 80 px), hold still, clean the lens. If your webcam is just soft, relax a gate for the test:
 `python -m tools.face_demo --min-sharpness 15 identify --webcam --debug` (also `--min-face`, `--min-det`). The percentage is
 a similarity score, not a probability of being right; 45% is the line.
+
+**Sharpness gate (changed):** the blur number is now measured on the face resized to 112x112, so it no longer depends on how close you
+sit. The first version measured the raw crop and wrongly rejected close-up faces: the same sharp photo scored 1067 at a 100 px face
+and 27 at 453 px. The limit is 30, which rejects about 1% of LFW photos and genuine heavy blur, while the model still recognises
+moderately blurry faces (a sigma-4 blur still matched at 96%).
 
 `evaluate` is the accuracy test: put photos of you in one folder (different light, angles, glasses, a different day)
 and photos of other people in another. It lists every photo as ok/ERR, your lowest score vs the others' highest, and

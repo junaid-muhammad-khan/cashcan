@@ -16,7 +16,7 @@ MIN_ENROLL_FRAMES = 3
 MAX_ENROLL_FRAMES = 8
 MIN_DET_SCORE = 0.60
 MIN_FACE_PX = 80  # shortest side of the face box
-MIN_SHARPNESS = 40.0  # variance of Laplacian on the face crop
+MIN_SHARPNESS = 30.0  # Laplacian variance of the face crop resized to 112x112 (size-independent); rejects ~1% of LFW
 
 # Bin session: after one successful match, items in this window pay out to that user
 SESSION_TTL_SECONDS = int(os.environ.get("SESSION_TTL_SECONDS", "60"))

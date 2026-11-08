@@ -26,6 +26,24 @@ class FaceEngine(Protocol):
     def analyse(self, image_bgr: np.ndarray) -> list[FaceResult]: ...
 
 
+SHARPNESS_NORM_PX = 112  # the size the recognition model actually sees
+
+
+def face_sharpness(image_bgr: np.ndarray, box: tuple[int, int, int, int]) -> float:
+    """Variance of the Laplacian of the face crop, measured at a fixed 112x112 size.
+
+    The raw variance depends on how many pixels the face covers: the same sharp photo scores ~1000 at a
+    100 px face and ~15 at a 560 px face, so a fixed limit wrongly rejects close-up faces. Resizing to the
+    model's input size first makes the number comparable at any distance while still dropping with real blur."""
+    x1, y1, x2, y2 = box
+    crop = image_bgr[max(y1, 0):max(y2, y1 + 1), max(x1, 0):max(x2, x1 + 1)]
+    if crop.size == 0:
+        return 0.0
+    gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
+    gray = cv2.resize(gray, (SHARPNESS_NORM_PX, SHARPNESS_NORM_PX), interpolation=cv2.INTER_AREA)
+    return float(cv2.Laplacian(gray, cv2.CV_64F).var())
+
+
 class QualityError(ValueError):
     """Frame is unusable. The message is safe to show the user."""
 
@@ -72,9 +90,7 @@ class InsightFaceEngine:
         for f in self._app.get(image_bgr):
             x1, y1, x2, y2 = (int(v) for v in f.bbox)
             x1, y1 = max(x1, 0), max(y1, 0)
-            crop = image_bgr[y1:max(y2, y1 + 1), x1:max(x2, x1 + 1)]
-            gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
-            sharp = float(cv2.Laplacian(gray, cv2.CV_64F).var())
+            sharp = face_sharpness(image_bgr, (x1, y1, x2, y2))
             emb = np.asarray(f.normed_embedding, dtype=np.float32)
             turn = turn_ratio(np.asarray(f.kps)) if getattr(f, "kps", None) is not None else None
             pose = getattr(f, "pose", None)

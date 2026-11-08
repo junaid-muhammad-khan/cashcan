@@ -100,7 +100,7 @@ def test_percent_is_a_similarity_not_a_probability_and_never_negative():
 
 def test_skipped_frame_says_which_gate_failed_and_by_how_much():
     blurry = _report(sharp=12.0)
-    assert not blurry.usable and "blurry" in blurry.label and "12 < 40" in blurry.label
+    assert not blurry.usable and "blurry" in blurry.label and f"12 < {config.MIN_SHARPNESS:.0f}" in blurry.label
     small = _report(box=(0, 0, 60, 70))
     assert "too small" in small.label and "60px < 80px" in small.label
     unclear = _report(det=0.4)
