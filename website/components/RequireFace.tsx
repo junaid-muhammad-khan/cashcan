@@ -3,7 +3,9 @@
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import type { HeldRelease, Me } from "@/lib/faceApi";
+import { DB_PAUSED } from "@/lib/errors";
 import { useProfile } from "@/lib/useProfile";
+import PausedScreen from "./ServicePaused";
 
 // Face match is mandatory: a signed-in user without an enrolled face and a wallet is sent to /enroll.
 // If the profile can't be loaded we do NOT let the page through; we show a retry instead.
@@ -23,6 +25,7 @@ export default function RequireFace({ children }: { children: (p: Props) => Reac
 
   if (GATE_OFF) return <>{children({ me: state.status === "ready" ? state.me : null, setWallet, getToken })}</>;
   if (state.status === "loading" || missing) return <p style={{ padding: 48 }}>Checking your face match…</p>;
+  if (state.status === "error" && state.code === DB_PAUSED) return <PausedScreen current="dashboard" onRetry={reload} message={state.message} />;
   if (state.status === "error") {
     return (
       <div style={{ padding: 48, maxWidth: 560 }}>

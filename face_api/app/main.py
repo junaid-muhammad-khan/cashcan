@@ -25,11 +25,12 @@ import secrets
 from pathlib import Path
 
 from fastapi import Body, FastAPI, File, Form, Header, HTTPException, Response, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 
 from . import config, rewards
 from .activity import RANGES, summarise, window, zone
 from .auth import TokenVerifier, bearer, bin_for_key
+from .databricks_store import DatabaseUnavailable
 from .face_engine import FaceEngine, InsightFaceEngine, QualityError, check_quality, decode_image, pick_face
 from .liveness import POSE_HINTS, LivenessManager, enroll_pose
 from .matching import match
@@ -110,6 +111,15 @@ def create_app(engine: FaceEngine | None = None, store: FaceStore | None = None,
             if request.scope.get("raw_path"):
                 request.scope["raw_path"] = request.scope["path"].encode()
         return await call_next(request)
+    @app.exception_handler(DatabaseUnavailable)
+    async def database_unavailable(request, exc: DatabaseUnavailable):
+        """The database can't be reached or said no (stopped warehouse, free daily limit used up). Say so clearly, with a 503."""
+        log.warning("database unavailable on %s %s: %s", request.method, request.url.path, str(exc)[:200])
+        return JSONResponse(status_code=503, headers={"Retry-After": "600"}, content={"detail": {
+            "code": "database_unavailable", "daily_limit": exc.daily_limit,
+            "message": "CashCan's database isn't available right now, so we can't load this. It may be paused for the day "
+                       "(it has a free daily limit). Please try again later."}})
+
     state = {"engine": engine, "store": store or make_store(),
              "sessions": sessions or SessionManager(), "liveness": liveness or LivenessManager(),
              "accounts": accounts or make_accounts(), "verifier": verifier or make_verifier()}

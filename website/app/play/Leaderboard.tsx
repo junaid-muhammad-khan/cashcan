@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { isDbPaused } from "@/lib/errors";
 import { getBoard, type Board, type Period } from "@/lib/gameApi";
 
-type Load = { status: "loading" } | { status: "error"; message: string } | { status: "ready"; board: Board };
+type Load = { status: "loading" } | { status: "error"; message: string; paused: boolean } | { status: "ready"; board: Board };
 
 /** Top ten players for the week or all time. Nicknames only. `refresh` changes when a new score has been saved. */
 export default function Leaderboard({ getToken, refresh }: { getToken: (() => Promise<string>) | null; refresh: number }) {
@@ -21,7 +22,7 @@ export default function Leaderboard({ getToken, refresh }: { getToken: (() => Pr
         const board = await getBoard(period, token);
         if (alive) setLoad({ status: "ready", board });
       } catch (e) {
-        if (alive) setLoad({ status: "error", message: (e as Error).message });
+        if (alive) setLoad({ status: "error", message: (e as Error).message, paused: isDbPaused(e) });
       }
     })();
     return () => { alive = false; };
@@ -43,7 +44,7 @@ export default function Leaderboard({ getToken, refresh }: { getToken: (() => Pr
       {load.status === "loading" && <p className="lb-note">Loading the best sorters…</p>}
       {load.status === "error" && (
         <div className="lb-note" role="alert">
-          {load.message} <button type="button" className="lb-retry" onClick={() => setNonce((n) => n + 1)}>Try again</button>
+          {load.message}{load.paused ? " You can still play, and your score will save when it's back." : ""} <button type="button" className="lb-retry" onClick={() => setNonce((n) => n + 1)}>Try again</button>
         </div>
       )}
       {load.status === "ready" && load.board.leaderboard.length === 0 && (

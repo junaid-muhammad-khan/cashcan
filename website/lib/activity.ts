@@ -1,4 +1,5 @@
 // The signed-in user's drops, from the face API's GET /me/activity (face_api/app/activity.py). Real stored values only.
+import { parseDetail } from "./errors";
 import { FACE_API, FaceApiError } from "./faceApi";
 
 export type RangeKey = "today" | "week" | "30d";
@@ -44,7 +45,7 @@ export async function getActivity(token: string, range: RangeKey): Promise<Activ
     throw new FaceApiError("We couldn't reach CashCan. Check your connection and try again.", 0);
   }
   const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new FaceApiError(typeof body?.detail === "string" ? body.detail : `Your activity couldn't be loaded (${res.status}).`, res.status);
+  if (!res.ok) { const d = parseDetail(body, `Your activity couldn't be loaded (${res.status}).`); throw new FaceApiError(d.message, res.status, [], d.code); }
   return body as Activity;
 }
 

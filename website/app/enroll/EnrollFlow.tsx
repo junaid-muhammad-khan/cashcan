@@ -7,9 +7,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import AuthShell from "@/components/AuthShell";
 import { Check, LogoMark } from "@/components/icons";
 import { checkPose, enroll, FaceApiError, getMe, matchFrame, userIdFromSub, type MatchResult, type Me } from "@/lib/faceApi";
+import { ServicePaused } from "@/components/ServicePaused";
+import { isDbPaused } from "@/lib/errors";
 import { useCamera } from "./useCamera";
 
-type Step = "loading" | "already" | "consent" | "camera" | "scan" | "saving" | "duplicate" | "test" | "done";
+type Step = "loading" | "paused" | "already" | "consent" | "camera" | "scan" | "saving" | "duplicate" | "test" | "done";
 
 // The face API accepts 1-3 enrollment frames (face_api/app/config.py); three angles give the best recall.
 // Each photo is taken only once the API sees the head really turned that way (POST /pose), so "left" is never a front photo.
@@ -24,7 +26,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const AUDIENCE = process.env.NEXT_PUBLIC_AUTH0_AUDIENCE;
 
 const STEPPER = ["Consent", "Scan", "Test", "Done"];
-const stepIndex = (s: Step) => (s === "consent" || s === "loading" || s === "already" ? 0 : s === "test" ? 2 : s === "done" ? 3 : 1);
+const stepIndex = (s: Step) => (s === "consent" || s === "loading" || s === "already" || s === "paused" ? 0 : s === "test" ? 2 : s === "done" ? 3 : 1);
 
 export default function EnrollFlow() {
   const { user, getAccessTokenSilently } = useAuth0();
@@ -54,10 +56,12 @@ export default function EnrollFlow() {
         if (AUDIENCE) t = await getAccessTokenSilently({ authorizationParams: { audience: AUDIENCE } });
       } catch { /* no API token: fall back to local mode, the API will say if it needs one */ }
       let profile: Me | null = null;
+      let paused = false;
       if (t) {
-        try { profile = await getMe(t); } catch { /* accounts not configured on the API */ }
+        try { profile = await getMe(t); } catch (e) { if (isDbPaused(e)) paused = true; /* otherwise: accounts not configured on the API */ }
       }
       if (cancelled) return;
+      if (paused) { setStep("paused"); return; }
       setToken(t);
       setMe(profile);
       if (profile?.sol_wallet) setWallet(profile.sol_wallet);
@@ -250,6 +254,7 @@ export default function EnrollFlow() {
       </div>
 
       {step === "loading" && <p className="sub">Getting your account ready…</p>}
+      {step === "paused" && <ServicePaused onRetry={() => window.location.reload()} />}
 
       {step === "already" && (
         <div className="success-panel en-fade" role="status">

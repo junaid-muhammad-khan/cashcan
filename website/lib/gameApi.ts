@@ -1,4 +1,5 @@
 // Calls for the sorting game's leaderboard (face_api /game/*). Reading the board needs no login; saving does.
+import { parseDetail } from "./errors";
 import { FACE_API } from "./faceApi";
 
 export type Period = "week" | "all";
@@ -29,7 +30,7 @@ export interface SaveResult {
 }
 
 export class GameApiError extends Error {
-  constructor(message: string, public status: number) { super(message); }
+  constructor(message: string, public status: number, public code?: string) { super(message); }
 }
 
 async function call<T>(path: string, init: RequestInit, token?: string): Promise<T> {
@@ -43,7 +44,7 @@ async function call<T>(path: string, init: RequestInit, token?: string): Promise
     throw new GameApiError("We couldn't reach the leaderboard. Check your connection.", 0);
   }
   const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new GameApiError(typeof body?.detail === "string" ? body.detail : `Something went wrong (${res.status}).`, res.status);
+  if (!res.ok) { const d = parseDetail(body, `Something went wrong (${res.status}).`); throw new GameApiError(d.message, res.status, d.code); }
   return body as T;
 }
 

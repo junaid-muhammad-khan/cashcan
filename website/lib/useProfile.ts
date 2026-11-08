@@ -13,7 +13,7 @@ const writeCache = (me: Me | null) => { try { if (me) sessionStorage.setItem(CAC
 
 export type ProfileState =
   | { status: "loading" }
-  | { status: "error"; message: string }
+  | { status: "error"; message: string; code?: string }
   | { status: "ready"; me: Me };
 
 /** The signed-in user's profile from the face API (wallet, face enrolled), via an Auth0 access token for that API. */
@@ -35,7 +35,7 @@ export function useProfile() {
         writeCache(me);
         if (!cancelled) setState({ status: "ready", me });
       } catch (e) {
-        if (!cancelled) setState((s) => (s.status === "ready" ? s : { status: "error", message: (e as Error).message || "We couldn't load your profile." }));
+        if (!cancelled) setState((s) => (s.status === "ready" ? s : { status: "error", code: (e as { code?: string }).code, message: (e as Error).message || "We couldn't load your profile." }));
       }
     })();
     return () => { cancelled = true; };

@@ -1,0 +1,8 @@
+.paused-page { min-height: 100vh; background: #f4f3ee; color: #1f3b2e; font-family: var(--font-inter), system-ui, sans-serif; }
+.paused-main { padding: 48px 20px 64px; display: flex; justify-content: center; }
+.paused { width: 100%; max-width: 560px; background: #fff; border: 1px solid #e6e5dd; border-radius: 20px; padding: 32px 28px 28px; box-shadow: 0 1px 2px rgba(31, 59, 46, .04); }
+.paused-icon { width: 52px; height: 52px; border-radius: 16px; background: #fbf1d8; color: #8a5a00; display: flex; align-items: center; justify-content: center; }
+.paused .paused-title { font-family: var(--font-inter), system-ui, sans-serif; font-size: 26px; letter-spacing: -0.02em; margin: 18px 0 0; }
+.paused-msg { font-size: 16px; line-height: 1.55; color: #33433a; margin: 12px 0 0; }
+.paused-safe { font-size: 14px; line-height: 1.5; color: #157a46; font-weight: 600; margin: 14px 0 0; }
+.paused-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 22px; }

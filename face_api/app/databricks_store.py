@@ -28,6 +28,16 @@ class DatabricksError(RuntimeError):
     pass
 
 
+class DatabaseUnavailable(DatabricksError):
+    """Databricks could not be reached or refused the request (warehouse stopped, free daily limit used up, network,
+    expired token). Not a bug in a query: the API answers 503 with a plain message instead of a bare 500."""
+
+    @property
+    def daily_limit(self) -> bool:
+        t = str(self)
+        return "CREDIT_EXHAUSTED" in t or "daily limit" in t
+
+
 def score_to_cosine(score: float) -> float:
     """Vector Search scores L2 distance d as 1/(1+d^2). For unit vectors cosine = 1 - d^2/2, so we can
     report the same cosine similarity the local matcher and the thresholds use."""
@@ -60,9 +70,12 @@ class DatabricksFaces:
 
     # ---- plumbing
     def _json(self, method: str, path: str, body: dict | None = None) -> dict:
-        r = self._http.request(method, path, json=body)
+        try:
+            r = self._http.request(method, path, json=body)
+        except httpx.TransportError as e:   # timeout, DNS, connection reset
+            raise DatabaseUnavailable(f"{method} {path} -> {type(e).__name__}") from e
         if r.status_code >= 400:
-            raise DatabricksError(f"{method} {path} -> HTTP {r.status_code}: {r.text[:300]}")
+            raise DatabaseUnavailable(f"{method} {path} -> HTTP {r.status_code}: {r.text[:300]}")
         return r.json() if r.content else {}
 
     def sql(self, statement: str, params: dict[str, str] | None = None) -> list[list]:
