@@ -131,3 +131,28 @@ distribution states.
 All three datasets are used under their stated licenses for this non-commercial hackathon
 project. If CashCan is ever commercialized, re-verify license terms (especially GD, whose
 stated license differs between sources) before shipping.
+
+
+## Retrained for CashCan's rule: Recycle / Organics / Waste (current model)
+**The rule:** Recycle (the "cans" bin) = cans and bottles that can be recycled (drink cans, tins, aerosols, plastic and glass bottles, jars, jugs, cartons);
+Organics = food and plants; Waste = everything else, including paper and cardboard, foil, wrappers, bags, trays, lids, foam and textiles.
+
+**Why it was retrained:** the datasets are labelled by material, so "plastic" is mostly trays, bags and wrappers and "metal" includes foil and chip bags; the first model learned
+"any plastic or metal = Recycle". Measured on 1,009 photos it never trained on, with labels following the rule above, it put **218 of 647 waste items (34%) in the Recycle bin**
+(waste recall 66.2%, overall 78.0%).
+
+**How:** `scripts/relabel_containers.py` gives every glass/metal/plastic photo a container probability with CLIP (zero-shot) and writes `relabel/containers.csv`; photos CLIP is unsure about
+are left out. The labels were spot-checked by eye on contact sheets (`scripts/contact_sheet.py`): plastic "container" was almost all bottles and jugs, plastic "other" trays, bags, lids and foam,
+metal "container" cans, tins and aerosols, metal "other" foil, trays and wrappers (a few borderline cosmetic bottles). `scripts/train_containers.py` fine-tunes the previous checkpoint on TrashNet +
+RealWaste with a seeded 70/15/15 split (`relabel/split.csv`; the test split is never used for training or choosing the epoch).
+
+| Held-out test, 1,009 photos | Overall | Recycle correct | Organics correct | Waste correct | Waste sent to Recycle |
+|---|---|---|---|---|---|
+| Previous model (v1, kept as `*_v1.*`) | 78.0% | 98.7% | 100% | 66.2% | 218 / 647 |
+| **Retrained, FP32 (`mobilenetv2_cashcan.onnx`)** | **94.4%** | 95.7% | 99.2% | **92.9%** | **44 / 647** |
+| Retrained, INT8 (`mobilenetv2_cashcan_int8.onnx`, Pi default) | 94.1% | 96.2% | 99.2% | 92.3% | 47 / 647 |
+
+**Caveats:** the labels for glass/metal/plastic come from CLIP, not hand labelling, so a few training and test labels are wrong; the test photos are from TrashNet and RealWaste (floor and white-paper
+backgrounds), not from a bin camera; the GD dataset (Kaggle) was not available for this run, so organics come from RealWaste only (Food Organics, Vegetation); and a stricter reading that puts paper and
+cardboard in Recycle is a one-line change in `train_containers.py` (the `RW` and `TN` maps) plus a retrain. The 94.1% / 96.8% figures in the first section describe the previous, material-based labels.
+The most useful next step is photos from the real bin camera: 30 or so of each kind of item, added to the training set.

@@ -1,0 +1,38 @@
+{
+  "old_model": {
+    "accuracy": 78.0,
+    "per_class_recall": {
+      "cans": 98.72,
+      "organics": 100.0,
+      "waste": 66.15
+    }
+  },
+  "new_model": {
+    "accuracy": 94.35,
+    "per_class_recall": {
+      "cans": 95.73,
+      "organics": 99.22,
+      "waste": 92.89
+    }
+  },
+  "confusion_matrix_new[true x pred: cans, organics, waste]": [
+    [
+      224,
+      0,
+      10
+    ],
+    [
+      0,
+      127,
+      1
+    ],
+    [
+      44,
+      2,
+      601
+    ]
+  ],
+  "test_photos": 1009,
+  "train_photos": 4697,
+  "epochs": 5
+}

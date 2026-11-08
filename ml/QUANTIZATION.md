@@ -13,7 +13,7 @@ speeds on the real board will differ (INT8 usually helps more on ARM CPUs, but t
 The models were never the slow part. **Identifying on the device removes the network from every frame** (`--local-identity`, `pi_client/cashcan_pi/local.py`):
 a full identification of a 640x480 JPEG, including decoding, detection, embedding and matching, takes **~17 ms (median)**.
 
-## Object classifier: INT8 (`scripts/quantize_int8.py`)
+## Object classifier: INT8 (`scripts/quantize_int8.py`; numbers below are for the first, material-based model; the current retrained model's INT8 results are in README.md)
 Static INT8 quantization (QDQ, per-channel), calibrated on 400 unlabeled photos mixed from TrashNet and RealWaste (the real-world, damaged items matter).
 Evaluated on 1,500 photos from both datasets (100 per material folder), FP32 vs INT8 on the same photos:
 

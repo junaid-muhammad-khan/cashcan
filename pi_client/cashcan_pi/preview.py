@@ -9,6 +9,7 @@ import numpy as np
 
 GREEN, RED, AMBER, GREY, WHITE = (60, 170, 70), (60, 60, 200), (0, 170, 230), (110, 110, 110), (255, 255, 255)
 LIDS = ("organics", "cans", "waste")
+SHOWN = {"cans": "recycle"}   # the bin people call the recycle bin; the model's class is still "cans"
 
 
 def _text(img, s, org, color=WHITE, scale=0.6, bold=1):
@@ -43,7 +44,7 @@ def draw(frame: np.ndarray, status: dict, indicator_state: str, indicator_msg: s
     elif item:
         pay = f"reward {item['reward_lamports'] / 1e9:g} SOL" if item["reward_lamports"] else "no reward"
         note = " (unsure -> waste)" if item["reason"] == "low_confidence" else ""
-        _text(out, f"ITEM: {item['bin'].upper()} {item['confidence'] * 100:.0f}%{note}", (12, 84), WHITE, 0.7, 2)
+        _text(out, f"ITEM: {SHOWN.get(item['bin'], item['bin']).upper()} {item['confidence'] * 100:.0f}%{note}", (12, 84), WHITE, 0.7, 2)
         _text(out, f"{pay} - {'paid to ' + item['user_id'][:8] if item['user_id'] else 'nobody verified'}", (12, 110), WHITE, 0.55)
     else:
         _text(out, "show an item and hold it still in the box", (12, 84), GREY, 0.6)
@@ -60,7 +61,7 @@ def draw(frame: np.ndarray, status: dict, indicator_state: str, indicator_msg: s
         lit = status["open_lid"] == name
         x = i * bw
         cv2.rectangle(out, (x + 4, h - 46), (x + bw - 4, h - 6), GREEN if lit else (40, 40, 40), -1)
-        label = f"{name.upper()} OPEN" if lit else name.upper()
+        label = f"{SHOWN.get(name, name).upper()} OPEN" if lit else SHOWN.get(name, name).upper()
         (tw, _), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2 if lit else 1)
         cv2.putText(out, label, (x + (bw - tw) // 2, h - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, WHITE if lit else (170, 170, 170), 2 if lit else 1, cv2.LINE_AA)
     return out
