@@ -35,7 +35,7 @@ function AccountPageInner() {
         <h1 style={{ fontSize: 44, marginTop: 12 }}>
           {welcome ? `Welcome to CashCan, ${firstName}.` : `Hi, ${firstName}.`}
         </h1>
-        <p className="section-lede">Add a Solana wallet address so the bin knows where to send your rewards.</p>
+        <p className="section-lede">Add your crypto wallet address so we know where to send your SOL.</p>
 
         <section className="account-card" aria-label="Account details">
           <dl>

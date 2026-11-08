@@ -66,7 +66,7 @@ export default function EnrollFlow() {
   async function onConsentContinue() {
     const next = {
       consent: consent ? undefined : "Tick the box to continue, or skip face match for now.",
-      wallet: !needsWallet ? undefined : !wallet.trim() ? "Add a Solana wallet address. Rewards from the bin are sent there."
+      wallet: !needsWallet ? undefined : !wallet.trim() ? "Add your crypto wallet address so we know where to send your SOL."
         : !SOLANA_RE.test(wallet.trim()) ? "Solana addresses are 32–44 letters and numbers. Paste it again." : undefined,
     };
     setErrs(next);
@@ -155,7 +155,7 @@ export default function EnrollFlow() {
 
   const journey = [
     { title: "Create your account", sub: "Done", done: true },
-    { title: "Link a Solana wallet", sub: needsWallet ? "Part of this setup" : "Linked", done: !needsWallet },
+    { title: "Link a crypto wallet", sub: needsWallet ? "Part of this setup" : "Linked", done: !needsWallet },
     { title: "Set up face match", sub: step === "done" || step === "already" ? "Ready at any bin" : "About a minute", done: step === "done" || step === "already" },
   ];
 
@@ -211,7 +211,7 @@ export default function EnrollFlow() {
 
           {needsWallet && (
             <div className="field" style={{ marginTop: 20 }}>
-              <div className="label-row"><label htmlFor="wallet">Solana wallet address <span className="hint">(where bin rewards go)</span></label></div>
+              <div className="label-row"><label htmlFor="wallet">Crypto wallet address <span className="hint">(for your SOL payouts)</span></label></div>
               <input
                 id="wallet" type="text" autoComplete="off" spellCheck={false} value={wallet}
                 aria-invalid={errs.wallet ? true : undefined} aria-describedby={errs.wallet ? "wallet-err" : undefined}
@@ -224,7 +224,7 @@ export default function EnrollFlow() {
 
           <label className="check check-card" style={{ marginTop: 16, borderColor: errs.consent ? "var(--danger)" : undefined }}>
             <input type="checkbox" checked={consent} onChange={(e) => { setConsent(e.target.checked); setErrs((x) => ({ ...x, consent: undefined })); }} />
-            <span>I agree to CashCan creating a face template from my camera and using it to identify me at bins. I can delete it at any time.</span>
+            <span>I agree to let CashCan create a face template from my camera to recognize me at bins, and I can delete it any time.</span>
           </label>
           {errs.consent && <p className="en-err" role="alert">{errs.consent}</p>}
           {error && <div className="alert" role="alert" style={{ marginTop: 16 }}>{error}</div>}
