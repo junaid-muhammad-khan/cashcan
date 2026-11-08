@@ -96,3 +96,6 @@ cached on disk so a restart or a dropped network still works) and identifies peo
 server's own code from `../face_api`, so the rules are identical. A full identification measured **~17 ms** (median) instead of seconds, and the last 3 good frames are averaged
 (with a reset if a different person steps in). Records to `POST /interactions` then name the user (`user_id`), which the server accepts only from a bin with a valid key.
 **Trust:** the bin holds everyone's face templates and vouches for who it saw, so protect its key and its disk. The classifier defaults to the INT8 model (see `../ml/QUANTIZATION.md`).
+
+`--no-liveness` (with `--local-identity`): verify on the face match alone. By default, after the bin recognises a face it asks for one random head turn (left or right) before it opens a session,
+so a still photo on a phone cannot collect rewards. With the flag a recognised face is verified straight away; a photo or a video of the person would then also verify.
