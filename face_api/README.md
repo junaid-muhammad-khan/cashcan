@@ -96,6 +96,10 @@ A person can hold up to 40 templates (`--max-templates`); `--add` checks there i
 `--smooth 1` turns it off). One bad frame (blink, motion, a light flicker) no longer flips the answer, and the average is cleared the moment the
 face disappears or a different-looking face steps in, so nobody can borrow another person's average. The label shows `(avg of N)`.
 
+**Test everyone in one go:** `python -m tools.face_demo selftest --outsider` (add `--rounds 2` to go through everyone twice, `--databricks` to look people up with Databricks
+Vector Search, `--names junaid,person-1` to test only some). Each person steps up when prompted, is looked up from a few averaged camera frames, and is marked PASS or FAIL against who was meant to
+be there; `--outsider` adds a step for someone who is not enrolled, who should come back unrecognised. It ends with a result block you can paste and exits with code 2 if anything failed.
+
 **If nothing seems to happen:** the terminal now prints each stage (model loading, camera opened, frames arriving) and ends with
 `Stopped: <reason>`. The video window can open behind other windows; if you cannot find it, press Ctrl+C and run
 `python -m tools.face_demo identify --webcam --no-window --debug`, which prints everything as text. The line

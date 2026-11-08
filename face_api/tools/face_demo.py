@@ -7,6 +7,7 @@
   python -m tools.face_demo identify --webcam                      # live; press q to quit
   python -m tools.face_demo identify --webcam --debug              # also show why a frame is skipped, in numbers
   python -m tools.face_demo evaluate --name junaid --mine ~/test/me --others ~/test/others
+  python -m tools.face_demo selftest --outsider                     # everyone steps up in turn: PASS or FAIL for each
   python -m tools.face_demo list | delete --name junaid
 
 Faces are stored as 512-number templates (no photos) in a local SQLite file (--db, default
@@ -552,6 +553,65 @@ def cmd_evaluate(a, engine, store) -> int:
     return 0 if (mine_ok == mine_n and oth_hit + oth_wrong == 0) else 2
 
 
+def decide_from_ranking(ranked: list[tuple[str, float]], threshold: float, margin: float) -> str | None:
+    """The same rule as app.matching.match, for a ranked list of (person, best score): recognised only if the best person
+    clears the threshold AND beats the runner-up by the margin."""
+    if not ranked or ranked[0][1] < threshold:
+        return None
+    if len(ranked) > 1 and ranked[0][1] - ranked[1][1] < margin:
+        return None
+    return ranked[0][0]
+
+
+def cmd_selftest(a, engine, store) -> int:
+    """Guided test: each person steps up in turn, is looked up, and is marked PASS or FAIL against who was meant to be there."""
+    people = [n.strip() for n in a.names.split(",")] if a.names else sorted(set(store.all_embeddings()[0]))
+    if not people:
+        print("Nobody is enrolled yet. Run `databricks_sync pull --refresh` or `enroll` first.", file=sys.stderr)
+        return 1
+    steps = [(p, p) for _ in range(a.rounds) for p in people] + ([("someone who is NOT enrolled", None)] if a.outsider else [])
+    if a.databricks:
+        from app.databricks_store import DatabricksFaces
+
+        dbx = DatabricksFaces()
+        lookup = lambda emb: dbx.search(emb, 3)
+        print("Looking people up with Databricks Vector Search.")
+    else:
+        owners, gal = store.all_embeddings()
+        lookup = lambda emb: ranking(emb, owners, gal)[:3]
+        print("Looking people up with the local templates.")
+    rows = []
+    for who, expected in steps:
+        input(f"\nNext: {who}. Stand at the camera, look at it, and press Enter... ")
+        try:
+            face = face_from_camera(engine, a.camera)
+        except QualityError as e:
+            print(f"  no usable photo: {e}")
+            rows.append((who, expected, None, None, 0.0, None, 0.0))
+            continue
+        ranked = lookup(face.embedding)
+        top, score = (ranked[0] if ranked else (None, 0.0))
+        nxt, nxt_score = (ranked[1] if len(ranked) > 1 else (None, 0.0))
+        got = decide_from_ranking(ranked, a.threshold, a.margin)
+        ok = got == expected
+        shown = f"recognised as {got}" if got else "not recognised"
+        print(f"  expected {who:28} -> {shown} (best {top} {pct(score)}; next {nxt} {pct(nxt_score)})   {'PASS' if ok else 'FAIL'}")
+        rows.append((who, expected, got, top, score, nxt, nxt_score))
+    done = [r for r in rows if r[3] is not None or r[2] is not None]
+    passed = sum(1 for r in rows if r[2] == r[1] and r[3] is not None)
+    right = [r[4] for r in rows if r[1] is not None and r[2] == r[1]]
+    wrong = [r[4] for r in rows if (r[1] is None and r[3] is not None) or (r[1] is not None and r[3] not in (None, r[1]))]
+    print("\n==== SELFTEST RESULT (paste this) ====")
+    print(f"passed {passed} of {len(rows)} steps   threshold {pct(a.threshold)}   skipped (no photo): {len(rows) - len(done)}")
+    if right:
+        print(f"right person recognised: {len(right)}   lowest score {pct(min(right))}   median {pct(float(np.median(right)))}")
+    if wrong:
+        print(f"wrong-person / outsider best scores: highest {pct(max(wrong))}")
+    for who, expected, got, top, score, nxt, nxt_score in rows:
+        print(f"  {who:28} expected {str(expected):10} got {str(got):10} best {top} {pct(score)}  next {nxt} {pct(nxt_score)}")
+    return 0 if passed == len(rows) else 2
+
+
 def cmd_list(a, engine, store) -> int:
     owners, _ = store.all_embeddings()
     if not owners:
@@ -599,6 +659,12 @@ def main(argv=None) -> int:
     v = sub.add_parser("evaluate"); v.add_argument("--name", required=True)
     v.add_argument("--mine", nargs="+"); v.add_argument("--others", nargs="+"); v.set_defaults(fn=cmd_evaluate)
 
+    t = sub.add_parser("selftest", help="guided test: each person steps up and is marked PASS or FAIL")
+    t.add_argument("--names", help="comma-separated people to test (default: everyone enrolled)")
+    t.add_argument("--rounds", type=int, default=1, help="how many times through the list")
+    t.add_argument("--outsider", action="store_true", help="add a step for someone who is NOT enrolled (should come back unrecognised)")
+    t.add_argument("--databricks", action="store_true", help="look people up with Databricks Vector Search instead of the local templates")
+    t.add_argument("--camera", default="0"); t.set_defaults(fn=cmd_selftest)
     sub.add_parser("list").set_defaults(fn=cmd_list)
     d = sub.add_parser("delete"); d.add_argument("--name", required=True); d.set_defaults(fn=cmd_delete)
 

@@ -99,6 +99,7 @@ def test_search_returns_best_cosine_per_user(db):
     assert out[0][1] == pytest.approx(score_to_cosine(0.9))  # best of alice's two hits
     sent = fake.other[-1][2]
     assert len(sent["query_vector"]) == 512 and sent["columns"] == ["user_id"]
+    assert sent["num_results"] >= 50      # deeper than one person's maximum (40) so a runner-up person is never hidden
 
 
 def test_http_errors_surface(db):

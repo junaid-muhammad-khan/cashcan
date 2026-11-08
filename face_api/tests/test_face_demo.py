@@ -18,7 +18,7 @@ def write(tmp_path, folder, name, pid, **kw):
 def args(tmp_path, **kw):
     base = dict(db=str(tmp_path / "d.db"), name="me", images=None, camera="0", count=5, interval=1.0,
                 no_window=True, threshold=config.MATCH_THRESHOLD, margin=config.AMBIGUITY_MARGIN,
-                mine=None, others=None, add=False, guided=False, lead=4.0, max_templates=40)
+                mine=None, others=None, add=False, guided=False, lead=4.0, max_templates=40, names=None, rounds=1, outsider=False, databricks=False)
     return Namespace(**{**base, **kw})
 
 
@@ -291,3 +291,36 @@ def test_face_from_camera_ignores_the_warmup_and_averages_good_frames(monkeypatc
     assert Seq.calls == 5 and abs(float(np.linalg.norm(face.embedding)) - 1.0) < 1e-5
     single = Seq().analyse(None)[0].embedding
     assert float(face.embedding @ truth) > float(single @ truth)          # averaging 5 noisy frames beats one frame
+
+
+def test_decide_from_ranking_matches_the_matcher_rules():
+    assert fd.decide_from_ranking([("a", 0.80), ("b", 0.10)], 0.45, 0.05) == "a"
+    assert fd.decide_from_ranking([("a", 0.40), ("b", 0.10)], 0.45, 0.05) is None            # below the line
+    assert fd.decide_from_ranking([("a", 0.80), ("b", 0.78)], 0.45, 0.05) is None            # too close to call
+    assert fd.decide_from_ranking([], 0.45, 0.05) is None
+
+
+def _selftest(monkeypatch, tmp_path, who_is_at_camera, **kw):
+    from app.face_engine import FaceResult
+    from app.store import FaceStore
+    from .conftest import person_vec
+
+    store = FaceStore(str(tmp_path / "s.db"))
+    store.add_user("alice", "W", [person_vec(1)])
+    store.add_user("bob", "W", [person_vec(2)])
+    seq = list(who_is_at_camera)
+    monkeypatch.setattr("builtins.input", lambda prompt="": "")
+    monkeypatch.setattr(fd, "face_from_camera", lambda engine, cam: FaceResult(person_vec(seq.pop(0)), 0.99, (0, 0, 200, 200), 500.0, 0.0))
+    return fd.cmd_selftest(args(tmp_path, names=kw.get("names", "alice,bob"), rounds=1, outsider=kw.get("outsider", False), databricks=False), None, store)
+
+
+def test_selftest_passes_when_everyone_is_recognised_and_the_outsider_is_not(monkeypatch, tmp_path, capsys):
+    assert _selftest(monkeypatch, tmp_path, [1, 2, 99], outsider=True) == 0
+    out = capsys.readouterr().out
+    assert out.count("PASS") == 3 and "FAIL" not in out and "passed 3 of 3 steps" in out and "highest" in out
+
+
+def test_selftest_fails_loudly_when_the_wrong_person_is_at_the_camera(monkeypatch, tmp_path, capsys):
+    assert _selftest(monkeypatch, tmp_path, [2, 2]) == 2          # told 'alice' but bob stood there
+    out = capsys.readouterr().out
+    assert "FAIL" in out and "passed 1 of 2 steps" in out and "expected alice" in out

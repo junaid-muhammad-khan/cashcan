@@ -19,6 +19,7 @@ import numpy as np
 
 DEFAULT_SCHEMA = "workspace.cashcan_faces"
 DEFAULT_INDEX = "workspace.cashcan_faces.face_templates_index"
+SEARCH_DEPTH = 64  # nearest templates to fetch: a person can hold 40, so ask for more than that or a runner-up person can be hidden
 DEFAULT_ENDPOINT = "cashcan-faces"
 MODEL_VERSION = "buffalo_s/w600k_mbf"
 
@@ -217,7 +218,7 @@ class DatabricksFaces:
     def search(self, embedding: np.ndarray, k: int = 3) -> list[tuple[str, float]]:
         """Best cosine per user according to Vector Search, highest first."""
         r = self._json("POST", f"/api/2.0/vector-search/indexes/{self.index}/query",
-                       {"columns": ["user_id"], "query_vector": [float(x) for x in embedding], "num_results": k * 3})
+                       {"columns": ["user_id"], "query_vector": [float(x) for x in embedding], "num_results": max(k * 3, SEARCH_DEPTH)})
         best: dict[str, float] = {}
         for row in r.get("result", {}).get("data_array", []):
             user, score = row[0], float(row[-1])
