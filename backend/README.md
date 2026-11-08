@@ -68,6 +68,21 @@ enrollment page use; `delete` removes it. This is local only for now. Databricks
 there is a workspace to point at. Not yet run on macOS itself (developed and tested on Linux, with video files
 standing in for a camera).
 
+## Databricks (face templates + Vector Search)
+Workspace `dbc-38b8f0fd-7cd5.cloud.databricks.com`, schema `workspace.cashcan_faces` (separate from Trevor's `workspace.cashcan`):
+`users` (wallet, consent time) and `face_templates` (512-d templates, Change Data Feed on), plus Vector Search endpoint
+`cashcan-faces` (standard; storage-optimised is not supported on this workspace) with Delta Sync index `face_templates_index`.
+Code: `app/databricks_store.py`, CLI: `python -m tools.databricks_sync` (see its docstring). Needs `DATABRICKS_HOST`,
+`DATABRICKS_TOKEN` (your personal access token, never committed) and `DATABRICKS_WAREHOUSE_ID=9a5194b5eb7321ed`.
+
+Checked live with synthetic (random) templates, no real faces: Vector Search cosine matched the local cosine to 0.00005 and
+put the right person first 5/5; push, pull (exact round trip) and delete worked; test rows were removed afterwards.
+- **Matching stays local** after `pull`. A Vector Search lookup takes a couple of seconds and a new person only appears ~2 min
+  after a push (TRIGGERED sync); deletes leave the table at once but the index drops them only after its next sync.
+- **Cost:** the standard endpoint bills while it exists. Delete it when you are not using it.
+- **Who can read the face tables:** no grants beyond the owner exist, but Trevor Lau is also a workspace admin, and admins can read
+  everything. Treat the tables as readable by both of you. Biometric data: consent, deletion on request, no photos stored.
+
 ## Measured accuracy (LFW, 2026-11-07)
 Full tables in [`EVAL.md`](EVAL.md); regenerate with `python -m tools.eval_lfw --data <dir>` (see its docstring).
 Real pipeline, threshold 0.45, 150 enrolled people (3 photos each), 757 later photos of them, 831 photos of 600 strangers:

@@ -114,8 +114,23 @@ class DatabricksFaces:
         return True
 
     # ---- vector search
-    def sync_index(self) -> None:
-        self._json("POST", f"/api/2.0/vector-search/indexes/{self.index}/sync")
+    def sync_index(self, retries: int = 12, wait: float = 10.0, sleep=None) -> bool:
+        """Ask the index to catch up with the table. A TRIGGERED index refuses (HTTP 400, "not ready to sync")
+        while an earlier sync is still running, so retry for a while. The table change is already committed
+        either way, so this never raises for that case: it returns False and the next sync will pick it up."""
+        import time
+
+        sleep = sleep or time.sleep
+        for attempt in range(retries):
+            r = self._http.post(f"/api/2.0/vector-search/indexes/{self.index}/sync")
+            if r.status_code < 400:
+                return True
+            if r.status_code == 400 and "not ready to sync" in r.text:
+                if attempt < retries - 1:
+                    sleep(wait)
+                continue
+            raise DatabricksError(f"POST sync -> HTTP {r.status_code}: {r.text[:300]}")
+        return False
 
     def index_status(self) -> dict:
         return self._json("GET", f"/api/2.0/vector-search/indexes/{self.index}").get("status", {})

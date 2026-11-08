@@ -106,3 +106,40 @@ def test_http_errors_surface(db):
     d._http = httpx.Client(base_url="https://x.example", transport=httpx.MockTransport(lambda r: httpx.Response(403, text="nope")))
     with pytest.raises(DatabricksError, match="403"):
         d.sync_index()
+
+
+def test_sync_waits_out_a_running_sync_and_does_not_raise_if_it_stays_busy():
+    calls = []
+
+    def busy_then_ok(req):
+        calls.append(1)
+        if len(calls) < 3:
+            return httpx.Response(400, text='{"message":"Index is not ready to sync yet. Pipeline is in state INITIALIZING"}')
+        return httpx.Response(200, json={})
+
+    d = DatabricksFaces("https://x.example", "tok", "wh1", transport=httpx.MockTransport(busy_then_ok))
+    assert d.sync_index(sleep=lambda s: None) is True and len(calls) == 3
+
+    always_busy = DatabricksFaces("https://x.example", "tok", "wh1", transport=httpx.MockTransport(
+        lambda r: httpx.Response(400, text="Index is not ready to sync yet")))
+    assert always_busy.sync_index(retries=3, sleep=lambda s: None) is False  # committed data is not lost to an exception
+
+
+def test_sync_still_raises_on_real_errors():
+    d = DatabricksFaces("https://x.example", "tok", "wh1", transport=httpx.MockTransport(lambda r: httpx.Response(403, text="nope")))
+    with pytest.raises(DatabricksError, match="403"):
+        d.sync_index(sleep=lambda s: None)
+
+
+def test_pull_into_adds_only_missing_people(tmp_path):
+    from app.store import FaceStore
+    from tools.databricks_sync import pull_into
+
+    store = FaceStore(str(tmp_path / "l.db"))
+    store.add_user("local-only", "W0", [vec(9)])
+    owners = ["alice", "alice", "bob", "local-only"]
+    mat = np.stack([vec(1), vec(2), vec(3), vec(4)])
+    added = pull_into(store, owners, mat, {"alice": "WA", "bob": "WB", "local-only": "WX"})
+    assert added == ["alice", "bob"]
+    assert store.wallet("alice") == "WA" and len(store.embeddings_for("alice")) == 2
+    assert store.wallet("local-only") == "W0" and len(store.embeddings_for("local-only")) == 1  # untouched
