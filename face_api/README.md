@@ -262,3 +262,7 @@ Settings: see `.env.example` (`AUTH0_*`, `BIN_API_KEYS`, `DATABRICKS_*`, `PAYOUT
 
 **Known limit:** bin sessions (`app/sessions.py`) live in the memory of one server instance. On Vercel, `/match` and `/interactions` can land on
 different instances, and then the drop is recorded as `not_recognised` (no reward). This is unchanged by the payout work.
+
+## For bins that identify people on the device
+`GET /gallery` (X-Bin-Key) returns every person's face templates (float16, base64) with an `ETag` version; `If-None-Match` gets a 304 when nothing changed. `POST /interactions`
+accepts a `user_id` from a bin (the bin key vouches for it; unknown ids are ignored). See `../pi_client/README.md` (`--local-identity`) and `../ml/QUANTIZATION.md` for the measurements.

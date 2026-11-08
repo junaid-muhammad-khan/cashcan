@@ -89,3 +89,13 @@ still in it), the last decision (bin, confidence, reward, who gets it) and the t
 Lag and "it does not see my face": server calls (0.5-4 s each, longer on a cold start) run on their own thread now, so the window stays smooth. The line above the lids shows
 `local face check` (does the cheap on-device detector see a face) and `server:` (its last answer, e.g. `below_threshold 31%`, `ambiguous`, `matched 76%`). If the local check says
 `no face`, run with `--no-face-precheck` to send every frame. At start-up the bin calls `/warm` so the server is awake before the first match.
+
+## Fast identity on the device (`--local-identity`)
+```bash
+python -m cashcan_pi --camera 0 --classify --show --local-identity --server https://www.cashcan.biz/face-api --bin-key "$CASHCAN_BIN_KEY"
+```
+Without it, every frame goes to the face server (0.5 to 4 s each). With it the bin downloads the face gallery once (bin key required; refreshed every 60 s, resent only when it changed,
+cached on disk so a restart or a dropped network still works) and identifies people itself: detection, embedding, matching, head-turn challenge and sessions run locally, using the
+server's own code from `../face_api`, so the rules are identical. A full identification measured **~17 ms** (median) instead of seconds, and the last 3 good frames are averaged
+(with a reset if a different person steps in). Records to `POST /interactions` then name the user (`user_id`), which the server accepts only from a bin with a valid key.
+**Trust:** the bin holds everyone's face templates and vouches for who it saw, so protect its key and its disk. The classifier defaults to the INT8 model (see `../ml/QUANTIZATION.md`).

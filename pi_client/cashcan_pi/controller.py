@@ -142,7 +142,8 @@ class BinController:
         self.on_event(item)
         payload = {"interaction_id": iid, "item_class": bin_name, "confidence": round(conf, 4)}
         if session:
-            payload["session_token"] = session.token
+            payload["session_token"] = session.token   # meaningful only if the server issued it
+            payload["user_id"] = session.user_id       # a bin that identifies people itself names them; the bin key vouches for it
         res = self.outbox.send(payload, now)
         if res is not None:
             item.update(server_outcome(res))      # what the server decided: shown in the preview

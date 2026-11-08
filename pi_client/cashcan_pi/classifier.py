@@ -35,7 +35,10 @@ class OnnxClassifier:
     def __init__(self, model: str | Path | None = None, classes: list[str] | None = None):
         import onnxruntime as ort
 
-        model = Path(model) if model else DEFAULT_MODEL_DIR / "mobilenetv2_cashcan.onnx"
+        if model is None:  # the INT8 model is the Pi default (3.4x smaller, faster, ~0.4 points less accurate: see ml/QUANTIZATION.md); FP32 if it is missing
+            int8 = DEFAULT_MODEL_DIR / "mobilenetv2_cashcan_int8.onnx"
+            model = int8 if int8.exists() else DEFAULT_MODEL_DIR / "mobilenetv2_cashcan.onnx"
+        model = Path(model)
         opts = ort.SessionOptions()
         opts.log_severity_level = 3
         self._sess = ort.InferenceSession(str(model), opts, providers=["CPUExecutionProvider"])

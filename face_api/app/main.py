@@ -13,13 +13,15 @@ GET    /cron/reconcile    retries failed payouts and resolves stuck ones (Vercel
 """
 from __future__ import annotations
 
+import base64
+import hashlib
 import logging
 import re
 import secrets
 
 from pathlib import Path
 
-from fastapi import Body, FastAPI, File, Form, Header, HTTPException, UploadFile
+from fastapi import Body, FastAPI, File, Form, Header, HTTPException, Response, UploadFile
 from fastapi.responses import FileResponse
 
 from . import config, rewards
@@ -345,6 +347,21 @@ def create_app(engine: FaceEngine | None = None, store: FaceStore | None = None,
             raise HTTPException(401, "Missing or invalid X-Bin-Key.")
         return found
 
+    @app.get("/gallery")
+    def gallery(response: Response, x_bin_key: str | None = Header(None), if_none_match: str | None = Header(None)):
+        """Face templates for a bin that identifies people ON THE DEVICE (no network call per frame). Bin key only.
+        These are biometric templates of every enrolled person: only trusted bins get them, over HTTPS. float16 keeps it small."""
+        bin_id_of(x_bin_key)
+        owners, mat = state["store"].all_embeddings()
+        version = hashlib.sha1(mat.tobytes() + "|".join(owners).encode()).hexdigest()[:16]
+        if if_none_match == version:
+            return Response(status_code=304, headers={"ETag": version})
+        order = list(dict.fromkeys(owners))
+        people = [{"user_id": u, "embeddings_b64": base64.b64encode(mat[[i for i, o in enumerate(owners) if o == u]].astype(np.float16).tobytes()).decode()}
+                  for u in order]
+        response.headers["ETag"] = version
+        return {"version": version, "dim": int(mat.shape[1]) if len(owners) else 512, "people": people}
+
     @app.post("/interactions")
     def new_interaction(body: dict = Body(...), x_bin_key: str | None = Header(None)):
         """One sorted item. `interaction_id` is chosen by the bin and makes retries safe: the same id is stored once and paid
@@ -358,6 +375,9 @@ def create_app(engine: FaceEngine | None = None, store: FaceStore | None = None,
             raise HTTPException(400, "interaction_id is too long.")
         token = body.get("session_token")
         user_id = state["sessions"].user_for(str(token)) if token else None
+        claimed = str(body.get("user_id") or "").strip()   # a bin that identifies people itself (local identity) names them; the bin key vouches for it
+        if user_id is None and claimed and state["store"].user_exists(claimed):
+            user_id = claimed
         row, created = need_payouts().record(iid, bin_id, item, body.get("confidence"), user_id, token and str(token)[:8])
         return {**public(row), "duplicate": not created}
 
