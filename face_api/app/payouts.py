@@ -56,7 +56,8 @@ class PayoutClient:
             return SendResult(False, error=f"payout route unreachable: {type(e).__name__}", timed_out=True)
         body = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
         if r.status_code == 200 and body.get("signature"):
-            return SendResult(True, body["signature"], int(body["lamports"]), float(body["cad_per_sol"]), body.get("rate_source"))
+            num = lambda k, f: None if body.get(k) is None else f(body[k])
+            return SendResult(True, body["signature"], num("lamports", int), num("cad_per_sol", float), body.get("rate_source"))
         return SendResult(False, error=str(body.get("error") or f"payout route returned HTTP {r.status_code}")[:500])
 
     def lookup(self, interaction_id: str) -> dict | None:
