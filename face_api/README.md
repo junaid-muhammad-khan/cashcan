@@ -3,7 +3,7 @@
 Face enrollment and matching for the bin. Stores 512-d ArcFace embeddings only, never photos.
 
 ```bash
-cd backend
+cd face_api
 pip install -r requirements.txt
 uvicorn app.main:app_factory --factory --port 8000
 python -m pytest -q
@@ -43,7 +43,7 @@ session. The bin streams frames to `/liveness/{id}/frame`; only a pass returns t
 
 ```bash
 git fetch origin && git checkout feature/mac-demo
-cd backend
+cd face_api
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 pip uninstall -y opencv-python-headless && pip install opencv-python   # the windowed build, for the camera preview
@@ -63,7 +63,7 @@ python -m tools.face_demo delete --name junaid
 and photos of other people in another. It lists every photo as ok/ERR, your lowest score vs the others' highest, and
 whether a clean threshold exists. The more varied photos, the more it tells you.
 
-Your face is saved as 512 numbers (no photo) in `backend/cashcan_faces.db` (git-ignored), the same database the API and
+Your face is saved as 512 numbers (no photo) in `face_api/cashcan_faces.db` (git-ignored), the same database the API and
 enrollment page use; `delete` removes it. This is local only for now. Databricks Vector Search is the next step once
 there is a workspace to point at. Not yet run on macOS itself (developed and tested on Linux, with video files
 standing in for a camera).
