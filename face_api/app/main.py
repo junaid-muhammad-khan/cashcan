@@ -29,10 +29,19 @@ SOLANA_ADDR_RE = re.compile(r"^[1-9A-HJ-NP-Za-km-z]{32,44}$")  # base58 public k
 STATIC = Path(__file__).parent / "static"
 
 
+def make_store():
+    """Databricks when configured (CASHCAN_STORE / DATABRICKS_* env), else the local SQLite file."""
+    if config.STORE == "databricks":
+        from .databricks_store import DatabricksFaces, DatabricksStore
+
+        return DatabricksStore(DatabricksFaces())  # raises with a clear message if the env vars are missing
+    return FaceStore(config.DB_PATH)
+
+
 def create_app(engine: FaceEngine | None = None, store: FaceStore | None = None,
                sessions: SessionManager | None = None, liveness: LivenessManager | None = None) -> FastAPI:
     app = FastAPI(title="CashCan face API")
-    state = {"engine": engine, "store": store or FaceStore(config.DB_PATH),
+    state = {"engine": engine, "store": store or make_store(),
              "sessions": sessions or SessionManager(), "liveness": liveness or LivenessManager()}
 
     def get_engine() -> FaceEngine:

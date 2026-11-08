@@ -88,7 +88,7 @@ class DatabricksFaces:
         rows = self.sql(f"SELECT wallet FROM {self.schema}.users WHERE user_id = :u", {"u": user_id})
         return rows[0][0] if rows else None
 
-    def push_user(self, user_id: str, wallet: str, embeddings: list[np.ndarray]) -> int:
+    def push_user(self, user_id: str, wallet: str, embeddings: list[np.ndarray], sync: bool = True) -> int:
         """Store a person's consented templates. Refuses duplicates; delete first to re-enroll."""
         if self.user_exists(user_id):
             raise DatabricksError(f"'{user_id}' already exists in Databricks; delete it first to re-enroll.")
@@ -98,7 +98,8 @@ class DatabricksFaces:
             self.sql(f"INSERT INTO {self.schema}.face_templates VALUES (:t, :u, {_array_literal(emb)}, :m, current_timestamp())",
                      {"t": uuid.uuid4().hex, "u": user_id, "m": MODEL_VERSION})
         self.writes_done = True
-        self.sync_index()
+        if sync:
+            self.sync_index()
         return len(embeddings)
 
     def push_many(self, people: dict[str, tuple[str, list[np.ndarray]]], chunk: int = 20) -> tuple[int, int]:
@@ -224,3 +225,57 @@ class DatabricksFaces:
             user, score = row[0], float(row[-1])
             best[user] = max(best.get(user, -1.0), score_to_cosine(score))
         return sorted(best.items(), key=lambda kv: kv[1], reverse=True)[:k]
+
+
+class DatabricksStore:
+    """Drop-in for store.FaceStore used by the API, backed by Databricks (the source of truth).
+
+    Matching stays in-process on a cached copy of all templates (see module docstring); the cache is
+    refreshed after any write and at most every `cache_seconds`, so one /match is not one SQL round trip.
+    The Vector Search index is not synced per request (it takes minutes); run `databricks_sync status` to sync it.
+    """
+
+    def __init__(self, db: DatabricksFaces, cache_seconds: float = 30.0, clock=None):
+        import time
+
+        self.db, self.cache_seconds = db, cache_seconds
+        self._clock = clock or time.monotonic
+        self._cache: tuple[list[str], np.ndarray] | None = None
+        self._at = 0.0
+
+    def _invalidate(self) -> None:
+        self._cache = None
+
+    def _pull(self) -> tuple[list[str], np.ndarray]:
+        now = self._clock()
+        if self._cache is None or now - self._at > self.cache_seconds:
+            owners, mat, _ = self.db.pull_all()
+            self._cache, self._at = (owners, mat), now
+        return self._cache
+
+    def user_exists(self, user_id: str) -> bool:
+        return self.db.user_exists(user_id)
+
+    def add_user(self, user_id: str, wallet: str, embeddings: list[np.ndarray]) -> None:
+        try:
+            self.db.push_user(user_id, wallet, embeddings, sync=False)
+        finally:
+            self._invalidate()
+
+    def delete_user(self, user_id: str) -> bool:
+        try:
+            return self.db.delete_user(user_id, sync=False)
+        finally:
+            self._invalidate()
+
+    def wallet(self, user_id: str) -> str | None:
+        return self.db.get_wallet(user_id)
+
+    def embeddings_for(self, user_id: str) -> np.ndarray:
+        owners, mat = self._pull()
+        idx = [i for i, o in enumerate(owners) if o == user_id]
+        return mat[idx] if idx else np.zeros((0, 512), np.float32)
+
+    def all_embeddings(self) -> tuple[list[str], np.ndarray]:
+        owners, mat = self._pull()
+        return list(owners), mat
