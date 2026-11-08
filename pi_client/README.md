@@ -44,3 +44,27 @@ Tested with unit tests and end to end against the real API using video files as 
 real matching). **Not tested on a real Pi, a real webcam, or LEDs.** CSI ribbon cameras on newer Pi OS need the
 libcamera/V4L2 compatibility layer (or a `picamera2` capture swap) to appear as an OpenCV camera; USB webcams
 should work with `--camera 0`. Frames travel over plain http on your network and the API has no auth: demo network only.
+
+## Full bin controller: identity + object classifier on one camera (`--classify`)
+```bash
+python -m cashcan_pi --camera 0 --server https://www.cashcan.biz/face-api --classify --bin-key "$CASHCAN_BIN_KEY" \
+  --item-roi 0.15,0.40,0.85,1.0 --lids lids.json     # omit --lids to simulate the lids on stderr
+```
+One camera frame feeds two jobs. **Who:** the existing loop (face match + head-turn check) keeps a live session = a logged-in, verified person.
+**What:** `ItemGate` notices an item held still in the region of interest, `OnnxClassifier` (ml/models/mobilenetv2_cashcan.onnx, same preprocessing as
+training) averages 3 looks into organics / cans / waste, and `LidController` opens that one lid.
+
+| Situation | Lid | Record sent to `POST /interactions` |
+|---|---|---|
+| Verified person, confident item | the item's lid | session token + reward (cans/organics) |
+| Nobody identified (or session expired) | the item's lid | no user, reward 0 |
+| Unsure item (confidence below `--min-confidence`) | **waste** | reward 0 |
+| Waste item | waste | reward 0 (waste never pays) |
+
+Records carry a bin-chosen `interaction_id`; if the server is unreachable they wait in a short-lived outbox (10 min TTL, no face data) and retry with the same id, so
+the server stores each once. Rewards are **placeholders** in `controller.REWARDS` (from backend/src/rewardTable.ts); the real figures are an open team decision.
+`lids.json` maps each bin to shell commands, e.g. `{"cans": {"open": "servo 5 90", "close": "servo 5 0"}}`; the lid hardware is not decided yet.
+
+Not built / not verified: the real lid hardware, a payout worker that settles `pending` interactions on Solana, tuning the item region and thresholds on the real camera
+and light, and accuracy of the classifier on a bin camera (its 94% is on held-out RealWaste photos). The item gate cannot tell a hand from an item; held-still foreground is
+what counts, and the classifier's confidence threshold is the second line of defence.

@@ -5,8 +5,10 @@ import httpx
 
 
 class FaceApi:
-    def __init__(self, base_url: str, timeout: float = 5.0, transport: httpx.BaseTransport | None = None):
-        self._http = httpx.Client(base_url=base_url.rstrip("/"), timeout=timeout, transport=transport)
+    def __init__(self, base_url: str, timeout: float = 5.0, transport: httpx.BaseTransport | None = None,
+                 bin_key: str | None = None):
+        headers = {"X-Bin-Key": bin_key} if bin_key else {}
+        self._http = httpx.Client(base_url=base_url.rstrip("/"), timeout=timeout, transport=transport, headers=headers)
 
     def match(self, jpeg: bytes, session_token: str | None = None) -> dict:
         """session_token: pass the current live session so the same person can refresh without a new challenge."""
@@ -24,5 +26,11 @@ class FaceApi:
         r = self._http.get(f"/session/{token}")
         if r.status_code == 404:
             return None
+        r.raise_for_status()
+        return r.json()
+
+    def interaction(self, payload: dict) -> dict:
+        """Record one sorted item (needs the bin key). The same interaction_id is stored once, so retrying is safe."""
+        r = self._http.post("/interactions", json=payload)
         r.raise_for_status()
         return r.json()

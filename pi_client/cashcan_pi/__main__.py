@@ -37,6 +37,14 @@ def main(argv=None) -> int:
     ap.add_argument("--send-interval", type=float, default=0.7)
     ap.add_argument("--recheck-interval", type=float, default=5.0)
     ap.add_argument("--led-pins", metavar="GREEN,RED,AMBER", help="BCM pins; needs gpiozero (on the Pi)")
+    g = ap.add_argument_group("object classifier + lids (turns the identity loop into the full bin controller)")
+    g.add_argument("--classify", action="store_true", help="also classify the item on the same camera and open the right lid")
+    g.add_argument("--model", help="ONNX classifier (default ml/models/mobilenetv2_cashcan.onnx)")
+    g.add_argument("--bin-key", default=os.environ.get("CASHCAN_BIN_KEY"), help="this bin's key (X-Bin-Key) for POST /interactions")
+    g.add_argument("--item-roi", default="0.15,0.40,0.85,1.0", help="x1,y1,x2,y2 as fractions of the frame: where items are held or dropped")
+    g.add_argument("--min-confidence", type=float, default=0.60, help="below this the item goes to the waste lid and earns nothing")
+    g.add_argument("--lid-seconds", type=float, default=6.0)
+    g.add_argument("--lids", metavar="FILE.json", help='{"cans": {"open": "cmd", "close": "cmd"}, ...}; omit to simulate lids on stderr')
     a = ap.parse_args(argv)
 
     ind = ConsoleIndicator()
@@ -44,8 +52,22 @@ def main(argv=None) -> int:
         g, r, y = (int(p) for p in a.led_pins.split(","))
         ind = GpioIndicator(g, r, y)
     emit = lambda e: print(json.dumps(e), flush=True)
-    loop = BinLoop(FaceApi(a.server), make_detector(warn=lambda m: print(m, file=sys.stderr)), ind, emit,
+    api = FaceApi(a.server, bin_key=a.bin_key)
+    loop = BinLoop(api, make_detector(warn=lambda m: print(m, file=sys.stderr)), ind, emit,
                    send_interval=a.send_interval, recheck_interval=a.recheck_interval)
+    runner = loop
+    if a.classify:
+        from .classifier import OnnxClassifier
+        from .controller import BinController, Outbox
+        from .itemgate import ItemGate
+        from .lid import CommandLid, LidController, SimulatedLid
+
+        if not a.bin_key:
+            print("cashcan_pi: no --bin-key / CASHCAN_BIN_KEY: items will be sorted but the server will refuse the records", file=sys.stderr)
+        roi = tuple(float(v) for v in a.item_roi.split(","))
+        driver = CommandLid(json.loads(open(a.lids).read())) if a.lids else SimulatedLid()
+        runner = BinController(loop, ItemGate(roi=roi), OnnxClassifier(a.model), LidController(driver, a.lid_seconds),
+                               Outbox(api, on_event=emit), emit, min_confidence=a.min_confidence)
 
     is_file = not a.camera.isdigit() and os.path.isfile(a.camera)
     cam, fails = open_camera(a.camera, a.width, a.height), 0
@@ -65,7 +87,7 @@ def main(argv=None) -> int:
                     cam, fails = open_camera(a.camera, a.width, a.height), 0
                 continue
             fails = 0
-            loop.step(frame, time.monotonic())
+            runner.step(frame, time.monotonic())
             time.sleep(0.05)
     except KeyboardInterrupt:
         return 0
