@@ -54,7 +54,7 @@ class QualityError(ValueError):
 def decode_image(data: bytes) -> np.ndarray:
     img = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)
     if img is None:
-        raise QualityError("Could not read the image.")
+        raise QualityError("Could not read the image. Use a JPG or PNG file (HEIC photos are not supported here: export or convert it first).")
     return img
 
 

@@ -162,7 +162,9 @@ def apply_gate_overrides(a) -> None:
 
 def list_images(paths: list[str]) -> list[Path]:
     found: list[Path] = []
-    for p in map(Path, paths):
+    for p in (Path(x).expanduser() for x in paths):
+        if not p.exists():
+            raise SystemExit(f"Cannot find '{p}'. Check the path (tip: drag the file or folder into this window to paste its real path).")
         found += sorted(f for f in p.rglob("*") if f.suffix.lower() in IMAGE_EXT) if p.is_dir() else [p]
     return found
 

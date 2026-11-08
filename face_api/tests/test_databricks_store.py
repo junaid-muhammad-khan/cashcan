@@ -230,3 +230,13 @@ def test_cli_ctrl_c_is_a_clean_exit_that_says_whether_data_is_saved(monkeypatch,
     Stub.writes_done = False
     assert ds.main(["--db", str(tmp_path / "x.db"), "status"]) == 130
     assert "Interrupted before finishing" in capsys.readouterr().out
+
+
+def test_cli_without_databricks_variables_says_what_to_set_instead_of_a_traceback(monkeypatch, capsys, tmp_path):
+    from tools import databricks_sync as ds
+
+    for k in ("DATABRICKS_HOST", "DATABRICKS_TOKEN", "DATABRICKS_WAREHOUSE_ID"):
+        monkeypatch.delenv(k, raising=False)
+    assert ds.main(["--db", str(tmp_path / "x.db"), "status"]) == 2
+    err = capsys.readouterr().err
+    assert "export DATABRICKS_HOST" in err and "read -s DATABRICKS_TOKEN" in err and "Traceback" not in err

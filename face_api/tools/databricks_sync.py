@@ -20,7 +20,7 @@ import sys
 import numpy as np
 
 from app import config
-from app.databricks_store import DatabricksFaces
+from app.databricks_store import DatabricksError, DatabricksFaces
 from app.store import FaceStore
 from tools.face_demo import PLACEHOLDER_WALLET
 
@@ -47,7 +47,15 @@ def main(argv=None) -> int:
     sub.add_parser("pull"); sub.add_parser("status")
     a = ap.parse_args(argv)
 
-    dbx, store = DatabricksFaces(), FaceStore(a.db)
+    try:
+        dbx = DatabricksFaces()
+    except DatabricksError as e:
+        print(f"{e}\nSet them in THIS terminal first (a new terminal window forgets them):\n"
+              "  export DATABRICKS_HOST=https://<your-workspace>.cloud.databricks.com\n"
+              "  export DATABRICKS_WAREHOUSE_ID=<your-warehouse-id>\n"
+              "  read -s DATABRICKS_TOKEN && export DATABRICKS_TOKEN     # paste the token; it is not shown or saved", file=sys.stderr)
+        return 2
+    store = FaceStore(a.db)
     dbx.notify = lambda m: print(m, flush=True)
     try:
         return run(a, dbx, store)
@@ -88,8 +96,14 @@ def run(a, dbx, store) -> int:
         from app.face_engine import InsightFaceEngine, QualityError, check_quality, decode_image, pick_face
         from pathlib import Path
 
+        image = Path(a.image).expanduser()
+        if not image.is_file():
+            print(f"Cannot find an image at '{image}'. Give the path of a real JPG or PNG photo of a face "
+                  "(tip: drag the file into this window to paste its path).", file=sys.stderr)
+            return 1
+
         try:
-            face = pick_face(InsightFaceEngine(modules=["detection", "recognition"]).analyse(decode_image(Path(a.image).read_bytes())))
+            face = pick_face(InsightFaceEngine(modules=["detection", "recognition"]).analyse(decode_image(image.read_bytes())))
             check_quality(face)
         except QualityError as e:
             print(f"Cannot use that image: {e}", file=sys.stderr); return 1

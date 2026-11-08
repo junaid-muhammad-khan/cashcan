@@ -213,3 +213,19 @@ def test_enrollment_images_use_the_strict_tier_and_identification_photos_the_len
     assert fd.cmd_enroll(args(tmp_path, images=[str(folder)]), Soft(), store) == 1          # strict: 40 < 60, nothing saved
     assert not store.user_exists("me")
     assert fd.largest_usable(Soft(), np.zeros((50, 50, 3), np.uint8), identification=True)   # lenient: 40 >= 25
+
+
+def test_a_wrong_path_gives_a_one_line_message_not_a_traceback(tmp_path):
+    import pytest
+
+    with pytest.raises(SystemExit) as e:
+        fd.list_images([str(tmp_path / "no-such-photo.jpg")])
+    assert "Cannot find" in str(e.value) and "no-such-photo.jpg" in str(e.value)
+
+
+def test_unreadable_image_says_to_use_jpg_or_png():
+    import pytest
+    from app.face_engine import QualityError, decode_image
+
+    with pytest.raises(QualityError, match="JPG or PNG"):
+        decode_image(b"this is not an image")
