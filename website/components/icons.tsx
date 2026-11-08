@@ -60,3 +60,15 @@ export const Logo = ({ color = "#157A46" }: { color?: string }) => (
     <path d="M13 15c1.5-1.5 4.5-1.5 6 0M16 14v8" />
   </svg>
 );
+
+/** The app mark: white bin on the brand green, same as the browser-tab icon (app/icon.svg). */
+export const LogoMark = ({ size = 32 }: { size?: number }) => (
+  <span className="logo-mark" style={{ width: size, height: size }} aria-hidden="true">
+    <svg width={size * 0.69} height={size * 0.69} viewBox="0 0 32 32" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M7 9h18l-2 18H9z" />
+      <path d="M5 9h22" />
+      <path d="M12 9V6h8v3" />
+      <path d="M13 15c1.5-1.5 4.5-1.5 6 0M16 14v8" />
+    </svg>
+  </span>
+);

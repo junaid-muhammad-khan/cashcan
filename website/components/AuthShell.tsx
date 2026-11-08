@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRef } from "react";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
-import { Check, Logo } from "./icons";
+import { Check, LogoMark } from "./icons";
 
 gsap.registerPlugin(useGSAP);
 
@@ -63,7 +63,7 @@ export default function AuthShell({
       <aside className="auth-aside">
         <div aria-hidden="true" className="blob" style={{ width: 420, height: 420, background: "#2BB673", opacity: 0.3, left: -120, top: -80 }} />
         <div aria-hidden="true" className="blob" style={{ width: 360, height: 360, background: "#E3B23C", opacity: 0.2, right: -100, bottom: -80 }} />
-        <Link href="/" className="logo" style={{ position: "relative" }}><Logo color="#5FD79A" /><span>cashcan</span></Link>
+        <Link href="/" className="logo" style={{ position: "relative" }}><LogoMark /><span>cashcan</span></Link>
         <div className="auth-aside-body">
           <h2 data-intro>{heading}</h2>
           <p data-intro>{body}</p>
@@ -72,7 +72,7 @@ export default function AuthShell({
       </aside>
       <main className="auth-main">
         <div className={wide ? "auth-card wide" : "auth-card"}>
-          <Link href="/" className="logo auth-top"><Logo /><span>cashcan</span></Link>
+          <Link href="/" className="logo auth-top"><LogoMark /><span>cashcan</span></Link>
           {children}
         </div>
       </main>
